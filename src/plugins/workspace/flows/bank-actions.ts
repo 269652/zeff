@@ -62,6 +62,23 @@ export const BANK_ACTIONS: FlowAction[] = [
     run: async () => ({ href: (await (await import("@/lib/bank/sync")).startBankAuth(`${await origin()}/api/bank/callback`)).url }),
   },
   {
+    name: "bank.bookings",
+    group: "bank",
+    label: "The bank's bookings between two days",
+    summary: "The bookings kept in the bank (a statement read, the bank connection): date, amount (out < 0), text, counterparty, iban, reference, person_id (whom it went to, when known) — from (inclusive) to (exclusive), YYYY-MM-DD. [] when none were read.",
+    input: [f("from", "text", { required: true }), f("to", "text", { required: true })],
+    output: "{ bookings: [{ date, amount, text, counterparty, reference }] }",
+    run: async (i) => {
+      const { bookingsDb } = await import("@/lib/bank/bookings");
+      try {
+        const rows = bookingsDb().prepare("select date, amount, text, counterparty, iban, reference, person_id from bank_transactions where date >= ? and date < ? order by date, id").all(text(i.from), text(i.to));
+        return { bookings: rows };
+      } catch {
+        return { bookings: [] };
+      }
+    },
+  },
+  {
     name: "bank.sync",
     group: "bank",
     label: "Fetch the bookings",

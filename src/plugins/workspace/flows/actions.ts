@@ -12,6 +12,7 @@ import "./store-actions";
 import "./data-actions";
 import "./bank-actions";
 import "./mirror-actions";
+import "./file-actions";
 import "./session-actions";
 
 /**
@@ -31,9 +32,15 @@ async function runMeta(i: Record<string, unknown>, ctx: ActionCtx, change: boole
   const access = metaAccess(op, args);
   const need = access.key.replace(/^meta:/, "");
   if ((need === "read" || need.endsWith("-read")) === change) throw new Error(change ? "meta.run changes the structure: read it with meta.read." : "meta.read is for reading: use meta.run to change.");
-  if (!(ctx.perms.meta ?? []).includes(need)) throw new Error(`This flow may not ${access.label} — grant “${need}” under the flow's permissions (Zeff's structure).`);
+  // (A database the flow made — or may write — is one whose fields it may change too.)
+  const schemaOfOwn = /^schema:(\d+)$/.exec(need);
+  const own = schemaOfOwn && (ctx.perms.write === "all" || (ctx.perms.write ?? []).some((w) => Number(w) === Number(schemaOfOwn[1])));
+  if (!own && !(ctx.perms.meta ?? []).includes(need)) throw new Error(`This flow may not ${access.label} — grant “${need}” under the flow's permissions (Zeff's structure).`);
   if (change && ctx.dryRun) return { dryRun: true, op };
-  return metaRun(op, args);
+  const out = await metaRun(op, args);
+  // A database it made is one it may write from now on (as with db.ensure).
+  if (op === "database.create" && out && typeof out === "object" && typeof (out as { id?: unknown }).id === "number") ctx.grantWrite?.((out as { id: number }).id);
+  return out;
 }
 
 export type ActionCtx = {

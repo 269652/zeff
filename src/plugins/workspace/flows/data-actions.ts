@@ -243,6 +243,96 @@ export const DATA_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "workspace.value",
+    group: "data",
+    label: "The rows of a value type",
+    summary: 'A value type of the Workspace ("Fixkosten": columns of your databases publish what it is) read: its aggregate (sum by default), the total over all its rows, and the rows { id, title, amount, source }. None published: total null.',
+    input: [f("type", "text", { required: true })],
+    output: "{ agg, total, items }",
+    run: async (i) => {
+      const { isInstalled } = await import("@/plugins/state");
+      if (!isInstalled("workspace")) return { agg: null, total: null, items: [] };
+      const { refRows, valueAggregate, valueSources } = await import("@/plugins/workspace/values");
+      const { getPage } = await import("@/plugins/workspace/store");
+      const { rollup } = await import("@/plugins/workspace/model");
+      const type = String(i.type ?? "").trim().toLowerCase();
+      const refs = valueSources(type as never);
+      if (!refs.length) return { agg: null, total: null, items: [] };
+      const had = valueAggregate(type as never);
+      const agg = had && had !== "count_unique" ? had : "sum";
+      const items = refs.flatMap((ref) => {
+        const source = getPage(ref.dbId)?.title || "?";
+        return refRows(ref).map((r) => ({ id: `${ref.dbId}:${r.rowId}`, title: r.title, amount: r.value, source }));
+      });
+      const total = rollup(agg, undefined, items.map((x) => x.amount));
+      return { agg, total: typeof total === "number" && Number.isFinite(total) ? Math.round(total * 100) / 100 : null, items };
+    },
+  },
+  {
+    name: "workspace.value-sources",
+    group: "data",
+    label: "The databases that publish a value type",
+    summary: 'The databases whose columns publish a value type ("Fixkosten"): for each its id, the published column, its fields { id, name, type }, the rows that count { rowId: value } (running ones) and all its rows { id, title, cells } as kept. [] when none publish it.',
+    input: [f("type", "text", { required: true })],
+    output: "{ sources: [{ dbId, propId, title, properties, running, rows }] }",
+    run: async (i) => {
+      const { isInstalled } = await import("@/plugins/state");
+      if (!isInstalled("workspace")) return { sources: [] };
+      const { refRows, valueSources } = await import("@/plugins/workspace/values");
+      const { getDatabase, getPage, rawRows } = await import("@/plugins/workspace/store");
+      const type = String(i.type ?? "").trim().toLowerCase();
+      const seen = new Set<string>();
+      const sources = valueSources(type as never).flatMap((ref) => {
+        const d = getDatabase(ref.dbId);
+        const key = `${ref.dbId}:${ref.propId}`;
+        if (!d || d.page.archivedAt || seen.has(key)) return [];
+        seen.add(key);
+        return [
+          {
+            dbId: ref.dbId,
+            propId: ref.propId,
+            title: getPage(ref.dbId)?.title || "",
+            properties: d.schema.properties.map((p) => ({ id: p.id, name: p.name, type: p.type })),
+            running: Object.fromEntries(refRows(ref).map((r) => [String(r.rowId), r.value])),
+            rows: rawRows(ref.dbId).map((r) => ({ id: r.id, title: r.title, cells: r.cells })),
+          },
+        ];
+      });
+      return { sources };
+    },
+  },
+  {
+    name: "pref.get",
+    group: "data",
+    label: "A preference a port may read",
+    summary: "A preference of Zeff that the calling plugin's built-in kept as its own (lib/ext/stores.ts ADOPTABLE_PREFS): key → its value (null: not set). Any other key is refused.",
+    input: [f("key", "text", { required: true })],
+    output: "{ value }",
+    run: async (i, ctx) => {
+      const key = String(i.key ?? "").trim();
+      const lambda = String(ctx.flow ?? "").replace(/^lambda:/, "");
+      const { getLambda } = await import("@/plugins/workspace/lambdas/store");
+      const plugin = (getLambda(lambda)?.plugin ?? "").replace(/^ext:/, "");
+      const { ADOPTABLE_PREFS } = await import("@/lib/ext/stores");
+      if (!plugin || !(ADOPTABLE_PREFS[plugin] ?? []).includes(key)) throw new Error(`The preference “${key}” isn't one this plugin may read.`);
+      const { getPref } = await import("@/lib/prefs");
+      return { value: getPref<unknown>(key, null) };
+    },
+  },
+  {
+    name: "db.cells",
+    group: "data",
+    label: "A database's rows as kept",
+    summary: "The rows of a database (by its id) as kept: { id, title, cells } — the cells by their field's id (not its name, which changes with the language), the values as stored (a person field's ids, a select's option id, a date as text). For code that knows the fields it reads.",
+    input: [f("db", "db", { required: true }), f("limit", "number", { default: 2000 })],
+    output: "{ rows: [{ id, title, cells }] }",
+    run: async (i) => {
+      const { rawRows } = await import("@/plugins/workspace/store");
+      const limit = Math.min(5000, Math.max(1, Number(i.limit) || 2000));
+      return { rows: rawRows(Number(i.db)).slice(0, limit).map((r) => ({ id: r.id, title: r.title, cells: r.cells })) };
+    },
+  },
+  {
     name: "workspace.rows-by-ref",
     group: "data",
     label: "A database's rows by their source",

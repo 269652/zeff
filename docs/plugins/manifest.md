@@ -395,7 +395,8 @@ They are there while the plugin is on, gone when it is off or Zeff is in safe mo
   It is called like Zeff's own functions, `withVat(100, 19)`, in views, formula fields and tables. A name the formula language already
   has, its other names included (`wenn`, `gross` …), is left out.
 - **`metrics`**: a Kennzahl (`kennzahl("Films watched")` in formulas, the Kennzahlen widgets). The function is called with `{}` and gives
-  a number. The Kennzahl shows its last answer and asks again in the background once that is older than `everyMinutes` (1–1440, default
+  a number; instead of a `function` a metric may name a `lambda` (kind function) with fixed `args` — one lambda answers several Kennzahlen
+  (`{ "lambda": "finances.metric", "args": { "which": "owe-open" } }`). The Kennzahl shows its last answer and asks again in the background once that is older than `everyMinutes` (1–1440, default
   15), so a formula never waits for it.
 - **`rowBadges`**: badges on the rows a plugin's source brought, by their record's ref. The function gives
   `{ "film:12": [{ "label": "2 new", "tone": "unread", "count": 2 }] }`. Only refs starting with `prefix` count. `tone` is `important`,

@@ -46,8 +46,20 @@ console.log = console.info = console.warn = console.error = console.debug = say;
 globalThis.fetch = async (input, init = {}) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const headers = Object.fromEntries(new Headers(init.headers ?? (typeof input === "object" && !(input instanceof URL) ? input.headers : undefined)).entries());
-  const body = init.body === undefined || init.body === null ? undefined : typeof init.body === "string" ? init.body : init.body instanceof URLSearchParams ? init.body.toString() : JSON.stringify(init.body);
-  const r = await ask({ type: "fetch", url, method: init.method ?? "GET", headers, body });
+  const b = init.body;
+  let body;
+  let bodyBase64;
+  if (b === undefined || b === null) body = undefined;
+  else if (typeof b === "string") body = b;
+  else if (b instanceof URLSearchParams) body = b.toString();
+  else if (b instanceof FormData || b instanceof Blob || b instanceof ArrayBuffer || ArrayBuffer.isView(b)) {
+    // (Bytes and forms — an upload — go as bytes; a form with its multipart type and boundary.)
+    const made = new Response(b);
+    const type = made.headers.get("content-type");
+    if (type && !Object.keys(headers).some((k) => k.toLowerCase() === "content-type")) headers["content-type"] = type;
+    bodyBase64 = Buffer.from(await made.arrayBuffer()).toString("base64");
+  } else body = JSON.stringify(b);
+  const r = await ask({ type: "fetch", url, method: init.method ?? "GET", headers, body, ...(bodyBase64 !== undefined ? { bodyBase64 } : {}) });
   return new Response(r.status === 204 || r.status === 304 ? null : Buffer.from(r.body, "base64"), { status: r.status, statusText: r.statusText, headers: r.headers });
 };
 

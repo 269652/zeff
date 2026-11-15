@@ -25,9 +25,18 @@ export const ADOPTABLE: Record<string, string[]> = {
   "keep-ext": ["keep_notes", "keep_own_notes"],
 };
 
+/**
+ * The preferences a port may read (the kernel's `pref.get`, for a lambda of that plugin): what its built-in kept there as its own settings
+ * and data — nothing else (a preference can hold a key or a token: never open to a plugin by name).
+ */
+export const ADOPTABLE_PREFS: Record<string, string[]> = {
+  "finances-ext": ["finances.ownAccounts", "cases.income", "cases.incomeFacts"],
+};
+
 /** The built-ins' sources their ports may stand in for (a source's `replaces`), by the port's plugin id: the databases that read it go on. */
 export const REPLACEABLE_SOURCES: Record<string, string[]> = {
   "cases-ext": ["cases"],
+  "finances-ext": ["recurring"],
 };
 
 const SQL_TYPE: Record<Column["type"], string> = { text: "text", integer: "integer", real: "real", json: "text" };

@@ -86,6 +86,20 @@ export const PEOPLE_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "people.by-iban",
+    group: "people",
+    label: "Whose account is it",
+    summary: "The contact each of these accounts (IBANs) belongs to — by their details and accounts (null: no one, or ambiguous).",
+    input: [{ name: "ibans", type: "list", required: true }],
+    output: "{ ids: { [iban]: id | null } }",
+    run: async (i) => {
+      const { makePersonResolver } = await import("./resolve");
+      const who = makePersonResolver();
+      const list = Array.isArray(i.ibans) ? (i.ibans as unknown[]).map(String).slice(0, 5000) : [];
+      return { ids: Object.fromEntries(list.map((x) => [x, who.byIban(x) ?? null])) };
+    },
+  },
+  {
     name: "people.accounts",
     group: "people",
     label: "Where to pay someone",

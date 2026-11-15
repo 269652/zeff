@@ -98,6 +98,7 @@ export function externalSources(): WorkspaceSource[] {
         icon: s.icon,
         hint: s.hint,
         noNewRows: s.noNewRows,
+        ...(s.lockedFields.length ? { lockedFields: s.lockedFields } : {}),
         read: async () => {
           let v: unknown;
           if (s.lambda) {

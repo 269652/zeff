@@ -804,6 +804,16 @@
                 "default": true,
                 "description": "The records are only read from where they live: a row cannot be made by hand.",
                 "type": "boolean"
+              },
+              "lockedFields": {
+                "default": [],
+                "description": "Fields (by their id) the records fix: not changed by hand on the rows the source brings.",
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 40
+                }
               }
             },
             "required": [
@@ -965,9 +975,30 @@
                 "maxLength": 200
               },
               "function": {
+                "description": "The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows.",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,39}$",
-                "description": "The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows."
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "lambda": {
+                "description": "Or a lambda of the plugin (kind function) that gives it — called with `args` (one lambda may answer several Kennzahlen).",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+              },
+              "args": {
+                "default": {},
+                "description": "What a lambda is called with: { \"which\": \"owe-open\" }.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
               },
               "everyMinutes": {
                 "default": 15,
@@ -979,8 +1010,7 @@
             },
             "required": [
               "id",
-              "label",
-              "function"
+              "label"
             ]
           }
         },

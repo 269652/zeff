@@ -179,6 +179,7 @@ const sourceDecl = z.object({
   lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or a lambda of the plugin (kind function) that reads them — no Notebook needed; its records may also say status, typed (fields of fixed id and type) and dataType."),
   replaces: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/).optional().describe("A port's: the built-in's source it stands in for (its id, as the databases name it) — only its own built-in's (lib/ext/stores.ts REPLACEABLE_SOURCES)."),
   noNewRows: z.boolean().default(true).describe("The records are only read from where they live: a row cannot be made by hand."),
+  lockedFields: z.array(z.string().max(40)).max(40).default([]).describe("Fields (by their id) the records fix: not changed by hand on the rows the source brings."),
 }).refine((s) => !!s.read || !!s.lambda, { message: "a source reads its records by a function (read) or a lambda" });
 
 const fieldTypeDecl = z.object({
@@ -210,9 +211,11 @@ const metricDecl = z.object({
   label: z.string().min(1).max(60).describe("Its name as a Kennzahl (formulas read it with kennzahl(\"…\"))."),
   unit: z.string().max(20).default(""),
   what: z.string().max(200).default(""),
-  function: shortId.describe("The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows."),
+  function: shortId.optional().describe("The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows."),
+  lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or a lambda of the plugin (kind function) that gives it — called with `args` (one lambda may answer several Kennzahlen)."),
+  args: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}).describe("What a lambda is called with: { \"which\": \"owe-open\" }."),
   everyMinutes: z.number().int().min(1).max(1440).default(15).describe("How old its last answer may be before it is asked again (in the background)."),
-});
+}).refine((m) => !!m.function || !!m.lambda, { message: "a metric is answered by a function or a lambda" });
 const rowBadgeDecl = z.object({
   prefix: z.string().regex(/^[a-z][a-z0-9-]{0,39}:$/, 'the start of its records\' refs, with the colon: "film:"').describe("The rows its sources brought (by their record's ref) it puts badges on."),
   function: shortId.describe('The plugin function that gives the badges: { "film:12": [{ "label": "2 new", "tone": "warn" }] }.'),

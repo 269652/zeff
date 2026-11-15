@@ -190,7 +190,11 @@ export function metaRun(op: string, a: Record<string, unknown>): unknown {
         id: d.id,
         title: d.title,
         titleName: s.titleName,
-        properties: s.properties.map((p) => ({ id: p.id, name: p.name, type: p.type, ...(Array.isArray((p as { options?: unknown[] }).options) ? { options: ((p as { options: { name: string }[] }).options).map((o) => o.name) } : {}) })),
+        properties: s.properties.map((p) => {
+          const opts = (p as { options?: { id: string; name: string; color: string }[] }).options;
+          // (Options by name — and with their ids and colours as `choices`: a row's raw value names the option by its id.)
+          return { id: p.id, name: p.name, type: p.type, ...(Array.isArray(opts) ? { options: opts.map((o) => o.name), choices: opts.map((o) => ({ id: o.id, name: o.name, color: o.color })) } : {}) };
+        }),
         views: s.views.map((v) => ({ id: v.id, name: v.name, type: v.type })),
       };
     }

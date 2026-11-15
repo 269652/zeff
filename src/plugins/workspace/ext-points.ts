@@ -73,13 +73,13 @@ type Kept = { at: number; value: number | null; asking: boolean; error?: string 
 const kept: Map<string, Kept> = ((globalThis as { __zeffExtMetrics?: Map<string, Kept> }).__zeffExtMetrics ??= new Map());
 
 /** The number a plugin's metric shows now; when its answer is older than `everyMinutes` (or there is none), it is asked again. */
-export function storedMetricValue(plugin: string, m: { id: string; function: string; everyMinutes: number }, now = Date.now()): number | null {
+export function storedMetricValue(plugin: string, m: { id: string; function?: string; lambda?: string; args?: Record<string, string | number | boolean>; everyMinutes: number }, now = Date.now()): number | null {
   const key = `${currentAccountId()}|${plugin}|${m.id}`;
   const k = kept.get(key) ?? { at: 0, value: null, asking: false };
   kept.set(key, k);
   if (!k.asking && now - k.at >= m.everyMinutes * 60_000) {
     k.asking = true;
-    void runPluginFunction(plugin, m.function, {})
+    void (m.lambda ? import("./mcp-plugin-tools").then((x) => x.runOwnLambda(plugin, m.lambda!, { ...(m.args ?? {}) })) : runPluginFunction(plugin, m.function!, {}))
       .then((v) => {
         const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
         k.value = Number.isFinite(n) ? n : null;

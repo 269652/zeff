@@ -146,12 +146,12 @@ export async function materialize(l: Lambda): Promise<{ dir: string; install: { 
 }
 
 /** A fetch of the lambda's, done here: the address checked (each redirect too), 5 MB at most, the answer whole. */
-async function proxyFetch(m: LambdaManifest, req: { url: string; method?: string; headers?: Record<string, string>; body?: string }, resolve?: (host: string) => Promise<string[]>) {
+async function proxyFetch(m: LambdaManifest, req: { url: string; method?: string; headers?: Record<string, string>; body?: string; bodyBase64?: string }, resolve?: (host: string) => Promise<string[]>) {
   const perms: FlowPermissions = { web: m.web ?? [] };
   let url = await checkedUrl(req.url, perms, resolve);
   const method = (req.method ?? "GET").toUpperCase();
   for (let hop = 0; hop < 5; hop++) {
-    const r = await fetch(url, { method, headers: { "user-agent": "Zeff/0.1 (personal app; https://getzeff.com)", ...(req.headers ?? {}) }, body: method === "GET" || method === "HEAD" ? undefined : req.body, redirect: "manual", signal: AbortSignal.timeout(20000) });
+    const r = await fetch(url, { method, headers: { "user-agent": "Zeff/0.1 (personal app; https://getzeff.com)", ...(req.headers ?? {}) }, body: method === "GET" || method === "HEAD" ? undefined : typeof req.bodyBase64 === "string" ? Buffer.from(req.bodyBase64, "base64") : req.body, redirect: "manual", signal: AbortSignal.timeout(20000) });
     if (r.status >= 300 && r.status < 400 && r.headers.get("location")) {
       url = await checkedUrl(new URL(r.headers.get("location")!, url).toString(), perms, resolve);
       continue;
@@ -243,7 +243,7 @@ export async function runLambda(l: Lambda, event: unknown, opts: { resolve?: (ho
             (value) => !done && child.connected && child.send({ id: msg.id, value }),
             (e: unknown) => !done && child.connected && child.send({ id: msg.id, error: hide(e instanceof Error ? e.message : String(e), secrets) }),
           );
-        if (msg.type === "fetch") void answer(proxyFetch(l.manifest, { url: String(msg.url), method: msg.method, headers: msg.headers, body: msg.body }, opts.resolve));
+        if (msg.type === "fetch") void answer(proxyFetch(l.manifest, { url: String(msg.url), method: msg.method, headers: msg.headers, body: msg.body, bodyBase64: msg.bodyBase64 }, opts.resolve));
         else if (msg.type === "call") void answer(Promise.resolve().then(() => proxyCall(l.manifest, String(msg.name), msg.input, l.plugin)));
       });
       child.on("exit", (code) => finish({ ok: false, error: `the process ended (${code ?? "killed"})${stderr ? `: ${stderr.trim().split("\n").slice(-3).join(" ")}` : ""}`, logs: [], ms: Date.now() - t0 }));

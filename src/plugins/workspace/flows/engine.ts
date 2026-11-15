@@ -550,7 +550,9 @@ async function listens(t: FlowTrigger, e: FlowEvent): Promise<boolean> {
 const settling = (globalThis as { __zeffFlowSettle?: Map<string, ReturnType<typeof setTimeout>> }).__zeffFlowSettle ??= new Map();
 
 async function runOnEvent(f: Flow, t: EventTrigger, e: FlowEvent): Promise<void> {
-  const input = { ...(e.payload ?? {}), event: e.event, ...(e.page !== undefined ? { page: e.page } : {}), ...(e.field ? { field: e.field } : {}), ...(e.name ? { name: e.name } : {}), ...(e.value !== undefined ? { value: e.value } : {}) };
+  // (`page`: the page it is about — a row is a page too.)
+  const at = e.page ?? e.row;
+  const input = { ...(e.payload ?? {}), event: e.event, ...(at !== undefined ? { page: at } : {}), ...(e.field ? { field: e.field } : {}), ...(e.name ? { name: e.name } : {}), ...(e.value !== undefined ? { value: e.value } : {}) };
   await runFlow(f, input, { trigger: t, row: e.row });
 }
 
@@ -568,7 +570,7 @@ export async function fireFlowEvent(e: FlowEvent): Promise<number> {
       if (!t) continue;
       if (t.settle) {
         // Runs once, `settle` seconds after the last such event for this page or row (in the account it happened in).
-        const key = `${f.pageId}|${e.event}|${e.page ?? e.row ?? ""}`;
+        const key = `${f.pageId}|${e.page ?? e.row ?? e.event}`;
         clearTimeout(settling.get(key));
         const { currentAccountId, withAccount } = await import("@/db/accounts");
         const account = currentAccountId();
