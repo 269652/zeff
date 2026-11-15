@@ -1,3 +1,4 @@
+import { casesThere } from "@/lib/cases/there";
 import { getSqlite } from "@/db";
 import { isInstalled } from "@/plugins/state";
 
@@ -45,7 +46,7 @@ export async function firstLook(): Promise<FirstLook> {
     }
   }
 
-  if (isInstalled("cases")) {
+  if (casesThere()) {
     const { listCases } = await import("@/plugins/cases/store");
     const { openOf } = await import("@/plugins/cases/bank");
     const { caseHref } = await import("@/plugins/cases/database");

@@ -4,6 +4,7 @@
  * The function only does what the user granted it (Settings → Notebook → Functions). Server only.
  */
 import { getPlugin, scanPlugins } from "@/lib/ext/registry";
+import { REPLACEABLE_SOURCES } from "@/lib/ext/stores";
 import { runPluginFunction } from "./plugin-fn";
 import type { LookupHit, LookupSource, LookupValue } from "./lookup-point";
 import type { WorkspaceSource } from "./source-point";
@@ -83,26 +84,57 @@ export function externalLookups(): LookupSource[] {
   );
 }
 
+const TYPED = new Set(["text", "date", "checkbox", "select", "url", "number", "person"]);
+const GROUPS = new Set(["todo", "doing", "done"]);
+
 export function externalSources(): WorkspaceSource[] {
   return enabled().flatMap((p) =>
-    p.manifest.contributes.sources.map(
-      (s): WorkspaceSource => ({
-        id: `${p.id}.${s.id}`,
+    p.manifest.contributes.sources.map((s): WorkspaceSource => {
+      // (a port's source stands in for its built-in's — by its id, so the databases that read it go on: only its own built-in's)
+      const replaces = s.replaces && (REPLACEABLE_SOURCES[p.id] ?? []).includes(s.replaces) ? s.replaces : null;
+      return {
+        id: replaces ?? `${p.id}.${s.id}`,
         label: s.label,
         icon: s.icon,
         hint: s.hint,
         noNewRows: s.noNewRows,
         read: async () => {
-          const v = await call(p.id, s.read, {});
+          let v: unknown;
+          if (s.lambda) {
+            const { invokeLambda } = await import("./lambdas/run");
+            const r = await invokeLambda(s.lambda, {});
+            if (!r.ok) throw new Error(r.error);
+            v = r.result;
+          } else v = await call(p.id, s.read!, {});
           return (Array.isArray(v) ? v : []).slice(0, 5000).flatMap((r): SourceRecord[] => {
             const o = r && typeof r === "object" ? (r as Record<string, unknown>) : null;
             if (!o || !str(o.ref) || !str(o.title)) return [];
             const fields: Record<string, string> = {};
             if (o.fields && typeof o.fields === "object") for (const [k, x] of Object.entries(o.fields as Record<string, unknown>)) fields[k.slice(0, 60)] = str(x, 2000);
-            return [{ ref: str(o.ref, 200), title: str(o.title, 300), ...(str(o.key) ? { key: str(o.key, 60) } : {}), fields, ...(str(o.text, 20000) ? { text: str(o.text, 20000) } : {}), ...(/^https?:\/\//.test(str(o.url)) ? { url: str(o.url, 1000) } : {}), ...(str(o.updatedAt) ? { updatedAt: str(o.updatedAt, 40) } : {}) }];
+            const st = o.status && typeof o.status === "object" ? (o.status as { name?: unknown; group?: unknown }) : null;
+            const typed = (Array.isArray(o.typed) ? o.typed : []).slice(0, 60).flatMap((x): NonNullable<SourceRecord["typed"]> => {
+              const f = x && typeof x === "object" ? (x as Record<string, unknown>) : null;
+              if (!f || !str(f.id) || !TYPED.has(str(f.type))) return [];
+              const value = f.value === null || typeof f.value === "string" || typeof f.value === "number" || typeof f.value === "boolean" ? f.value : null;
+              return [{ id: str(f.id, 60), name: str(f.name, 80) || str(f.id, 60), type: str(f.type) as never, value, ...(f.format === "number" || f.format === "euro" ? { format: f.format } : {}) }];
+            });
+            return [
+              {
+                ref: str(o.ref, 200),
+                title: str(o.title, 300),
+                ...(str(o.key) ? { key: str(o.key, 60) } : {}),
+                fields,
+                ...(st && str(st.name) && GROUPS.has(str(st.group)) ? { status: { name: str(st.name, 60), group: str(st.group) as "todo" | "doing" | "done" } } : {}),
+                ...(typed.length ? { typed } : {}),
+                ...(/^[a-z][a-z0-9-]{0,39}$/.test(str(o.dataType)) ? { dataType: str(o.dataType) as never } : {}),
+                ...(typeof o.text === "string" ? { text: str(o.text, 20000) } : {}),
+                ...(/^https?:\/\//.test(str(o.url)) ? { url: str(o.url, 1000) } : {}),
+                ...(str(o.updatedAt) ? { updatedAt: str(o.updatedAt, 40) } : {}),
+              },
+            ];
           });
         },
-      }),
-    ),
+      };
+    }),
   );
 }

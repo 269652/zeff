@@ -325,7 +325,12 @@ fail). Actions include web requests and page reading, CSS/regex extraction, AI e
 (TMDB, books …), lambdas, reading and writing databases, moving a row along its lifecycle, adding a todo and sending a
 signal. A flow has inputs, permissions (which web domains, which databases it may write, whether it may use the AI or
 send anything), triggers (by hand, a schedule, a row event, a form sent, a transition) and keeps a journal of each
-run, so a run that waits goes on where it stopped. Questions a flow or an agent asks you appear as a card in the corner
+run, so a run that waits goes on where it stopped. The runs are a queue that survives Zeff stopping: each step done is kept
+at once (its output in the journal, a sign of life), and a run cut off mid-way (Zeff stopped or crashed, the computer slept) is
+taken up again within a minute of a quiet quarter hour — the steps done read from the journal, not done twice; the actions that
+write do no harm when a step cut off in the middle runs once more (by key). The queue never stalls: a run cut off again and again
+(it may be what stops Zeff) and one cut off more than two days ago end with why, a run with no step done for an hour is ended as
+hung, at most three are taken up at once and the clock never waits for them. Questions a flow or an agent asks you appear as a card in the corner
 of every page. A database's status field can be made a **lifecycle**: allowed transitions with guards and required
 fields, shown as buttons on the row.
 

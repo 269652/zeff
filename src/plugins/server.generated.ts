@@ -20,6 +20,7 @@ import "./notebook-python/server";
 import "./notebook-rust/server";
 import "./people/server";
 import "./revolut/server";
+import "./teams/server";
 import "./timeline/server";
 import "./todos/server";
 import "./work/server";

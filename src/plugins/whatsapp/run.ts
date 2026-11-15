@@ -2,13 +2,12 @@
 import type { TodoOp } from "@/lib/todos/shared";
 import { formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload } from "@/lib/mcp/stdio";
 import type { ActionResult } from "../actions/run-types";
-import { automationEnv, driverPath } from "../drivers";
+import { runDriver } from "../drivers";
 
 export async function runWhatsappMessage(op: Extract<TodoOp, { type: "whatsapp-message" }>): Promise<ActionResult> {
-  const out = await runStdioSession(
-    { command: process.execPath, args: [driverPath("whatsapp")], env: automationEnv(), label: "WhatsApp" },
+  const out = await runDriver("whatsapp", "WhatsApp",
     async (call) => resultToPayload(await call("whatsapp_send", { chat: op.chat, text: op.body })),
     120000,
   );

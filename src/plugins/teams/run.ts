@@ -2,17 +2,17 @@
 import type { TodoOp } from "@/lib/todos/shared";
 import { formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload } from "@/lib/mcp/stdio";
 import { saveTeamsMessages, type TeamsMessageInput } from "@/lib/teams/store";
-import { automationEnv, driverPath } from "../drivers";
+import { runDriver } from "../drivers";
 import type { ActionResult } from "../actions/run-types";
 
 /** A 1:1 Teams message, through the Teams driver (src/plugins/teams/driver.mjs) in the automation Chrome. */
 type SentTeams = { to: string; newChat: boolean; away: string | null; message: (TeamsMessageInput & { link: string; sentAt: number }) | null };
 async function sendTeamsMessage(to: string, body: string): Promise<SentTeams> {
-  const script = driverPath("teams");
-  return runStdioSession(
-    { command: process.execPath, args: [script], env: automationEnv(), label: "Teams" },
+  return runDriver(
+    "teams",
+    "Teams",
     async (call) => resultToPayload(await call("teams_send", { to, text: body })) as SentTeams,
     180000,
   );

@@ -6,7 +6,13 @@
  * a lookup lambda gives hits and fields as its manifest says, any other the JSON schema of its manifest. The definitions; client-safe.
  */
 
-export type LambdaKind = "lookup" | "function";
+/**
+ * A driver (capability D) is a function that reaches what has no API — a web app in the automation Chrome (Google Keep), a desktop app: it
+ * runs outside the sandbox, with the account's Chrome (context.chrome) — only when a flow calls it through driver.call with its `driver`
+ * permission, and a plugin's only while the plugin is granted exec. Kept like any lambda: a plugin's as it ships, your (or the AI's) fix
+ * of it in the database — so a scraper that broke is mended where it is kept.
+ */
+export type LambdaKind = "lookup" | "function" | "driver";
 
 /** A JSON schema, as far as a lambda's output is checked: type, properties, required, items, enum. */
 export type JsonSchema = { type?: "object" | "array" | "string" | "number" | "integer" | "boolean" | "null" | ("object" | "array" | "string" | "number" | "integer" | "boolean" | "null")[]; properties?: Record<string, JsonSchema>; required?: string[]; items?: JsonSchema; enum?: unknown[]; additionalProperties?: boolean; description?: string };
@@ -56,7 +62,7 @@ export function normalizeManifest(raw: unknown): LambdaManifest {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const name = str(o.name).toLowerCase();
   if (!LAMBDA_NAME.test(name)) throw new Error(`lambda.json: "name" is lowercase letters, digits, - and _, parts joined by dots ("my.source") — not “${str(o.name)}”.`);
-  const kind: LambdaKind = o.kind === "function" ? "function" : "lookup";
+  const kind: LambdaKind = o.kind === "function" ? "function" : o.kind === "driver" ? "driver" : "lookup";
   const deps = record(o.dependencies);
   for (const [k, v] of Object.entries(deps)) if (!/^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/.test(k) || !/^[\w.^~<>=|* -]+$/.test(v || "x")) throw new Error(`lambda.json: the dependency “${k}@${v}” isn't a package name and version range.`);
   const web = list(o.web).map((d) => d.toLowerCase());
@@ -78,7 +84,7 @@ export function normalizeManifest(raw: unknown): LambdaManifest {
     ...(list(o.zeff).length ? { zeff: list(o.zeff) } : {}),
     ...(Object.keys(deps).length ? { dependencies: deps } : {}),
     ...(o.output && typeof o.output === "object" ? { output: o.output as JsonSchema } : {}),
-    timeoutMs: n(o.timeoutMs, 1000, 120000, 20000),
+    timeoutMs: n(o.timeoutMs, 1000, kind === "driver" ? 600000 : 120000, 20000),
     memoryMb: n(o.memoryMb, 32, 1024, 128),
   };
 }

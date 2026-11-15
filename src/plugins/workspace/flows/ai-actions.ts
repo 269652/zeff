@@ -13,6 +13,32 @@ const text = (v: unknown) => (typeof v === "string" ? v : typeof v === "number" 
 
 export const AI_ACTIONS: FlowAction[] = [
   {
+    name: "ai.json",
+    group: "ai",
+    label: "AI: an answer in a shape",
+    summary: "A prompt answered by the AI as JSON in the shape the schema says (a JSON Schema object) — routed and budgeted as the named task (Settings → AI: which AI does it).",
+    input: [f("prompt", "text", { required: true }), f("schema", "json", { required: true }), f("task", "text", { help: "The AI task it counts as (\"cases-compile\" …); general without one" }), f("budget", "number", { help: "At most this many dollars" })],
+    output: "the answer, as the schema says",
+    needs: ["ai"],
+    run: async (i, ctx) => {
+      ctx.may("ai");
+      if (!i.schema || typeof i.schema !== "object") throw new Error("schema: the shape of the answer (a JSON Schema object).");
+      const { runAi } = await import("@/lib/ai");
+      const budget = Number(i.budget);
+      const r = await runAi<unknown>(text(i.prompt).slice(0, 200000), i.schema as object, { task: (text(i.task) || "general") as never, timeoutMs: 4 * 60000, ...(budget > 0 ? { maxBudgetUsd: Math.min(5, budget) } : {}) });
+      return r.output ?? {};
+    },
+  },
+  {
+    name: "prompts.text",
+    group: "ai",
+    label: "A prompt as you set it",
+    summary: "The text of one of Zeff's prompts (System → Prompts) as you changed it — else the one given.",
+    input: [f("key", "text", { required: true }), f("fallback", "text", { required: true })],
+    output: "{ text }",
+    run: async (i) => ({ text: (await import("@/lib/prompts")).promptText(text(i.key), text(i.fallback)) }),
+  },
+  {
     name: "localai.config",
     group: "ai",
     label: "The local AI's settings",

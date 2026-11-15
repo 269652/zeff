@@ -496,9 +496,12 @@ whichever plugin answers: a built-in, or a port of it. The answer is checked aga
 | Service | Called with | Answers |
 | --- | --- | --- |
 | `web.search` | `{ query, count?, site?, language? }` | `{ hits: [{ title, url, snippet }] }` (only http(s) addresses) |
+| `bank.statement` | `{ csv, name? }` | `{ account, bookings: [{ date, amount, currency?, text, counterparty?, iban?, reference? }] }` (each booking checked; throws when the CSV is no statement) |
 
 `web.search` is used by flows, by the lookups' web source and by Learn's research. While the built-in Web search is installed, it
-answers; otherwise the first plugin that is on and fills the service does.
+answers; otherwise the first plugin that is on and fills the service does. `bank.statement` is how the kernel reads a bank statement
+(`src/lib/bank/statements.ts`: an import — the action `bank.import` —, a statement among the documents and the note it is kept as); a
+plugin that fills it answers, else the built-in Revolut while it is on.
 
 Lambdas also reach the kernel's own actions (name them in `lambda.json`'s `"zeff"`). These include `web.read` (a page as text, never
 the machine's own network) and `ai.websearch` (a search through the Claude login, no key needed).
@@ -551,3 +554,21 @@ so the widgets on your pages keep working after the switch.
 Mail & Chat is built this way ([zeff-plugins/plugins/mail-client-ext](../../../zeff-plugins/plugins/mail-client-ext)): its compute
 script is the built-in's `view-data.ts`, bundled by `scripts/port-mail-client.mts`, and its screens are the built-in's templates
 turned into view language (`src/plugins/mail-client/port.meta.ts`).
+
+## `contributes.stores` — data of its own
+
+```json
+"stores": [{ "name": "messages", "key": "id", "columns": [{ "name": "id" }, { "name": "chat" }, { "name": "at" }, { "name": "data", "type": "json" }], "indexes": [["chat", "at"]] }]
+```
+
+Data beyond Workspace databases: many rows, looked up by key (a connector's messages, a case's sources). The kernel keeps each store in a
+table of its own (`ext_<plugin>_<name>`) in the account's database. A column added in a newer version is added to the table; none is
+ever dropped.
+
+- **Reading and writing.** Through the flow actions `store.query` (where, order, limit), `store.put` (rows by their key: added, or
+  changed in the columns they name) and `store.delete` (where must name something). A flow needs the permission
+  `"store": ["<plugin>.<name>"]`; a package's flow asks for it and you allow it when installing. The plugin's lambdas read its own
+  stores (they never write).
+- **Types.** `text`, `integer`, `real`, `json` (any value, read back as it was).
+- **A port keeps the built-in's data.** `"adopts": "cases"` makes the store the built-in's own table — only one the kernel lets that
+  port adopt (`ADOPTABLE` in `src/lib/ext/stores.ts`). Nothing is copied: the built-in and its port see the same rows while you switch.

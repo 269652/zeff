@@ -1,3 +1,4 @@
+import { casesThere } from "@/lib/cases/there";
 import { getSqlite } from "@/db";
 import { getPref, setPref } from "@/lib/prefs";
 import { isInstalled } from "@/plugins/state";
@@ -204,7 +205,7 @@ export async function meetingBriefs(now = new Date()): Promise<MeetingBrief[]> {
       const before = past.filter((x) => withThem(p, x)).sort((a, b) => b.start.localeCompare(a.start))[0];
       const from = before ? instant(before.start) : new Date(now.getTime() - 30 * DAY).toISOString();
       let cases: MeetingBrief["cases"] = [];
-      if (isInstalled("cases")) {
+      if (casesThere()) {
         const { casesOfPerson } = await import("@/plugins/cases/store");
         const { caseTitle } = await import("@/plugins/cases/shared");
         const { openOf } = await import("@/plugins/cases/bank");

@@ -2,7 +2,7 @@ import { currentAccountId, accountChrome } from "@/db/accounts";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
 import { integrationServer } from "@/lib/integrations/server";
-import { automationEnv, automationUp, driverPath, type DriverId } from "@/plugins/drivers";
+import { automationUp, runDriver, type DriverId } from "@/plugins/drivers";
 import { PLUGINS } from "@/plugins/catalog";
 import { installedPlugins, stepAvailable } from "@/plugins/state";
 import { listAttention, serviceLabel, type ServiceId } from "./attention";
@@ -106,12 +106,14 @@ export async function checkLogin(service: ServiceId): Promise<{ state: LoginStat
   if (service !== "signal" && !(await chromeUp())) r = { state: "chrome", detail: t("The automation Chrome isn't running — “Sign in” starts it.") };
   else {
     try {
-      const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-      const out = await runStdioSession(
-        // (a mounted integration's driver gets its address and login too — its status check doesn't sign anyone in.)
-        { command: process.execPath, args: [driverPath(tool[0])], env: { ...automationEnv(), ...((await integrationServer(service)?.service?.env?.()) ?? {}) }, label: `${serviceLabel(service) ?? service} status` },
+      const { resultToPayload } = await import("@/lib/mcp/stdio");
+      // (a mounted integration's driver gets its address and login too — its status check doesn't sign anyone in; a plugin's driver answers when it is on)
+      const out = await runDriver(
+        tool[0],
+        `${serviceLabel(service) ?? service} status`,
         async (call) => resultToPayload(await call(tool[1], {})),
         45000,
+        (await integrationServer(service)?.service?.env?.()) ?? {},
       );
       r = classify(out);
       noteContractCheck(service, out);

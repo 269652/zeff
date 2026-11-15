@@ -75,6 +75,45 @@ export const GITLAB_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "gitlab.settings",
+    group: "gitlab",
+    label: "How GitLab is set up for reading",
+    summary: "Where your GitLab is (its address), how it is read (api: a token or sign-in — cdp: the automation Chrome), and from when to read again (a day before the last good sync; none: everything).",
+    input: [],
+    output: "{ baseUrl, via, sinceIso }",
+    run: async () => {
+      const { getGitlabSettings } = await import("@/lib/gitlab/store");
+      const { driverOf } = await import("@/lib/connectors/store");
+      const s = getGitlabSettings();
+      return { baseUrl: s.baseUrl.replace(/\/+$/, ""), via: driverOf("gitlab"), sinceIso: s.lastOk && s.lastSyncAt ? new Date(new Date(s.lastSyncAt).getTime() - 864e5).toISOString() : "" };
+    },
+  },
+  {
+    name: "gitlab.keep",
+    group: "gitlab",
+    label: "Keep what was read from GitLab",
+    summary: "Merge requests, comments and branches a reader brought, kept — and what the todos and the work do with them (merges waiting for an approval, the buttons on todos, the branches as context); how the sync went is noted for the GitLab page. Needs the flow's sync permission for gitlab.",
+    input: [{ name: "items", type: "json", required: true }, { name: "ok", type: "boolean" }, { name: "message", type: "text" }],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!(ctx.perms.sync ?? []).includes("gitlab")) throw new Error("This flow may not keep GitLab's items — grant “gitlab” under the flow's permissions (sync).");
+      if (ctx.dryRun) return { ok: true, message: "dry run" };
+      const sync = await import("@/lib/gitlab/sync");
+      const { clearAttention, needsSignIn, raiseLogin } = await import("@/lib/attention");
+      const { t } = await import("@/lib/i18n/server");
+      // (a failure the reader had: noted — a sign-in it wants asked of you)
+      if (i.ok === false || i.ok === "false") {
+        const message = String(i.message ?? "").slice(0, 300);
+        if (needsSignIn(message) && !/reachable/i.test(message)) raiseLogin("gitlab", message);
+        return sync.recordGitlabSync(false, message);
+      }
+      const r = await sync.keepGitlabItems(Array.isArray(i.items) ? (i.items as never[]) : []);
+      clearAttention("login:gitlab");
+      return sync.recordGitlabSync(true, t("{added} new · {total} in all", { added: r.added, total: r.total }));
+    },
+  },
+  {
     name: "gitlab.sync",
     group: "gitlab",
     label: "Sync GitLab",

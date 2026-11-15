@@ -1,3 +1,4 @@
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import fs from "node:fs";
 import path from "node:path";
 import { t } from "@/lib/i18n/server";
@@ -141,6 +142,39 @@ export function getJiraSyncConfig(): JiraSyncConfig {
   return { configured: false, source: "none", args: [], env: {}, tool, jql, fields, limit, baseUrl: process.env.JIRA_BASE_URL?.trim() || undefined };
 }
 
+/**
+ * What was read from Jira, kept: the tickets upserted (the ones no longer returned inactive — unless a board wasn't read to the end), their
+ * boards and "mine" flags, the titles of booked tickets. The sync's own tail (a reader's — the built-in's MCP session, or its port's driver —
+ * hands over what it read; a port's flow does this through the kernel's jira.keep).
+ */
+export function keepJiraRead(read: { myTickets: NormalizedTicket[]; boardTickets: NormalizedTicket[]; members: { key: string; boardId: number }[]; titleOnly: NormalizedTicket[]; unreadBoards: number }): SyncResult {
+  const byKey = new Map<string, NormalizedTicket>();
+  for (const x of read.boardTickets) byKey.set(x.key, x);
+  for (const x of read.myTickets) byKey.set(x.key, x);
+  const all = [...byKey.values()];
+  const upserted = upsertTickets(all, { markMissingInactive: read.unreadBoards === 0 });
+  const unionKeys = all.map((x) => x.key);
+  assignTicketBoards(unionKeys, read.members);
+  const myKeys = read.myTickets.map((x) => x.key);
+  setTicketsMine(myKeys, unionKeys);
+  const titlesAdded = insertTitleOnlyTickets(read.titleOnly);
+  return { ...upserted, fetched: read.myTickets.length + read.boardTickets.length, titlesAdded, boardTickets: read.boardTickets.length, mine: myKeys.length, unreadBoards: read.unreadBoards };
+}
+
+/** How a read went, as the Sync menu says it — and what the databases do with it (the boards' databases, Meine Lage, the pipelines). */
+export async function jiraStepOutcome(r: SyncResult): Promise<{ ok: boolean; message: string }> {
+  const unread = r.unreadBoards ? ` ${t("{n} board(s) couldn't be read to the end — nothing deactivated, next sync tries again.", { n: r.unreadBoards })}` : "";
+  const done = t("{total} tickets — {mine} yours ({inserted} new, {updated} updated).", { total: r.total, mine: r.mine, inserted: r.inserted, updated: r.updated });
+  const { isInstalled } = await import("@/plugins/state");
+  // The Jira boards' databases in the Workspace (Jira as a data source) follow at once.
+  if (isInstalled("jira-lage") && isInstalled("workspace"))
+    await (await import("@/plugins/jira-lage/to-workspace")).syncJiraBoardDatabases().catch((e) => console.error("[jira] keeping the boards' databases failed", e));
+  // My briefing replaced by Meine Lage, a pipeline database (once); the databases with a pipeline keep their rows; their AI steps go with the briefing.
+  if (isInstalled("jira-lage") && isInstalled("workspace")) await (await import("@/plugins/jira-lage/to-workspace")).replaceBriefingOnce().catch((e) => console.error("[jira] Meine Lage as a pipeline database failed", e));
+  if (isInstalled("workspace")) await (await import("@/plugins/workspace/pipeline")).runPipelinesAfterSync().catch((e) => console.error("[workspace] the pipelines failed", e));
+  return { ok: !unread, message: `${done}${unread}` };
+}
+
 export type SyncResult = UpsertResult & { fetched: number; titlesAdded: number; boardTickets: number; mine: number; /** Boards not read to the end (nothing deactivated then). */ unreadBoards?: number };
 
 /**
@@ -173,7 +207,7 @@ async function readFromJira(): Promise<SyncResult> {
       t("Jira MCP sync is not configured. Set JIRA_MCP_COMMAND (and optionally JIRA_MCP_ARGS/JIRA_MCP_ENV/JIRA_JQL) in .env.local, or use Paste import."),
     );
   }
-  const config: McpStdioConfig = { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira MCP" };
+  const config: McpStdioConfig = { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira MCP", notFoundHint: jiraNotFoundHint };
   const normalize = (issues: unknown[]) =>
     issues.map((i) => normalizeIssue(i, cfg.baseUrl)).filter((x): x is NormalizedTicket => x !== null);
 
@@ -225,31 +259,21 @@ async function readFromJira(): Promise<SyncResult> {
         );
       }
 
-      // 3. Merge (my tickets win for shared keys — they carry the changelog), upsert, deactivate the rest.
-      const byKey = new Map<string, NormalizedTicket>();
-      for (const x of boardTickets) byKey.set(x.key, x);
-      for (const x of myTickets) byKey.set(x.key, x);
-      const all = [...byKey.values()];
-      const upserted = upsertTickets(all, { markMissingInactive: unread.length === 0 });
-
-      // 4. Board membership + mine flags across everything we just synced.
-      const unionKeys = all.map((x) => x.key);
-      assignTicketBoards(unionKeys, members);
-      setTicketsMine(myKeys, unionKeys);
-
-      // 5. Titles for tickets booked in Zeff but not in either set above.
-      const missing = bookedTicketKeysMissingTitle();
-      let titlesAdded = 0;
+      // 3. Titles for tickets booked in Zeff but not in either set above.
+      const known = new Set([...boardTickets, ...myTickets].map((x) => x.key));
+      const missing = bookedTicketKeysMissingTitle().filter((k) => !known.has(k));
+      const titleOnly: NormalizedTicket[] = [];
       for (let i = 0; i < missing.length; i += 50) {
         const chunk = missing.slice(i, i + 50);
         try {
           const p2 = resultToPayload(await call(cfg.tool, { jql: `key in (${chunk.join(",")})`, limit: chunk.length, fields: cfg.fields }));
-          titlesAdded += insertTitleOnlyTickets(normalize(extractIssues(p2)));
+          titleOnly.push(...normalize(extractIssues(p2)));
         } catch {
           // ignore title-fetch failures (e.g. tickets the user can't view)
         }
       }
-      return { ...upserted, fetched: myRaw.length + boardTickets.length, titlesAdded, boardTickets: boardTickets.length, mine: myKeys.length, unreadBoards: unread.length };
+      // 4. Merge (my tickets win for shared keys — they carry the changelog), upsert, deactivate the rest; boards, "mine", titles.
+      return keepJiraRead({ myTickets, boardTickets, members, titleOnly, unreadBoards: unread.length });
     },
     180000,
   );

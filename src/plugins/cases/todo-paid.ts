@@ -8,6 +8,7 @@ import { caseStanding, openOf, paymentsOf } from "./bank";
 import { getPref } from "@/lib/prefs";
 import { getPage, rawRows } from "@/plugins/workspace/store";
 import { casesOfRef, getCase, updateCase } from "./store";
+import { settledSummary } from "./core-summary";
 
 /**
  * A payment todo ticked off pays its case (the Cases plugin, through lib/todos/settle.ts): the todos come from the cases (a
@@ -19,16 +20,6 @@ import { casesOfRef, getCase, updateCase } from "./store";
 /** A todo that asks for money to go out — as payments.ts reads them. */
 const PAYS = /überweis|bezahl|zahl(?:en|ung)|\brate\b|raten|begleich|anweis/i;
 
-/** The due a month on — on the plan's day of the month when it has one (paid late on the 23rd, the next is still the 15th). */
-const plusMonth = (iso: string, planDay?: number): string => {
-  const d = new Date(`${iso}T12:00:00`);
-  const want = planDay && planDay >= 1 && planDay <= 31 ? planDay : d.getDate();
-  d.setDate(1);
-  d.setMonth(d.getMonth() + 1);
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  d.setDate(Math.min(want, last)); // (the 31st in February: its last day)
-  return d.toLocaleDateString("sv-SE");
-};
 
 /** The open cases a todo belongs to: as one of their sources, or as the warning made for one. */
 function casesOfTodo(todoId: number): number[] {
@@ -78,15 +69,6 @@ function unpayCase(caseId: number, key: string): void {
   if (p) ledger.deallocate(p.id, `case:${caseId}`);
 }
 
-/** The due a month back (a summary from before the ledger moved it on by its payments: where it started). */
-const minusMonth = (iso: string, planDay?: number): string => {
-  const d = new Date(`${iso}T12:00:00`);
-  const want = planDay && planDay >= 1 && planDay <= 31 ? planDay : d.getDate();
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
-  d.setDate(Math.min(want, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
-  return d.toLocaleDateString("sv-SE");
-};
 
 /**
  * A case's figures computed from its letters and its payments, never patched: the summary's due and done as the letters say (kept as
@@ -99,22 +81,9 @@ export function settleCase(caseId: number): void {
   const s = c?.compiled;
   if (!c || !s) return;
   // (A summary from before: its due was moved on by the payments it had counted — moved back, that is where it started.)
-  const counted = s.settled ?? [];
-  const base = s.base ?? {
-    nextDue: counted.length && s.nextDue && s.installment != null ? counted.reduce((d) => minusMonth(d, s.installmentDay), s.nextDue) : counted.length ? null : s.nextDue,
-    done: counted.length ? false : s.done,
-  };
-  const since = s.at.slice(0, 10);
-  let due = base.nextDue;
-  for (const p of paymentsOf(caseId).filter((x) => x.date >= since)) {
-    if (!due) break;
-    if (s.installment != null && p.amount >= s.installment - 0.005) due = plusMonth(due, s.installmentDay);
-    else if (s.installment == null) due = null;
-  }
-  const open = s.open != null ? caseStanding(caseId).open : null;
-  const { settled: _settled, ...rest } = s;
-  const next = { ...rest, base, nextDue: open === 0 ? null : due, done: open === 0 || base.done };
-  if (JSON.stringify(next) !== JSON.stringify(s)) updateCase(caseId, { compiled: next });
+  // (the pure core's — the port's flow moves a summary on the same way: core-summary.ts settledSummary)
+  const next = settledSummary(s, paymentsOf(caseId), s.open != null ? caseStanding(caseId).open : null);
+  if (next) updateCase(caseId, { compiled: next });
 }
 
 // The ledger: a case's allocations changed (a booking matched, a todo ticked off, one taken back) — its figures follow.

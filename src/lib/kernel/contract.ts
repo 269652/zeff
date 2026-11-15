@@ -20,6 +20,7 @@ export const CONTRACT_VERSION = API_VERSION;
  */
 export const KERNEL_SERVICES = {
   "web.search": { input: "{ query: text, count?: 1–10, site?: domain, language?: de|en|… }", output: "{ hits: [{ title, url, snippet }] }" },
+  "bank.statement": { input: "{ csv: text, name?: the file's name }", output: "{ account, bookings: [{ date: YYYY-MM-DD, amount (out < 0), currency?, text, counterparty?, iban?, reference? }] } — throws when it is no statement" },
 } as const;
 export type KernelService = keyof typeof KERNEL_SERVICES;
 
@@ -71,7 +72,7 @@ export const KERNEL_CONTRACT = {
   },
 
   /** What a plugin's manifest may bring (`contributes` in zeff-plugin.json, lib/ext/manifest.ts). */
-  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
+  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
 
   /** What a server function or a Notebook cell may ask Zeff for (`zeff.*` in Python and Node.js; notebook/zeff-access.ts). */
   functionCalls: ["add_row", "ai", "api", "call", "database", "databases", "delete_row", "meta", "metric", "metrics", "output", "outputs", "publish", "table", "tables", "update_row"],
@@ -89,10 +90,10 @@ export const KERNEL_CONTRACT = {
   viewElements: [
     "a", "ask", "avatar", "b", "badge", "bar", "board", "box", "button", "calendar", "callout", "cards", "case", "chart", "chat", "chip", "clamp",
     "code", "codewidget", "col", "column", "copy", "cover", "data", "datatable", "def", "dialog", "divider", "dossier", "dot", "drag", "drop",
-    "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
+    "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "girocode", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
     "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
-    "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "quickadd", "quote", "rating", "row", "schedule", "search", "section",
-    "select", "selected", "setting", "settings", "slider", "slot", "small", "sparkline", "split", "state", "step", "steps", "strike", "subview", "suggested",
+    "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "quickadd", "quote", "rating", "row", "rowtimeline", "schedule", "search", "section",
+    "select", "selected", "setting", "settings", "slider", "slot", "small", "sources", "sparkline", "split", "state", "step", "steps", "strike", "subview", "suggested",
     "switch", "tab", "table", "tabs", "tabset", "text", "theme", "tile", "timeline", "todomark", "toggle", "toolbar", "transitions", "truncate",
     "upload", "use", "widget",
   ],

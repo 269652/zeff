@@ -17,7 +17,27 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   teams: { port: "teams-ext", steps: ["teams"] },
   whatsapp: { port: "whatsapp-ext", steps: ["whatsapp"] },
   signal: { port: "signal-ext", steps: ["signal"] },
+  // (the mail plugins share one step: the port's flow reads its own mailboxes, the step the others' — mail/sync.ts mailStepSources)
+  "outlook-mail": { port: "outlook-mail-ext", steps: [] },
+  gmail: { port: "gmail-ext", steps: [] },
+  "imap-mail": { port: "imap-mail-ext", steps: [] },
+  // (the port reads statements — the kernel's service bank.statement; paying by RevTag stays the kernel's todo action)
+  revolut: { port: "revolut-ext", steps: [] },
+  gitlab: { port: "gitlab-ext", steps: ["gitlab"] },
+  jira: { port: "jira-ext", steps: ["jira"] },
+  keep: { port: "keep-ext", steps: ["keep"] },
 };
+
+/**
+ * Built-ins whose port replaces them (their screens and data) — what builds on them is there with the port too: Finances and Revolut
+ * on Cases (the cases' tables are the port's stores now; lib/cases/there.ts says who keeps them). The built-in itself isn't there.
+ */
+export const DEPENDED_ON_THROUGH: Partial<Record<PluginId, string>> = {
+  cases: "cases-ext",
+};
+
+/** The built-ins whose port is on (DEPENDED_ON_THROUGH), per account — set by chosen(). */
+const portOnBy = new Map<string, Set<PluginId>>();
 
 /** The built-ins there only through their port (PROVIDED_BY), per account — set by chosen(). */
 const providedOnlyBy = new Map<string, Set<PluginId>>();
@@ -37,6 +57,9 @@ function chosen(): Map<PluginId, boolean> {
     out.set(id, true);
     only.add(id);
   }
+  const ports = new Set<PluginId>();
+  portOnBy.set(currentAccountId(), ports);
+  for (const [id, port] of Object.entries(DEPENDED_ON_THROUGH) as [PluginId, string][]) if (rows.some((r) => r.id === `x:${port}` && r.installed) && !safeMode()) ports.add(id);
   return out;
 }
 
@@ -71,7 +94,9 @@ function readInstalled(): Set<PluginId> {
   const there = (id: PluginId, path = new Set<PluginId>()): boolean => {
     if (!on.get(id) || path.has(id)) return false;
     const next = new Set(path).add(id);
-    return (pluginById(id).dependsOn ?? []).every((d) => there(d, next));
+    // (a dependency whose port is on counts as there for what builds on it — DEPENDED_ON_THROUGH)
+    const ports = portOnBy.get(currentAccountId()) ?? new Set<PluginId>();
+    return (pluginById(id).dependsOn ?? []).every((d) => there(d, next) || ports.has(d));
   };
   return new Set(PLUGINS.filter((p) => there(p.id)).map((p) => p.id));
 }

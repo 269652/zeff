@@ -3,7 +3,7 @@ import { errorMessage } from "@/lib/errors";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
 import { saveMails, type MailInput } from "@/lib/mail/store";
-import { automationEnv, driverPath } from "@/plugins/drivers";
+import { runDriver } from "@/plugins/drivers";
 
 /**
  * One WhatsApp chat's whole history (WhatsApp plugin), by hand: its earlier messages loaded until
@@ -22,9 +22,8 @@ async function pullHistory(chat: string, { fromPhone = true }: { fromPhone?: boo
   if (flag.__zeffWhatsappHistory) return { ok: false, message: t("A history is already running ({chat}).", { chat: flag.__zeffWhatsappHistory }) };
   flag.__zeffWhatsappHistory = chat;
   try {
-    const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-    const out = await runStdioSession(
-      { command: process.execPath, args: [driverPath("whatsapp")], env: automationEnv(), label: "WhatsApp history" },
+    const { resultToPayload } = await import("@/lib/mcp/stdio");
+    const out = await runDriver("whatsapp", "WhatsApp history",
       async (call) => resultToPayload(await call("whatsapp_history", { chat, fromPhone, openIfMissing: true })),
       45 * 60000, // a long chat from the phone: many rounds
     );

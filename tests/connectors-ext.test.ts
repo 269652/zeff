@@ -7,14 +7,14 @@ import { setupTempData } from "./helpers";
 setupTempData();
 
 /**
- * The connectors' ports (zeff-plugins: teams-ext, whatsapp-ext, signal-ext): each a package with a sync flow that calls the kernel's
+ * The connectors' ports (zeff-plugins: teams-ext, whatsapp-ext, signal-ext, gitlab-ext, jira-ext): each a package with a sync flow that calls the kernel's
  * connector.sync — only with the flow's `sync` permission for that source; while a port is on its built-in counts as there (its replies,
  * settings, pages), its own step doesn't run (the flow does, its interval on the Sync settings page), and the steps it shares with
  * others (todos found in messages, relations) still do.
  */
 
 const PLUGINS = path.resolve("../zeff-plugins/plugins");
-const have = ["teams", "whatsapp", "signal"].every((c) => fs.existsSync(path.join(PLUGINS, `${c}-ext`, `${c}.package.json`)));
+const have = ["teams", "whatsapp", "signal", "gitlab", "jira"].every((c) => fs.existsSync(path.join(PLUGINS, `${c}-ext`, `${c}.package.json`)));
 
 async function world() {
   const { setInstalled } = await import("@/plugins/state");
@@ -25,12 +25,12 @@ async function world() {
 
 test("connector.sync: only a known source, only with the flow's sync permission for it; a dry run reads nothing", async () => {
   const { flows, engine } = await world();
-  flows.createFlow({ name: "t.c.denied", nodes: [{ id: "r", kind: "action", action: "connector.sync", input: { source: "teams" } }], permissions: { sync: ["whatsapp"] } });
+  flows.createFlow({ name: "t.c.denied", nodes: [{ id: "r", kind: "action", action: "connector.sync", input: { source: "whatsapp" } }], permissions: { sync: ["signal"] } });
   const denied = await engine.runFlow("t.c.denied");
   assert.equal(denied.status, "failed");
-  assert.match(denied.error ?? "", /may not read teams/);
-  flows.createFlow({ name: "t.c.unknown", nodes: [{ id: "r", kind: "action", action: "connector.sync", input: { source: "fax" } }], permissions: { sync: ["teams"] } });
-  assert.match((await engine.runFlow("t.c.unknown")).error ?? "", /reads teams, whatsapp, signal/);
+  assert.match(denied.error ?? "", /may not read whatsapp/);
+  flows.createFlow({ name: "t.c.unknown", nodes: [{ id: "r", kind: "action", action: "connector.sync", input: { source: "fax" } }], permissions: { sync: ["signal"] } });
+  assert.match((await engine.runFlow("t.c.unknown")).error ?? "", /reads whatsapp, signal/);
   flows.createFlow({ name: "t.c.dry", nodes: [{ id: "r", kind: "action", action: "connector.sync", input: { source: "signal" } }], permissions: { sync: ["signal"] } });
   assert.equal((await engine.runFlow("t.c.dry", {}, { dry: true })).status, "done");
 });
@@ -40,12 +40,12 @@ test("ports on: the built-ins there through them, their own steps not — shared
   const state = await import("@/plugins/state");
   const { getDb, schema } = await import("@/db");
   const life = await import("@/plugins/workspace/package-life");
-  for (const c of ["teams", "whatsapp", "signal"] as const) {
+  for (const c of ["teams", "whatsapp", "signal", "gitlab", "jira"] as const) {
     state.setInstalled(c, false);
     getDb().insert(schema.plugins).values({ id: `x:${c}-ext`, installed: true, changedAt: new Date().toISOString() }).onConflictDoUpdate({ target: schema.plugins.id, set: { installed: true } }).run();
   }
   state.setInstalled("todos", true); // (drops the memo)
-  for (const c of ["teams", "whatsapp", "signal"] as const) {
+  for (const c of ["teams", "whatsapp", "signal", "gitlab", "jira"] as const) {
     assert.equal(state.isInstalled(c), true, `${c} there through its port`);
     assert.equal(state.stepAvailable(c), false, `${c}'s own step doesn't run`);
     const pkg = JSON.parse(fs.readFileSync(path.join(PLUGINS, `${c}-ext`, `${c}.package.json`), "utf8"));
@@ -68,4 +68,36 @@ test("ports on: the built-ins there through them, their own steps not — shared
     assert.ok(keys.includes(`flow:${c}.sync`), `${c}'s flow in the Sync menu`);
     assert.ok(!keys.includes(c), `${c}'s built-in step not`);
   }
+});
+
+test("the mail plugins' ports: each flow reads its own mailboxes, the shared mail step the others' — none left: the step steps aside", { skip: !have && "zeff-plugins isn't beside Zeff" }, async () => {
+  const { flows, engine } = await world();
+  const state = await import("@/plugins/state");
+  const { getDb, schema } = await import("@/db");
+  const { mailStepSources } = await import("@/lib/mail/sync");
+  state.setInstalled("gmail", true);
+  state.setInstalled("imap-mail", true);
+  assert.deepEqual((await mailStepSources()).filter((s) => s !== "outlook"), ["gmail", "imap"]);
+  // Gmail through its port: the step reads IMAP only.
+  state.setInstalled("gmail", false);
+  getDb().insert(schema.plugins).values({ id: "x:gmail-ext", installed: true, changedAt: new Date().toISOString() }).onConflictDoUpdate({ target: schema.plugins.id, set: { installed: true } }).run();
+  state.setInstalled("todos", true);
+  assert.equal(state.isInstalled("gmail"), true, "Gmail there through its port");
+  assert.ok(!(await mailStepSources()).includes("gmail"), "the shared step leaves Gmail to its port");
+  assert.ok((await mailStepSources()).includes("imap"));
+  const pkg = JSON.parse(fs.readFileSync(path.join(PLUGINS, "gmail-ext", "gmail.package.json"), "utf8"));
+  await (await import("@/plugins/workspace/package-life")).installTracked(pkg, null, { allow: true });
+  const f = flows.flowByName("gmail.sync")!;
+  assert.deepEqual(f.permissions.sync, ["gmail"]);
+  assert.equal(f.sync?.replaces, undefined, "beside the mail step, not in its place");
+  assert.equal((await engine.runFlow("gmail.sync", {}, { dry: true })).status, "done");
+  // Every mail plugin through its port: nothing left for the shared step.
+  for (const p of ["outlook-mail", "imap-mail"] as const) {
+    state.setInstalled(p, false);
+    getDb().insert(schema.plugins).values({ id: `x:${p}-ext`, installed: true, changedAt: new Date().toISOString() }).onConflictDoUpdate({ target: schema.plugins.id, set: { installed: true } }).run();
+  }
+  state.setInstalled("todos", true);
+  assert.deepEqual(await mailStepSources(), []);
+  const reg = await import("@/lib/sync/registry");
+  assert.ok(!reg.syncOverview().steps.some((s) => s.key === "mail"), "the mail step isn't shown");
 });

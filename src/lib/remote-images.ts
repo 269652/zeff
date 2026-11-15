@@ -44,7 +44,7 @@ async function fetchDirect(url: string): Promise<FetchedImage | null> {
 
 /** Through the automation Chrome (scripts/images-mcp.mjs), with the sessions signed in there. */
 async function fetchViaChrome(urls: string[]): Promise<FetchedImage[]> {
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
+  const { runStdioSession, resultToPayload } = await import("@/lib/mcp/stdio");
   const script = path.join(/*turbopackIgnore: true*/ process.cwd(), "scripts", "images-mcp.mjs");
   const out = await runStdioSession(
     { command: process.execPath, args: [script], env: automationEnv(), label: "Picture download" },

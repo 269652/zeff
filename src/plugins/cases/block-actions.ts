@@ -31,46 +31,40 @@ export async function caseOpAction(rowId: number, op: CaseOperation): Promise<Re
   });
 }
 
-export type CasesOverview = {
-  figures: { open: number; dueSoon: number; overdue: number; running: number };
-  cases: { id: number; rowId: number | null; title: string; label: string; person: string; /** Who it is owed to, who collects it (contacts' names). */ creditor: string; collector: string; open: number | null; nextDue: string | null; nextWhat: string; payment: import("./payments").CasePayment | null; summed: boolean }[];
-  /** The debts database of the Finances plugin (its overview): where the money is planned. */
-  debtsDb: number | null;
-};
+import type { CasesOverview } from "./core";
+export type { CasesOverview };
 
 /** The cases database's overview (its "Overview" view): the money in figures, the running cases by what is due first, each with where it pays to. */
 export async function casesOverviewAction(): Promise<Result<{ overview: CasesOverview }>> {
   return run(async () => {
     (await import("./detect")).detectCases();
     // The statements that came in as documents (your Drive folder; the Revolut plugin), read; the payments matched.
-    if (isInstalled("revolut")) (await import("@/plugins/revolut/statement")).importStatementDocuments();
+    await (await import("@/lib/bank/statements")).importStatementDocuments();
     (await import("./bank")).matchPayments();
     const { listCases } = await import("./store");
-    const { casePayment } = await import("./payments");
+    const { personAccount } = await import("./payments");
     const parties = await import("./parties");
     // Every running case's creditor and collector, as its summary names them.
     parties.assignAllParties();
-    const { caseTitle } = await import("./shared");
     const db = await (await import("./database")).casesDatabase();
-    const rows = new Map<string, number>();
-    if (db) for (const r of (await import("@/plugins/workspace/store")).rawRows(db)) rows.set(String(r.cells.srcref ?? ""), r.id);
-    const names = new Map<number, string>();
-    if (isInstalled("people")) for (const p of (await import("@/plugins/people/store")).listPeople()) names.set(p.id, p.name);
-    const today = localDay();
-    const in30 = localDay(new Date(Date.now() + 30 * 864e5));
-    const { openOf } = await import("./bank");
-    const cases = listCases()
-      .filter((c) => c.status === "open" && !c.compiled?.done && !c.compiled?.manual)
-      .map((c) => ({ id: c.id, rowId: rows.get(`case:${c.id}`) ?? null, title: caseTitle(c), label: c.label, person: c.personId ? (names.get(c.personId) ?? "") : "", creditor: parties.partiesOf(c.id).creditor?.name ?? "", collector: parties.partiesOf(c.id).collector?.name ?? "", open: openOf(c), nextDue: c.compiled?.nextDue ?? null, nextWhat: c.compiled?.nextWhat ?? "", payment: casePayment(c.id), summed: !!c.compiled }))
-      .sort((a, b) => (a.nextDue ?? "9999").localeCompare(b.nextDue ?? "9999"));
-    const figures = {
-      open: cases.reduce((s, c) => s + (c.open ?? 0), 0),
-      dueSoon: cases.filter((c) => c.nextDue && c.nextDue >= today && c.nextDue <= in30).reduce((s, c) => s + (c.payment?.amount ?? 0), 0),
-      overdue: cases.filter((c) => c.nextDue && c.nextDue < today).length,
-      running: cases.length,
-    };
+    const rows: Record<string, number> = {};
+    if (db) for (const r of (await import("@/plugins/workspace/store")).rawRows(db)) rows[String(r.cells.srcref ?? "")] = r.id;
+    const names: Record<number, string> = {};
+    if (isInstalled("people")) for (const p of (await import("@/plugins/people/store")).listPeople()) names[p.id] = p.name;
+    const all = listCases();
+    const { paymentsOf } = await import("./bank");
+    // (what the pure core works the overview out of — core.ts; the port's lambda the same)
+    const payments = Object.fromEntries(all.map((c) => [c.id, paymentsOf(c.id)]));
+    const partyNames = Object.fromEntries(
+      all.map((c) => {
+        const p = parties.partiesOf(c.id);
+        return [c.id, { creditor: p.creditor?.name, collector: p.collector?.name }];
+      }),
+    );
+    const accounts = Object.fromEntries(all.filter((c) => c.personId && !c.compiled?.iban).map((c) => [c.personId!, personAccount(c.personId!)]));
     const debtsDb = isInstalled("finances") ? (await import("@/plugins/finances/debts")).debtsDbId() : null;
-    return { overview: { figures, cases, debtsDb } };
+    const { overviewOf } = await import("./core");
+    return { overview: overviewOf({ cases: all, payments, parties: partyNames, names, accounts, rows, today: localDay(), in30: localDay(new Date(Date.now() + 30 * 864e5)), debtsDb }) };
   });
 }
 
@@ -83,7 +77,7 @@ export async function bankStatusAction(): Promise<Result<{ bank: BankStatus }>> 
     const s = sync.bankSettings();
     const { listTransactions } = await import("./bank");
     const debts = isInstalled("finances") ? await (await import("@/plugins/finances/database")).debtsDatabase() : null;
-    return { bank: { debtsHref: debts ? `/workspace/${debts}` : null, statements: isInstalled("revolut"), configured: !!(s?.appId && s.privateKey), connected: sync.bankConnected(), appId: s?.appId ?? "", aspsp: s?.aspsp ?? "Revolut", country: s?.country ?? "DE", validUntil: s?.validUntil ?? null, lastSync: s?.lastSync ?? null, transactions: listTransactions(100000).length } };
+    return { bank: { debtsHref: debts ? `/workspace/${debts}` : null, statements: await (await import("@/lib/bank/statements")).statementsReadable(), configured: !!(s?.appId && s.privateKey), connected: sync.bankConnected(), appId: s?.appId ?? "", aspsp: s?.aspsp ?? "Revolut", country: s?.country ?? "DE", validUntil: s?.validUntil ?? null, lastSync: s?.lastSync ?? null, transactions: listTransactions(100000).length } };
   });
 }
 

@@ -1,3 +1,4 @@
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { contextFileOnDisk, getContextItem, markContextSynced, markFilesSynced } from "@/lib/contexts";
 import { resolveLinks } from "@/lib/context-links";
 import { contextHeadline, jiraCommentMarkdown, jiraSyncHash, jiraSyncState, type ContextItem } from "@/lib/contexts-shared";
@@ -79,11 +80,45 @@ export async function syncContextsToJira(ids: number[], opts: { dryRun?: boolean
     return jiraSyncState(c) !== "no-ticket";
   });
   if (!todo.length) return res;
+  // The Jira plugin does it while it is on (lib/jira/port-ops.ts): every item's files and comment in ONE session.
+  const port = await import("./port-ops");
+  if (await port.jiraPortOn()) {
+    const calls: import("./port-ops").PortCall[] = [];
+    const plan = todo.map((c) => {
+      const where = `${c.ticket} · ${contextHeadline(c, t)}`;
+      const pending = c.files.filter((f) => !f.jiraSyncedAt);
+      const paths = pending.map((f) => contextFileOnDisk(f.id)?.absPath).filter((p): p is string => !!p);
+      const attachAt = pending.length && !opts.dryRun ? calls.push({ type: "attach", ticket: c.ticket!, paths }) - 1 : null;
+      const body = jiraCommentMarkdown(c, linkedWords(c));
+      const hash = jiraSyncHash(c);
+      const kind = !c.jiraCommentId ? "post" : c.jiraSyncedHash !== hash ? "edit" : "none";
+      const commentAt = kind === "none" || opts.dryRun ? null : calls.push(kind === "post" ? { type: "post", ticket: c.ticket!, body } : { type: "edit", ticket: c.ticket!, commentId: c.jiraCommentId!, body }) - 1;
+      return { c, where, pending, attachAt, kind, commentAt, hash };
+    });
+    const answers = await port.runJiraPortCalls(calls);
+    for (const p of plan) {
+      if (p.pending.length) res.files.push(...p.pending.map((f) => `${p.c.ticket} · ${f.name}`));
+      const attach = p.attachAt === null ? null : answers[p.attachAt];
+      if (attach?.ok) markFilesSynced(p.pending.map((f) => f.id));
+      if (attach && !attach.ok) res.errors.push(`${p.where}: ${(attach.error ?? "").slice(0, 200)}`);
+      if (p.kind === "none") {
+        res.unchanged.push(p.where);
+        if (!opts.dryRun) markContextSynced(p.c.id, p.c.jiraCommentId, p.hash);
+        continue;
+      }
+      (p.kind === "post" ? res.posted : res.updated).push(p.where);
+      if (opts.dryRun) continue;
+      const a = p.commentAt === null ? null : answers[p.commentAt];
+      if (a?.ok) markContextSynced(p.c.id, a.commentId ?? p.c.jiraCommentId, p.hash);
+      else res.errors.push(`${p.where}: ${(a?.error ?? "no answer").slice(0, 200)}`);
+    }
+    return res;
+  }
   const cfg = getJiraSyncConfig();
   if (!cfg.configured || !cfg.command) throw new Error(t("Jira isn't set up — see the Jira tab."));
 
   await runStdioSession(
-    { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+    { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
     async (call) => {
       for (const c of todo) {
         const where = `${c.ticket} · ${contextHeadline(c, t)}`;

@@ -1,3 +1,4 @@
+import { runJiraSession, jiraPortOn } from "@/lib/jira/port-ops";
 import { attachmentLine, todoAttachments } from "@/plugins/documents/attachments";
 import { gapNotice } from "./lage-gaps";
 import { lageLearnedBlock } from "@/lib/learning/lage-learned";
@@ -20,7 +21,8 @@ import { extraBlock, getContextPrefs } from "./context-prefs";
 import { followedTickets } from "../todos/followed";
 import { commentCopies } from "../todos/sources";
 import { gitFacts } from "./git-facts";
-import { jiraDown, resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload } from "@/lib/mcp/stdio";
+import { jiraDown, jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { extractIssues, normalizeIssue } from "@/lib/jira/normalize";
 import { getJiraTicket, listJiraBoards, myJiraName } from "@/lib/jira/store";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
@@ -658,7 +660,7 @@ export async function collectBoard(
   const { isInstalled } = await import("@/plugins/state");
   // The sources: Jira (its plugin, set up, with boards chosen) and your Workspace boards in the Lage —
   // either is enough.
-  const jiraOn = isInstalled("jira") && cfg.configured && !!cfg.command;
+  const jiraOn = isInstalled("jira") && ((cfg.configured && !!cfg.command) || (await jiraPortOn()));
   const boards = jiraOn ? listJiraBoards().filter((b) => b.enabled) : [];
   const ownBoardsOn = isInstalled("workspace");
   if (!boards.length && !ownBoardsOn)
@@ -673,8 +675,7 @@ export async function collectBoard(
   // Jira not there (maintenance, down): the run goes on from Zeff's own copy — said in the prompt.
   let fromCache: string | null = null;
   const noJira = { issues: [] as Issue[], leftIssues: [] as Issue[], transitions: {} as Record<string, string[]>, relatedIssues: [] as Issue[], onBoards: new Set<string>() };
-  const read = !boards.length ? noJira : await runStdioSession(
-    { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira MCP" },
+  const read = !boards.length ? noJira : await runJiraSession("Jira MCP",
     async (call) => {
       // Which of your tickets are on the chosen boards (the filter within each)…
       const keys = new Set<string>();
@@ -962,9 +963,8 @@ export async function refreshTicketComments(keys: string[]): Promise<number> {
     ),
   ];
   const cfg = getJiraSyncConfig();
-  if (!list.length || !cfg.configured || !cfg.command) return 0;
-  const issues = await runStdioSession(
-    { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+  if (!list.length || ((!cfg.configured || !cfg.command) && !(await jiraPortOn()))) return 0;
+  const issues = await runJiraSession("Jira",
     async (call) => {
       const p = resultToPayload(
         await call("jira_search", {

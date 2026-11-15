@@ -1,4 +1,4 @@
-import { automationEnv, automationUp, driverPath } from "@/plugins/drivers";
+import { automationUp, runDriver } from "@/plugins/drivers";
 import { driverOf } from "@/lib/connectors/store";
 import { clearAttention, needsSignIn, raiseLogin } from "@/lib/attention";
 import { errorMessage } from "@/lib/errors";
@@ -41,10 +41,10 @@ export async function syncGitlab({ background = false } = {}): Promise<{ ok: boo
     let data: { items?: GitlabItemInput[] };
     if (viaApi) data = await (await import("./api")).readItems({ sinceIso, days: DAYS });
     else {
-      const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-      const script = driverPath("gitlab");
-      const out = await runStdioSession(
-        { command: process.execPath, args: [script], env: automationEnv(), label: "GitLab sync" },
+      const { resultToPayload } = await import("@/lib/mcp/stdio");
+      const out = await runDriver(
+        "gitlab",
+        "GitLab sync",
         // GitLab not open: a tab for it (Chrome itself started only by hand).
         async (call) => resultToPayload(await call("gitlab_items", { baseUrl: base, sinceIso, days: DAYS, openIfMissing: true, launch: !background })),
         240000,
@@ -53,6 +53,25 @@ export async function syncGitlab({ background = false } = {}): Promise<{ ok: boo
       if (!Array.isArray(data.items)) throw new Error(typeof out === "string" ? out.slice(0, 300) : t("GitLab returned nothing readable."));
     }
     const items = data.items ?? [];
+    const { added, total } = await keepGitlabItems(items);
+    clearAttention("login:gitlab");
+    return record(true, t("{added} new · {total} in all", { added, total }));
+  } catch (e) {
+    const message = errorMessage(e).slice(0, 300);
+    // GitLab wants you to sign in (not just unreachable): asked of you, and pinged.
+    if (driverOf("gitlab") === "cdp" && needsSignIn(message) && !/reachable/i.test(message)) raiseLogin("gitlab", message);
+    return record(false, message);
+  } finally {
+    setAccountFlag("__zeffGitlabSyncing", false);
+  }
+}
+
+/** The sync's own record (the GitLab page, the scheduler): how it went — for a port's flow too. */
+export { record as recordGitlabSync };
+
+/** What was read, kept — and what the todos and the work do with it (the sync's tail: its own function, a port's flow does it too). */
+export async function keepGitlabItems(items: GitlabItemInput[]): Promise<{ added: number; total: number }> {
+  {
     const { added, total } = saveGitlabItems(items);
     // Merge todos waiting for an approval: theirs is in.
     const { promoteApprovedMerges } = await import("@/lib/todos/store");
@@ -74,14 +93,6 @@ export async function syncGitlab({ background = false } = {}): Promise<{ ok: boo
     } catch {
       // without the links, then
     }
-    clearAttention("login:gitlab");
-    return record(true, t("{added} new · {total} in all", { added, total }));
-  } catch (e) {
-    const message = errorMessage(e).slice(0, 300);
-    // GitLab wants you to sign in (not just unreachable): asked of you, and pinged.
-    if (driverOf("gitlab") === "cdp" && needsSignIn(message) && !/reachable/i.test(message)) raiseLogin("gitlab", message);
-    return record(false, message);
-  } finally {
-    setAccountFlag("__zeffGitlabSyncing", false);
+    return { added, total };
   }
 }

@@ -40,7 +40,10 @@ export const workspaceSources = extensionPoint<WorkspaceSource[]>("workspace.sou
 /** The sources of the installed plugins. */
 /** Every source: the installed plugins' and the external plugins' (read by their functions). */
 export function allSources(): WorkspaceSource[] {
-  return [...workspaceSources.list().flatMap((c) => c.impl), ...(external?.() ?? [])];
+  const own = workspaceSources.list().flatMap((c) => c.impl);
+  // (a port's source standing in for a built-in's: only once the built-in is off — till then the built-in's reads)
+  const ids = new Set(own.map((s) => s.id));
+  return [...own, ...(external?.() ?? []).filter((s) => !ids.has(s.id))];
 }
 
 // (Set by the Workspace's server.ts: ext-functions.ts reads the plugin registry, which must not be loaded while this file is.)

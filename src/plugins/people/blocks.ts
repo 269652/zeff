@@ -1,3 +1,4 @@
+import { casesThere } from "@/lib/cases/there";
 import { getSqlite } from "@/db";
 import { isInstalled } from "@/plugins/state";
 import { t } from "@/lib/i18n/server";
@@ -84,7 +85,7 @@ function documentsOf(p: NonNullable<ReturnType<typeof getPerson>>): PersonBundle
 }
 
 async function casesOfPerson(personId: number): Promise<PersonBundle["cases"]> {
-  if (!isInstalled("cases")) return [];
+  if (!casesThere()) return [];
   const { casesOfPerson: ofPerson } = await import("@/plugins/cases/store");
   const { caseHref } = await import("@/plugins/cases/database");
   const { caseTitle } = await import("@/plugins/cases/shared");

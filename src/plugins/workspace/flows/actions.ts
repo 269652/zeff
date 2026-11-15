@@ -8,6 +8,11 @@ import { rawRowObject, rowObject } from "./rows";
 import "./mail-actions";
 import "./connector-actions";
 import "./ai-actions";
+import "./store-actions";
+import "./data-actions";
+import "./bank-actions";
+import "./mirror-actions";
+import "./session-actions";
 
 /**
  * The actions a flow's node can call — Zeff's own here (web, extraction, AI, lookups, databases, todos, plugin methods), more
@@ -25,7 +30,7 @@ async function runMeta(i: Record<string, unknown>, ctx: ActionCtx, change: boole
   const args = (i.args && typeof i.args === "object" && !Array.isArray(i.args) ? i.args : {}) as Record<string, unknown>;
   const access = metaAccess(op, args);
   const need = access.key.replace(/^meta:/, "");
-  if ((need === "read") === change) throw new Error(change ? "meta.run changes the structure: read it with meta.read." : "meta.read is for reading: use meta.run to change.");
+  if ((need === "read" || need.endsWith("-read")) === change) throw new Error(change ? "meta.run changes the structure: read it with meta.read." : "meta.read is for reading: use meta.run to change.");
   if (!(ctx.perms.meta ?? []).includes(need)) throw new Error(`This flow may not ${access.label} — grant “${need}” under the flow's permissions (Zeff's structure).`);
   if (change && ctx.dryRun) return { dryRun: true, op };
   return metaRun(op, args);

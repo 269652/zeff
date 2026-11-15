@@ -3,8 +3,9 @@ import { isPackageRef, packagePage } from "../package-refs";
 import { fill, holds, evalExpr, text, type Scope } from "./expr";
 import { runScript } from "./sandbox";
 import { askUser, answerAsk, cancelAsk, expireAsks, type Ask } from "../asks";
-import { dueRuns, flowByName, getFlowRun, grantWrite, listFlows, saveFlowRun, secretValues, startFlowRun, type Flow, type FlowRun, type Journal, type LogEntry, type Waiting } from "./store";
-import type { FieldSpec, FlowDef, FlowNode, FlowPermissions } from "./types";
+import { dueRuns, flowByName, getFlowRun, grantWrite, listFlows, saveFlowRun, secretValues, startFlowRun, type Flow, type FlowRun, type Journal, type LogEntry, type Waiting, cutOffRuns, keepRunProgress } from "./store";
+import type { FieldSpec, FlowDef, FlowNode, FlowPermissions, FlowTrigger } from "./types";
+import { asFlow, currentFlow } from "../events";
 
 /**
  * The flow engine. A run goes through the nodes in order; what a node gives is `steps.<id>` for the ones after it. What reaches
@@ -120,6 +121,8 @@ async function journaled(ctx: Ctx, key: string, fn: () => Promise<unknown>): Pro
   if (key in ctx.journal) return { output: ctx.journal[key].output, replayed: true };
   const output = await fn();
   ctx.journal[key] = { output: output === undefined ? null : output, at: new Date().toISOString() };
+  // (kept at once: a run cut off after this step goes on after it — resumeCutOffRuns)
+  if (!ctx.dry) keepRunProgress(ctx.runId, ctx.journal, ctx.log);
   return { output, replayed: false };
 }
 
@@ -322,9 +325,17 @@ async function rowScope(rowId: number | undefined): Promise<Scope> {
  * Goes through a run's nodes (from the start, its journal skipping what is done) and keeps where it ended. What it writes sets no
  * routine or flow off (quietly, as a routine's own changes): a flow that wants to start others sends a signal.
  */
+/** The runs going on in this process (across its module copies): never taken up again as cut off while they still run here. */
+const liveRuns = ((globalThis as { __zeffLiveFlowRuns?: Set<number> }).__zeffLiveFlowRuns ??= new Set<number>());
+
 async function execute(...args: Parameters<typeof executeLoud>): Promise<RunResult> {
   const { quietly } = await import("../events");
-  return quietly(() => executeLoud(...args));
+  liveRuns.add(args[0]);
+  try {
+    return await quietly(() => executeLoud(...args));
+  } finally {
+    liveRuns.delete(args[0]);
+  }
 }
 
 async function executeLoud(runId: number, def: FlowDef, input: Record<string, unknown>, journal: Journal, log: LogEntry[], opts: { dry: boolean; row?: number; trigger?: unknown; resolve?: RunOptions["resolve"] }): Promise<RunResult> {
@@ -373,7 +384,8 @@ export async function runFlow(flow: Flow | string, input: Record<string, unknown
   const def: FlowDef = { name: f.name, title: f.title, inputs: f.inputs, nodes: f.nodes, output: f.output, permissions: f.permissions, triggers: f.triggers, lookup: f.lookup, ...(f.sync ? { sync: f.sync } : {}) };
   const full = withDefaults(f.inputs, input);
   const runId = startFlowRun({ pageId: f.pageId, name: f.name, def }, opts.trigger ?? { kind: "manual" }, { ...full, ...(opts.row ? { __row: opts.row } : {}) }, !!opts.dry);
-  return execute(runId, def, full, {}, [], { dry: !!opts.dry, row: opts.row, trigger: opts.trigger, resolve: opts.resolve });
+  // (As this flow: what it changes never starts it again — events.ts.)
+  return asFlow(f.name, () => execute(runId, def, full, {}, [], { dry: !!opts.dry, row: opts.row, trigger: opts.trigger, resolve: opts.resolve }));
 }
 
 /** A run that waits at a question goes on with its answers (they are kept as that step's output). */
@@ -417,16 +429,85 @@ export function cancelFlowRun(runId: number): void {
   if (run.waiting?.askId) void cancelAsk(run.waiting.askId);
 }
 
-/** The waits that are over go on (the scheduler calls this every minute). */
-export async function resumeDueFlows(now = new Date()): Promise<number> {
-  // (The questions nobody answered in time lapse: their runs end.)
-  let n = await expireAsks(now);
-  for (const run of dueRuns(now)) {
-    saveFlowRun(run.id, { status: "running", journal: run.journal, log: run.log, waiting: null, wakeAt: null });
+/** How long a run "running" may stay without a sign of life before it counts as cut off (longer than any one step may take). */
+export const CUT_OFF_MS = 15 * 60_000;
+/** A run cut off this often isn't taken up again (it may be what stops Zeff): it fails, with why. */
+export const MAX_RESUMES = 2;
+/** A run cut off longer ago than this isn't taken up again (what it read is stale by now): it fails, with why. */
+export const MAX_CUT_OFF_AGE_MS = 48 * 3600_000;
+/** A run going on without a sign of life this long hangs: it is ended (its place freed — the queue goes on), whatever it waits for. */
+export const HANG_MS = 60 * 60_000;
+/** At most this many runs taken up again at once — the clock never waits for them, so one that hangs holds up nothing else. */
+const MAX_RESUMING = 3;
+const resuming = ((globalThis as { __zeffResumingFlowRuns?: Set<number> }).__zeffResumingFlowRuns ??= new Set<number>());
+
+/**
+ * The runs cut off (Zeff stopped or crashed mid-run): taken up again where they were — the steps done read from their journal, the rest run.
+ * A step cut off in the middle runs again: the actions that write are made so that once more does no harm (by key — store.put, money.pay;
+ * a todo done stays done). How many.
+ */
+export async function resumeCutOffRuns(now = new Date(), opts: { /** Tests: wait for the runs taken up (the clock doesn't). */ wait?: boolean } = {}): Promise<number> {
+  let n = 0;
+  const started: Promise<unknown>[] = [];
+  const hung = new Set(cutOffRuns(HANG_MS, now).map((r) => r.id));
+  for (const run of cutOffRuns(CUT_OFF_MS, now)) {
+    if (liveRuns.has(run.id) || resuming.has(run.id)) {
+      // (going on here, but quiet for an hour: it hangs — ended, its place freed; should it come back after all, what it did stays)
+      if (hung.has(run.id)) {
+        saveFlowRun(run.id, { status: "failed", journal: run.journal, log: run.log, error: "It hung — no step done for an hour. Ended so the others go on; run it again by hand when it should.", waiting: null, wakeAt: null });
+        liveRuns.delete(run.id);
+        resuming.delete(run.id);
+      }
+      continue;
+    }
+    const times = Number((run.journal.__resumed?.output as { times?: number } | undefined)?.times ?? 0);
+    const fail = (why: string) => saveFlowRun(run.id, { status: "failed", journal: run.journal, log: run.log, error: why, waiting: null, wakeAt: null });
+    // (a poison run — cut off again and again — and one cut off long ago end, so the rest goes on)
+    if (times >= MAX_RESUMES) {
+      fail(`Cut off ${times + 1} times — not taken up again (it may be what stops Zeff). Run it again by hand when it should.`);
+      continue;
+    }
+    if (now.getTime() - Date.parse(run.startedAt) > MAX_CUT_OFF_AGE_MS) {
+      fail("Cut off more than two days ago — not taken up again (what it read is old by now).");
+      continue;
+    }
+    if (resuming.size >= MAX_RESUMING) break;
+    run.journal.__resumed = { output: { times: times + 1 }, at: now.toISOString() };
+    run.log.push({ key: "resumed", node: "resumed", kind: "action", status: "ok", ms: 0, output: { resumed: times + 1, after: run.startedAt }, at: now.toISOString(), depth: 0 } as never);
+    keepRunProgress(run.id, run.journal, run.log);
     const { __row, ...input } = run.input as Record<string, unknown> & { __row?: number };
-    await execute(run.id, run.def, input, run.journal, run.log, { dry: run.dry, row: typeof __row === "number" ? __row : undefined, trigger: run.trigger }).catch((e) => console.error(`[flows] run ${run.id}: ${e instanceof Error ? e.message : e}`));
+    resuming.add(run.id);
+    const p = execute(run.id, run.def, input, run.journal, run.log, { dry: run.dry, row: typeof __row === "number" ? __row : undefined, trigger: run.trigger })
+      .catch((e) => console.error(`[flows] run ${run.id} (taken up again): ${e instanceof Error ? e.message : e}`))
+      .finally(() => resuming.delete(run.id));
+    started.push(p);
     n++;
   }
+  if (opts.wait) await Promise.all(started);
+  return n;
+}
+
+/** The waits that are over go on, the runs cut off are taken up again (the scheduler calls this every minute). */
+export async function resumeDueFlows(now = new Date(), opts: { /** Tests: wait for the runs taken up (the clock doesn't). */ wait?: boolean } = {}): Promise<number> {
+  // (The questions nobody answered in time lapse: their runs end.)
+  let n = await expireAsks(now);
+  n += await resumeCutOffRuns(now, opts);
+  const started: Promise<unknown>[] = [];
+  for (const run of dueRuns(now)) {
+    if (liveRuns.has(run.id) || resuming.has(run.id)) continue;
+    if (resuming.size >= MAX_RESUMING) break;
+    saveFlowRun(run.id, { status: "running", journal: run.journal, log: run.log, waiting: null, wakeAt: null });
+    const { __row, ...input } = run.input as Record<string, unknown> & { __row?: number };
+    // (not waited for: one that hangs holds up neither the clock nor the others — at most MAX_RESUMING at once)
+    resuming.add(run.id);
+    started.push(
+      execute(run.id, run.def, input, run.journal, run.log, { dry: run.dry, row: typeof __row === "number" ? __row : undefined, trigger: run.trigger })
+        .catch((e) => console.error(`[flows] run ${run.id}: ${e instanceof Error ? e.message : e}`))
+        .finally(() => resuming.delete(run.id)),
+    );
+    n++;
+  }
+  if (opts.wait) await Promise.all(started);
   return n;
 }
 
@@ -434,22 +515,77 @@ export async function resumeDueFlows(now = new Date()): Promise<number> {
 // Triggers
 // ---------------------------------------------------------------------------
 
-export type FlowEvent = { event: "row.added" | "row.changed" | "row.removed" | "signal" | "form.submitted" | "transition"; db?: number; row?: number; field?: string; value?: string; name?: string; payload?: Record<string, unknown> };
+export type FlowEvent = { event: (typeof import("./types").EVENTS)[number]; db?: number; row?: number; /** A page's events: the page. */ page?: number; field?: string; value?: string; name?: string; payload?: Record<string, unknown> };
+type EventTrigger = Extract<FlowTrigger, { kind: "event" }>;
 
 let firing = 0;
 
-/** Something happened: the enabled flows that listen run (not while a flow's own event fires another, deeper than 3). */
+/** Whether a page (a row's: by its database) is at or below `top` — up the tree, at most 40 steps. */
+async function isUnder(pageId: number, top: number): Promise<boolean> {
+  const { getPage } = await import("../store");
+  for (let cur: number | null = pageId, hops = 0; cur && hops < 40; hops++) {
+    if (cur === top) return true;
+    const p = getPage(cur);
+    cur = p ? (p.parentId ?? p.dbId) : null;
+  }
+  return false;
+}
+
+/** Whether a trigger listens to this event. */
+async function listens(t: FlowTrigger, e: FlowEvent): Promise<boolean> {
+  if (t.kind !== "event" || t.event !== e.event) return false;
+  if (t.db && t.db !== e.db) return false;
+  if (t.field && t.field.toLowerCase() !== (e.field ?? "").toLowerCase()) return false;
+  if (t.equals && t.equals.trim().toLowerCase() !== (e.value ?? "").trim().toLowerCase()) return false;
+  if (t.name && t.name !== e.name) return false;
+  if (t.under !== undefined) {
+    const top = typeof t.under === "number" ? t.under : isPackageRef(t.under) ? packagePage(t.under) : null;
+    const at = e.page ?? e.row ?? e.db;
+    if (!top || !at || !(await isUnder(at, top))) return false;
+  }
+  return true;
+}
+
+/** The waits of triggers with `settle`: one per flow and page (or row), the last event kept — it runs once things rest. */
+const settling = (globalThis as { __zeffFlowSettle?: Map<string, ReturnType<typeof setTimeout>> }).__zeffFlowSettle ??= new Map();
+
+async function runOnEvent(f: Flow, t: EventTrigger, e: FlowEvent): Promise<void> {
+  const input = { ...(e.payload ?? {}), event: e.event, ...(e.page !== undefined ? { page: e.page } : {}), ...(e.field ? { field: e.field } : {}), ...(e.name ? { name: e.name } : {}), ...(e.value !== undefined ? { value: e.value } : {}) };
+  await runFlow(f, input, { trigger: t, row: e.row });
+}
+
+/** Something happened: the enabled flows that listen run (not while a flow's own event fires another, deeper than 3; never the flow that caused it). */
 export async function fireFlowEvent(e: FlowEvent): Promise<number> {
   if (firing > 3) return 0;
+  const by = currentFlow();
   let ran = 0;
   firing++;
   try {
     for (const f of listFlows()) {
-      if (f.enabled === false) continue;
-      const t = f.triggers.find((x) => x.kind === "event" && x.event === e.event && (!x.db || x.db === e.db) && (!x.field || x.field.toLowerCase() === (e.field ?? "").toLowerCase()) && (!x.equals || x.equals.trim().toLowerCase() === (e.value ?? "").trim().toLowerCase()) && (!x.name || x.name === e.name));
+      if (f.enabled === false || f.name === by) continue;
+      let t: EventTrigger | undefined;
+      for (const x of f.triggers) if (await listens(x, e)) t = x as EventTrigger;
       if (!t) continue;
+      if (t.settle) {
+        // Runs once, `settle` seconds after the last such event for this page or row (in the account it happened in).
+        const key = `${f.pageId}|${e.event}|${e.page ?? e.row ?? ""}`;
+        clearTimeout(settling.get(key));
+        const { currentAccountId, withAccount } = await import("@/db/accounts");
+        const account = currentAccountId();
+        const flow = f;
+        const trig = t;
+        settling.set(
+          key,
+          setTimeout(() => {
+            settling.delete(key);
+            void withAccount(account, () => runOnEvent(flow, trig, e)).catch((err) => console.error(`[flows] ${flow.name}: ${err instanceof Error ? err.message : err}`));
+          }, t.settle * 1000),
+        );
+        ran++;
+        continue;
+      }
       try {
-        await runFlow(f, { ...(e.payload ?? {}), event: e.event, ...(e.name ? { name: e.name } : {}), ...(e.value !== undefined ? { value: e.value } : {}) }, { trigger: t, row: e.row });
+        await runOnEvent(f, t, e);
       } catch (err) {
         console.error(`[flows] ${f.name}: ${err instanceof Error ? err.message : err}`);
       }
@@ -457,6 +593,54 @@ export async function fireFlowEvent(e: FlowEvent): Promise<number> {
     }
   } finally {
     firing--;
+  }
+  return ran;
+}
+
+/**
+ * The watch triggers (`{ kind: "watch", lambda, everySeconds }`) that are due: each lambda asked whether something changed since its last
+ * token; a flow runs only when it says so. Kept per account and flow while the server runs (a restart asks again from the last token kept
+ * with the flow run — or from nothing: the lambda then answers what it finds).
+ */
+type WatchState = { at: number; token: unknown; busy: boolean };
+const watching = (globalThis as { __zeffFlowWatch?: Map<string, WatchState> }).__zeffFlowWatch ??= new Map();
+
+export async function runDueWatches(now = Date.now()): Promise<number> {
+  const { currentAccountId } = await import("@/db/accounts");
+  const account = currentAccountId();
+  let ran = 0;
+  for (const f of listFlows()) {
+    if (f.enabled === false) continue;
+    for (const t of f.triggers) {
+      if (t.kind !== "watch") continue;
+      const key = `${account}|${f.pageId}|${t.lambda}`;
+      const st = watching.get(key) ?? { at: 0, token: null, busy: false };
+      watching.set(key, st);
+      if (st.busy || now - st.at < t.everySeconds * 1000) continue;
+      st.busy = true;
+      st.at = now;
+      try {
+        const { invokeLambda } = await import("../lambdas/run");
+        const r = await invokeLambda(t.lambda, { since: st.token });
+        if (!r.ok) {
+          console.warn(`[flows] ${f.name}: watching with ${t.lambda} failed — ${r.error}`);
+          continue;
+        }
+        const out = (r.result && typeof r.result === "object" ? r.result : {}) as { changed?: unknown; token?: unknown; input?: unknown };
+        if (out.changed !== true) {
+          if (out.token !== undefined) st.token = out.token;
+          continue;
+        }
+        const res = await runFlow(f, out.input && typeof out.input === "object" && !Array.isArray(out.input) ? (out.input as Record<string, unknown>) : {}, { trigger: t });
+        // (The token moves on only when the run went through — a failed one is asked again.)
+        if (out.token !== undefined && res.status !== "failed") st.token = out.token;
+        ran++;
+      } catch (e) {
+        console.error(`[flows] ${f.name}: ${e instanceof Error ? e.message : e}`);
+      } finally {
+        st.busy = false;
+      }
+    }
   }
   return ran;
 }

@@ -19,6 +19,8 @@ function db() {
     create index if not exists ws_flow_runs_waiting on ws_flow_runs (status, wake_at);
     create table if not exists ws_flow_secrets (name text primary key, value text not null, updated_at text not null);
   `);
+  // (A run's sign of life — each step done keeps it: a run "running" that hasn't moved for long was cut off, and is taken up again.)
+  if (!(d.prepare("pragma table_info(ws_flow_runs)").all() as { name: string }[]).some((c) => c.name === "touched_at")) d.exec("alter table ws_flow_runs add column touched_at text");
   return d;
 }
 
@@ -169,9 +171,23 @@ export function startFlowRun(flow: { pageId: number; name: string; def: FlowDef 
 export function saveFlowRun(id: number, v: { status: RunStatus; journal: Journal; log: LogEntry[]; output?: unknown; error?: string | null; waiting?: Waiting | null; wakeAt?: string | null }): void {
   const ended = v.status === "done" || v.status === "failed" || v.status === "cancelled";
   db()
-    .prepare("update ws_flow_runs set status = ?, journal = ?, log = ?, output = ?, error = ?, waiting = ?, wake_at = ?, ended_at = ? where id = ?")
-    .run(v.status, JSON.stringify(v.journal), JSON.stringify(v.log), v.output === undefined ? null : JSON.stringify(v.output), v.error ?? null, v.waiting ? JSON.stringify(v.waiting) : null, v.wakeAt ?? null, ended ? new Date().toISOString() : null, id);
+    .prepare("update ws_flow_runs set status = ?, journal = ?, log = ?, output = ?, error = ?, waiting = ?, wake_at = ?, ended_at = ?, touched_at = ? where id = ?")
+    .run(v.status, JSON.stringify(v.journal), JSON.stringify(v.log), v.output === undefined ? null : JSON.stringify(v.output), v.error ?? null, v.waiting ? JSON.stringify(v.waiting) : null, v.wakeAt ?? null, ended ? new Date().toISOString() : null, new Date().toISOString(), id);
   emitChange("workspace");
+}
+
+/**
+ * A step done, kept at once (the run's journal and log, its sign of life) — so a run cut off (Zeff stopped, crashed, the computer slept)
+ * is taken up again where it was: what was done is read from the journal, not done twice (engine.ts resumeCutOffRuns).
+ */
+export function keepRunProgress(id: number, journal: Journal, log: LogEntry[]): void {
+  db().prepare("update ws_flow_runs set journal = ?, log = ?, touched_at = ? where id = ? and status = 'running'").run(JSON.stringify(journal), JSON.stringify(log), new Date().toISOString(), id);
+}
+
+/** The runs cut off: "running", without a sign of life for `quietMs` (a step running in another of Zeff's processes keeps it fresh). */
+export function cutOffRuns(quietMs: number, now = new Date()): FlowRun[] {
+  const before = new Date(now.getTime() - quietMs).toISOString();
+  return (db().prepare("select * from ws_flow_runs where status = 'running' and coalesce(touched_at, started_at) < ? order by coalesce(touched_at, started_at) limit 200").all(before) as RRow[]).map(toRun);
 }
 
 export const getFlowRun = (id: number): FlowRun | null => {

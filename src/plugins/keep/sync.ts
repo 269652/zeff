@@ -1,7 +1,7 @@
 import { clearAttention, needsSignIn, raiseLogin } from "@/lib/attention";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { automationEnv, automationUp, driverPath } from "@/plugins/drivers";
+import { automationUp, runDriver } from "@/plugins/drivers";
 import { keepSettings, saveKeepNotes, type KeepNote } from "./store";
 import { accountFlag, setAccountFlag } from "@/lib/sync/account-flags";
 
@@ -22,9 +22,10 @@ export async function syncKeep({ background = false } = {}): Promise<{ ok: boole
   setAccountFlag("__zeffKeepSyncing", true);
   try {
     if (background && !(await chromeUp())) return { ok: false, message: t("The automation Chrome isn't running. Not synced.") };
-    const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-    const out = await runStdioSession(
-      { command: process.execPath, args: [driverPath("keep")], env: automationEnv(), label: "Keep sync" },
+    const { resultToPayload } = await import("@/lib/mcp/stdio");
+    const out = await runDriver(
+      "keep",
+      "Keep sync",
       async (call) => resultToPayload(await call("keep_notes", { account: keepSettings().account, launch: !background })),
       240000,
     );

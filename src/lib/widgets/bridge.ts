@@ -64,7 +64,7 @@ export type WidgetGrant = { dbs: number[]; ai?: boolean; flows?: string[]; meta?
 /** Meta permissions as kept (a list, or "a,b"): only the known kinds, each once. */
 export function metaOf(v: unknown): string[] {
   const raw = Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : [];
-  return [...new Set(raw.map((x) => String(x).trim()).filter((x) => /^(read|pages|databases|blocks|flows|plugins|delete|schema:\d+|call:[a-z0-9-]+\.[a-z0-9_-]+|chat:[a-z0-9-]+\.[a-z0-9-]+)$/.test(x)))].slice(0, 30);
+  return [...new Set(raw.map((x) => String(x).trim()).filter((x) => /^(read|pages-read|pages|databases|blocks|flows|plugins|delete|schema:\d+|call:[a-z0-9-]+\.[a-z0-9_-]+|chat:[a-z0-9-]+\.[a-z0-9-]+)$/.test(x)))].slice(0, 30);
 }
 
 /** Flow names as kept (a list, or a block's "a.b,c"), cleaned: a flow's name, each once, 20 at most. */

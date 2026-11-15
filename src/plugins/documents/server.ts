@@ -3,6 +3,7 @@ import { appNavProviders } from "@/plugins/workspace/app-nav-point";
 import { workspaceSources } from "@/plugins/workspace/source-point";
 import { docNav, factsOf } from "./nav";
 import { DOCUMENTS_SOURCE } from "./workspace-source";
+import "./flow-actions"; // (documents.texts for lambdas and flows)
 
 /** What Documents registers for other plugins (loaded through plugins/contributions): the documents as a source of the Workspace's pipelines. */
 workspaceSources.contribute("documents", [DOCUMENTS_SOURCE]);

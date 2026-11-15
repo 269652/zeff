@@ -5,11 +5,12 @@ import { checkPluginFolder } from "@/lib/ext/check";
 import { pluginsRoot, scanPlugins } from "@/lib/ext/registry";
 import { checkBlock } from "./block-check";
 import { deleteBlock, listBlocks, saveBlock } from "./block-store";
-import { markdownToDoc } from "./doc";
+import { markdownToDoc, sanitizeDoc } from "./doc";
 import { createFlow, deleteFlow, getFlow, listFlows, saveFlow } from "./flows/store";
 import type { DbSchema } from "./model";
 import { applyOps, type DbOp, type PropIn, type ViewIn } from "./schema-ops";
 import * as store from "./store";
+import { isPackageRef, packagePage } from "./package-refs";
 
 /**
  * The meta API: what code may do to Zeff's own structure — make and change pages, databases (their fields and views), blocks and
@@ -24,9 +25,9 @@ export type MetaAccess = { key: string; label: string; description: string };
 const str = (v: unknown, max = 300): string => (typeof v === "string" ? v.trim().slice(0, max) : typeof v === "number" ? String(v) : "");
 const related = (key: number | string): DbSchema | null => (typeof key === "number" ? (store.getDatabase(key)?.schema ?? null) : null);
 
-/** A page by its id, or by its title (the first with that title). */
+/** A page by its id, its place in an installed package ("@my-pkg.i0"), or by its title (the first with that title). */
 function pageId(ref: unknown, what = "page"): number {
-  const n = typeof ref === "number" ? ref : /^\d+$/.test(str(ref)) ? Number(str(ref)) : 0;
+  const n = typeof ref === "number" ? ref : /^\d+$/.test(str(ref)) ? Number(str(ref)) : isPackageRef(ref) ? (packagePage(ref) ?? 0) : 0;
   if (n > 0) {
     if (!store.getPage(n)) throw new Error(`There is no ${what} ${n}.`);
     return n;
@@ -44,7 +45,7 @@ function databaseOf(ref: unknown): { id: number; title: string } {
   return { id, title: d.page.title || `#${id}` };
 }
 
-export const META_OPS = ["tree", "schema", "blocks.list", "flows.list", "plugins.list", "page.create", "page.update", "page.archive", "page.delete", "database.create", "database.alter", "block.save", "block.delete", "flow.save", "flow.delete", "plugin.save", "plugin.delete"] as const;
+export const META_OPS = ["tree", "schema", "page.read", "blocks.list", "flows.list", "plugins.list", "page.create", "page.update", "page.archive", "page.delete", "database.create", "database.alter", "block.save", "block.delete", "flow.save", "flow.delete", "plugin.save", "plugin.delete"] as const;
 
 /** The permission an operation needs; what is wrong with the request said in words (it throws). */
 export function metaAccess(op: string, args: Record<string, unknown>): MetaAccess {
@@ -63,6 +64,8 @@ export function metaAccess(op: string, args: Record<string, unknown>): MetaAcces
       return { key: "meta:blocks", label: t("make and change blocks"), description: t("Blocks for views: their template, parameters and flows. They are checked like any block.") };
     case "flow.save":
       return { key: "meta:flows", label: t("make and change flows"), description: t("A flow's steps. A flow made by code gets no permissions: it reaches nothing until you grant it in the Studio.") };
+    case "page.read":
+      return { key: "meta:pages-read", label: t("read pages: their title, text and fields"), description: t("A page's title, icon, text (as the editor keeps it) and, for a row, its fields — nothing is changed.") };
     case "tree":
     case "schema":
     case "blocks.list":
@@ -81,6 +84,9 @@ export function metaAccess(op: string, args: Record<string, unknown>): MetaAcces
   }
 }
 
+/** A cover as given (the store keeps only a picture on the web, an uploaded one or a gradient — anything else becomes none). */
+const coverOf = (v: string): string => v.trim().slice(0, 1000);
+
 /** The operation, done (only after the permission is there). Gives JSON. */
 export function metaRun(op: string, a: Record<string, unknown>): unknown {
   switch (op) {
@@ -88,18 +94,31 @@ export function metaRun(op: string, a: Record<string, unknown>): unknown {
       const title = str(a.title);
       if (!title) throw new Error("A page needs a title.");
       const md = typeof a.markdown === "string" ? a.markdown.slice(0, 200_000) : "";
-      const id = store.createPage({ title, ...(str(a.icon, 16) ? { icon: str(a.icon, 16) } : {}), parentId: a.parent !== undefined && a.parent !== null ? pageId(a.parent) : null, ...(md ? { content: markdownToDoc(md) } : {}) });
-      return { id };
+      // (Its text as the editor keeps it — `doc`, cleaned like anything a client sends — or as Markdown.)
+      const content = a.doc && typeof a.doc === "object" ? sanitizeDoc(a.doc) : md ? markdownToDoc(md) : undefined;
+      const id = store.createPage({ title, ...(str(a.icon, 16) ? { icon: str(a.icon, 16) } : {}), parentId: a.parent !== undefined && a.parent !== null ? pageId(a.parent) : null, ...(content ? { content } : {}) });
+      if (typeof a.cover === "string" && a.cover.trim()) store.updatePage(id, { cover: coverOf(a.cover) });
+      return { id, rev: store.getPage(id)?.rev ?? 0 };
     }
     case "page.update": {
       const id = pageId(a.id);
       const patch: Record<string, unknown> = {};
       if (typeof a.title === "string") patch.title = a.title.trim().slice(0, 300);
       if (typeof a.icon === "string") patch.icon = a.icon.slice(0, 16);
-      if (typeof a.markdown === "string") patch.content = markdownToDoc(a.markdown.slice(0, 200_000));
-      if (!Object.keys(patch).length) throw new Error("Nothing to change: give a title, an icon or markdown.");
-      store.updatePage(id, patch);
-      return { id };
+      if (typeof a.cover === "string") patch.cover = coverOf(a.cover);
+      if (a.doc && typeof a.doc === "object") patch.content = sanitizeDoc(a.doc);
+      else if (typeof a.markdown === "string") patch.content = markdownToDoc(a.markdown.slice(0, 200_000));
+      // (Moved under another page: `parent` — null for the top.)
+      const move = a.parent !== undefined ? (a.parent === null ? null : pageId(a.parent)) : undefined;
+      if (!Object.keys(patch).length && move === undefined) throw new Error("Nothing to change: give a title, an icon, a cover, a parent, doc or markdown.");
+      if (move !== undefined && move !== store.getPage(id)?.parentId) store.movePage(id, move);
+      // (`rev`: only if the page is still as the caller last read it — else it says so and changes nothing.)
+      if (Object.keys(patch).length) {
+        const r = store.updatePage(id, patch, typeof a.rev === "number" ? a.rev : undefined);
+        if (!r.ok) return { id, conflict: true, rev: r.rev };
+        return { id, rev: r.rev };
+      }
+      return { id, rev: store.getPage(id)?.rev ?? 0 };
     }
     case "page.archive": {
       const id = pageId(a.id);
@@ -156,6 +175,11 @@ export function metaRun(op: string, a: Record<string, unknown>): unknown {
       delete flow.permissions;
       const saved = createFlow(flow, a.parent !== undefined && a.parent !== null ? pageId(a.parent) : null);
       return { id: saved.pageId, name: saved.name };
+    }
+    case "page.read": {
+      const p = store.getPage(pageId(a.id));
+      if (!p) throw new Error("There is no such page.");
+      return { id: p.id, kind: p.kind, title: p.title, icon: p.icon, cover: p.cover, parent: p.parentId, database: p.dbId, doc: p.content, ...(p.dbId ? { values: p.props } : {}), rev: p.rev, archived: !!p.archivedAt, createdAt: p.createdAt, updatedAt: p.updatedAt };
     }
     case "tree":
       return store.tree().slice(0, 3000).map((x) => ({ id: x.id, parentId: x.parentId, kind: x.kind, title: x.title, icon: x.icon }));

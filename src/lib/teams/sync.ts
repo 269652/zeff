@@ -1,4 +1,4 @@
-import { automationEnv, automationUp, driverPath } from "@/plugins/drivers";
+import { automationUp, runDriver } from "@/plugins/drivers";
 import { driverOf } from "@/lib/connectors/store";
 import { clearAttention, needsSignIn, raiseLogin } from "@/lib/attention";
 import { errorMessage } from "@/lib/errors";
@@ -39,10 +39,10 @@ export async function syncTeams({ background = false } = {}): Promise<{ ok: bool
     let data: { messages?: TeamsMessageInput[]; unresolved?: number };
     if (viaApi) data = await (await import("@/lib/microsoft/teams-api")).readTeams({ pmDays: PM_DAYS, chatDays: CHAT_DAYS });
     else {
-      const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-      const script = driverPath("teams");
-      const out = await runStdioSession(
-        { command: process.execPath, args: [script], env: automationEnv(), label: "Teams sync" },
+      const { resultToPayload } = await import("@/lib/mcp/stdio");
+      const out = await runDriver(
+        "teams",
+        "Teams sync",
         // Teams not open: a tab for it (Chrome itself started only by hand).
         async (call) => resultToPayload(await call("teams_messages", { pmDays: PM_DAYS, chatDays: CHAT_DAYS, openIfMissing: true, launch: !background })),
         180000,

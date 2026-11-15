@@ -15,11 +15,19 @@ export const PORTS: Port[] = [
   { builtin: "correlations", plugin: "correlations-ext", switch: async () => (await import("./correlations/to-plugin")).switchCorrelationsToPlugin() },
   { builtin: "agenda", plugin: "agenda-ext", switch: async () => (await import("./agenda/to-plugin")).switchAgendaToPlugin() },
   { builtin: "mail-client", plugin: "mail-client-ext", switch: async () => (await import("./mail-client/to-plugin")).switchMailClientToPlugin() },
-  { builtin: "teams", plugin: "teams-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("teams", { port: "teams-ext", flow: "teams.sync", minutes: async () => (await import("@/lib/teams/store")).getTeamsSettings().syncMinutes }) },
+  { builtin: "teams", plugin: "teams-ext", switch: async () => (await import("./teams/to-plugin")).switchTeamsToPlugin() },
   { builtin: "whatsapp", plugin: "whatsapp-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("whatsapp", { port: "whatsapp-ext", flow: "whatsapp.sync", minutes: stepMinutesOf("whatsapp") }) },
   { builtin: "signal", plugin: "signal-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("signal", { port: "signal-ext", flow: "signal.sync", minutes: stepMinutesOf("signal") }) },
+  { builtin: "outlook-mail", plugin: "outlook-mail-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("outlook-mail", { port: "outlook-mail-ext", flow: "outlook-mail.sync", minutes: async () => (await import("@/lib/mail/store")).getMailSettings().syncMinutes }) },
+  { builtin: "gmail", plugin: "gmail-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("gmail", { port: "gmail-ext", flow: "gmail.sync", minutes: async () => (await import("@/lib/mail/store")).getMailSettings().syncMinutes }) },
+  { builtin: "imap-mail", plugin: "imap-mail-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("imap-mail", { port: "imap-mail-ext", flow: "imap-mail.sync", minutes: async () => (await import("@/lib/mail/store")).getMailSettings().syncMinutes }) },
   { builtin: "local-ai", plugin: "local-ai-ext", switch: async () => (await import("./local-ai/to-plugin")).switchLocalAiToPlugin() },
   { builtin: "google-calendar", plugin: "google-calendar-ext", switch: async () => (await import("./google-calendar/to-plugin")).switchGoogleCalendarToPlugin() },
+  { builtin: "gitlab", plugin: "gitlab-ext", switch: async () => (await import("./gitlab/to-plugin")).switchGitlabToPlugin() },
+  { builtin: "jira", plugin: "jira-ext", switch: async () => (await import("./jira/to-plugin")).switchJiraToPlugin() },
+  { builtin: "keep", plugin: "keep-ext", switch: async () => (await import("./keep/to-plugin")).switchKeepToPlugin() },
+  { builtin: "revolut", plugin: "revolut-ext", switch: async () => (await import("./revolut/to-plugin")).switchRevolutToPlugin() },
+  { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

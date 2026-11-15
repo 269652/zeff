@@ -2,6 +2,9 @@
 
 import { confirmAction } from "@/components/confirm";
 import { ComputeData } from "./compute-data";
+import { GiroCode } from "@/components/GiroCode";
+import { TimelineList } from "@/plugins/timeline/ui/TimelineList";
+import { SourcesBlock } from "./sources-block";
 import { SuggestedActions } from "./suggested";
 import { KnowPanel } from "@/plugins/know/ui/KnowPanel";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -522,6 +525,20 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const value = r?.cells.rowactions;
         return typeof value === "string" && value ? <SuggestedActions key={key} rowId={Number(a.row)} value={value} onDone={() => (props.reload(), app.reload())} /> : null;
       }
+      case "sources":
+        return <SourcesBlock key={key} refs={a.refs} open={a.open === "true"} />;
+      case "rowtimeline":
+        return <TimelineList key={key} row={Number(a.row)} limit={Number(a.limit) || 20} compact filters={false} title={a.title || undefined} hideWhenOff />;
+      case "girocode": {
+        // ("1.234,56" as you write it, or "1234.56")
+        const raw = String(a.amount ?? "").trim();
+        const amount = Number(raw.includes(",") ? raw.replace(/./g, "").replace(",", ".") : raw);
+        return (
+          <div key={key} className="max-w-sm pt-1">
+            <GiroCode name={a.name ?? ""} iban={a.iban} bic={a.bic || null} amount={a.amount && Number.isFinite(amount) ? amount : null} purpose={a.purpose || null} />
+          </div>
+        );
+      }
       case "know":
         return <KnowPanel key={key} row={Number(a.row)} compact={a.compact !== "false"} />;
       case "todomark":
@@ -648,11 +665,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       }
       case "select": {
         const opts = json<[string, string, string?][]>(a.options, []);
-        if (a.search === "true") return <SearchSelect key={key} options={opts} value={a.current ?? ""} label={a.label} onPick={(v) => setState(a.bind, v)} />;
+        // (emit=: what the view does with the value picked, at once — a status saved)
+        const picked = (v: string) => (setState(a.bind, v), a.emit && setPending({ event: a.emit, id: ++pendingSeq.current }));
+        if (a.search === "true") return <SearchSelect key={key} options={opts} value={a.current ?? ""} label={a.label} onPick={picked} />;
         return (
           <label key={key} className="inline-flex items-center gap-1.5 text-sm print:hidden">
             {a.label && <span className="text-xs text-zinc-500">{a.label}</span>}
-            <select className="input w-auto py-1 text-sm" value={a.current} onChange={(e) => setState(a.bind, e.target.value)}>
+            <select className="input w-auto py-1 text-sm" value={a.current} onChange={(e) => picked(e.target.value)}>
               {opts.map(([v, label, count]) => (
                 <option key={v} value={v}>
                   {label}

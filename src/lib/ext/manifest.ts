@@ -175,9 +175,11 @@ const sourceDecl = z.object({
   label: z.string().min(1).max(60),
   icon: z.string().max(8).default("🔌"),
   hint: z.string().max(200).default("").describe("One line: what the records are."),
-  read: shortId.describe("The plugin function that reads the records: gives back a list of { ref, title, key?, fields?, text?, url?, updatedAt? }."),
+  read: shortId.optional().describe("The plugin function that reads the records: gives back a list of { ref, title, key?, fields?, text?, url?, updatedAt? }."),
+  lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or a lambda of the plugin (kind function) that reads them — no Notebook needed; its records may also say status, typed (fields of fixed id and type) and dataType."),
+  replaces: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/).optional().describe("A port's: the built-in's source it stands in for (its id, as the databases name it) — only its own built-in's (lib/ext/stores.ts REPLACEABLE_SOURCES)."),
   noNewRows: z.boolean().default(true).describe("The records are only read from where they live: a row cannot be made by hand."),
-});
+}).refine((s) => !!s.read || !!s.lambda, { message: "a source reads its records by a function (read) or a lambda" });
 
 const fieldTypeDecl = z.object({
   id: dotId.describe("Its id: <plugin id>.<this>."),
@@ -243,6 +245,19 @@ const widgetDecl = z.object({
   actLambda: z.string().regex(/^[a-z][a-z0-9_-]*(.[a-z0-9_-]+)*$/).max(80).optional().describe("Or one of its lambdas for the buttons."),
   act: shortId.optional().describe("The plugin function a button of it runs, called with { action, payload, config }; what it gives (data as above) is shown, else the data is read again."),
 });
+const storeColumn = z.object({
+  name: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/, "lower-case letters, digits and _"),
+  type: z.enum(["text", "integer", "real", "json"]).default("text").describe("json: any value, kept as JSON and read back as it was."),
+});
+const storeDecl = z
+  .object({
+    name: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/, "lower-case letters, digits and _").describe("Its name (unique in the plugin): <plugin>.<name> in the store actions and a flow's permissions."),
+    columns: z.array(storeColumn).min(1).max(40),
+    key: z.union([z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), z.array(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/)).min(1).max(4)]).describe("The column — or columns together — that tell its rows apart (store.put replaces the row with the same key)."),
+    indexes: z.array(z.array(z.string().regex(/^[a-z][a-z0-9_]{0,39}$/)).min(1).max(4)).max(8).default([]).describe("Columns looked up together often."),
+    adopts: z.string().regex(/^[a-z_][a-z0-9_]{0,59}$/).optional().describe("A port's: the built-in's own table it keeps using (only one the kernel lets the built-in's port adopt — lib/ext/stores.ts ADOPTABLE)."),
+  })
+  .refine((s) => (Array.isArray(s.key) ? s.key : [s.key]).every((k) => s.columns.some((c) => c.name === k)), { message: "its key must be one of its columns" });
 const appViewDecl = z.object({
   id: shortId.describe("Its id (unique in the plugin)."),
   dataType: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/).describe('The databases of this type get it (as their first view when Zeff makes one, and in the View menu): "mail", "message", "inbox" …'),
@@ -307,6 +322,7 @@ const contributes = z.object({
   functions: z.array(fnDecl).max(50).default([]).describe("Server functions of its own: code (Python or Node.js) that runs in the Notebook's sessions and is called over HTTP (POST /api/ext/fn/<plugin>/<name>), from Notebook cells (zeff.call) and by other functions."),
   formulaFunctions: z.array(formulaFnDecl).max(30).default([]).describe("Functions for formulas (views, formula fields, tables): each a formula of its own, called by its name like Zeff's own (a name Zeff or another plugin has already is left out)."),
   metrics: z.array(metricDecl).max(20).default([]).describe("Kennzahlen: numbers a plugin function gives, kept and asked again when they are older than everyMinutes."),
+  stores: z.array(storeDecl).max(10).default([]).describe("Data of its own, beyond Workspace databases (many rows, looked up by key): tables the kernel keeps for it — read and written through the store actions, by its flows with the permission, read by its lambdas."),
   appViews: z.array(appViewDecl).max(10).default([]).describe("App views for the databases of a type (a mail client for mails): a template of the view language each, made the database's view."),
   rowBadges: z.array(rowBadgeDecl).max(10).default([]).describe("Badges on the rows its sources brought (by their refs), given by a plugin function."),
   tabMenus: z.array(tabMenuDecl).max(10).default([]).describe("The menu of a tab (its address): entries a plugin function gives."),
@@ -314,7 +330,7 @@ const contributes = z.object({
   pageNav: z.array(pageNavDecl).max(5).default([]).describe("Entries under its pages in the Workspace tree, given by a plugin function."),
   reviewSources: z.array(reviewSourceDecl).max(10).default([]).describe("Things that wait for your word in the review queue, listed and decided by plugin functions."),
   services: z
-    .array(z.object({ name: z.enum(["web.search"]).describe("A service of the kernel (lib/kernel/contract.ts KERNEL_SERVICES)."), lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).describe("Its lambda (kind function) that answers in the service's shape.") }))
+    .array(z.object({ name: z.enum(["web.search", "bank.statement"]).describe("A service of the kernel (lib/kernel/contract.ts KERNEL_SERVICES)."), lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).describe("Its lambda (kind function) that answers in the service's shape.") }))
     .max(10)
     .default([])
     .describe("Places of the kernel it fills (web.search …): what Zeff calls stays the same, this plugin answers."),
@@ -358,7 +374,7 @@ export const manifestSchema = z
       .describe("Where newer versions of it are: a GitHub repository (one repository may hold many plugins, each in a folder with its own zeff-plugin.json and version). Plugins → Sources checks it and updates on a click."),
     apiVersion: z.number().int().min(1).max(API_VERSION).describe(`The extension API version it was written for (this Zeff speaks up to ${API_VERSION}).`),
     permissions: z.array(permissionId).max(30).default([]).describe("What it may do (granted by you): exec, network, prompt, and the permissions plugins bring (work.read, todos.write, workspace.write …)."),
-    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [] }),
+    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], stores: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [] }),
   })
   .superRefine((m, ctx) => {
     const has = (p: Permission) => m.permissions.includes(p);
@@ -397,7 +413,7 @@ export const manifestSchema = z
       else if (x.lambda && !m.contributes.lambdas) ctx.addIssue({ code: "custom", path: ["contributes", "tools", i, "lambda"], message: "a tool's lambda needs contributes.lambdas (the folder of its lambdas)" });
     });
     m.contributes.sources.forEach((s, i) => {
-      if (!hasFn(s.read)) ctx.addIssue({ code: "custom", path: ["contributes", "sources", i, "read"], message: `no function "${s.read}" in contributes.functions` });
+      if (s.read && !hasFn(s.read)) ctx.addIssue({ code: "custom", path: ["contributes", "sources", i, "read"], message: `no function "${s.read}" in contributes.functions` });
     });
     m.contributes.fieldTypes.forEach((f, i) => {
       if (f.pattern) {

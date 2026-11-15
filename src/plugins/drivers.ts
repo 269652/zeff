@@ -39,3 +39,25 @@ export const cdpUp = (endpoint: string, timeoutMs = 3000): Promise<boolean> =>
 /** Whether the automation Chrome of this account runs (the endpoint of one service, as `automationCdp`). */
 export const automationUp = (service?: Parameters<typeof automationCdp>[0], timeoutMs?: number): Promise<boolean> =>
   cdpUp(automationCdp(service), timeoutMs);
+
+type DriverCall = (name: string, args: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * A connector's driver run for one session of tool calls (body gets `call(tool, args)`, answered as an MCP result) — its plugin's driver
+ * lambda (`<id>.driver`, kind driver — the scraper kept in the plugin, fixable in the Studio) when its port is on, else the built-in's
+ * program. What calls it (a reply sent, a history pulled) needn't know which.
+ */
+export async function runDriver<T>(id: DriverId, label: string, body: (call: DriverCall) => Promise<T>, timeoutMs = 150000, extraEnv: Record<string, string> = {}): Promise<T> {
+  const { getLambda } = await import("@/plugins/workspace/lambdas/store");
+  const name = `${id}.driver`;
+  if (getLambda(name)?.manifest.kind === "driver") {
+    const { invokeLambda } = await import("@/plugins/workspace/lambdas/run");
+    return body(async (tool, args) => {
+      const r = await invokeLambda(name, { tool, args }, { asDriver: true });
+      if (!r.ok) return { content: [{ type: "text", text: `Error: ${r.error}` }], isError: true };
+      return { content: [{ type: "text", text: typeof r.result === "string" ? r.result : JSON.stringify(r.result) }] };
+    });
+  }
+  const { runStdioSession } = await import("@/lib/mcp/stdio");
+  return runStdioSession({ command: process.execPath, args: [driverPath(id)], env: { ...automationEnv(), ...extraEnv }, label }, body, timeoutMs);
+}

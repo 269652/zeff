@@ -1,3 +1,4 @@
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import path from "node:path";
 import { jiraCommentUrl } from "@/lib/todos/shared";
 import { documentFile } from "@/plugins/documents/store";
@@ -59,11 +60,25 @@ function commentIdOf(payload: unknown): string | null {
 
 /** Jira through its MCP server: the calls of one sync in one session. */
 async function viaJira<T>(fn: (deps: NoteSyncDeps) => Promise<T>): Promise<T> {
+  // The Jira plugin does the calls while it is on (lib/jira/port-ops.ts): each one a session of its own — a note is one or two calls.
+  const port = await import("./port-ops");
+  if (await port.jiraPortOn()) {
+    const one = async (call: import("./port-ops").PortCall) => {
+      const [r] = await port.runJiraPortCalls([call]);
+      if (!r?.ok) throw new Error(r?.error ?? "Jira gave no answer.");
+      return r;
+    };
+    return fn({
+      post: async (ticket, body) => (await one({ type: "post", ticket, body })).commentId ?? null,
+      edit: async (ticket, commentId, body) => void (await one({ type: "edit", ticket, commentId, body })),
+      attach: async (ticket, paths) => void (await one({ type: "attach", ticket, paths })),
+    });
+  }
   const cfg = getJiraSyncConfig();
   if (!cfg.configured || !cfg.command) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
   let out!: T;
   await runStdioSession(
-    { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+    { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
     async (call) => {
       out = await fn({
         post: async (ticket, body) => commentIdOf(resultToPayload(await call("jira_add_comment", { issue_key: ticket, body }))),

@@ -1,10 +1,11 @@
+import { runJiraSession, jiraPortOn } from "@/lib/jira/port-ops";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { dateOf, FIELDS, plain, who, type Issue } from "@/lib/runs/collect";
 import { followedTickets } from "@/lib/todos/followed";
 import { analyzedByTicketLage } from "@/lib/runs/ticket-lage";
 import { keepComments } from "@/lib/jira/comments";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload } from "@/lib/mcp/stdio";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
 import { emitChange } from "@/lib/events";
 import { errorMessage } from "@/lib/errors";
@@ -49,9 +50,8 @@ function relevantKeys(all: boolean): string[] {
 /** The relevant Jira tickets read fresh from Jira: their comments kept (the review reads them). The number read. */
 async function freshFromJira(keys: string[]): Promise<number> {
   const cfg = getJiraSyncConfig();
-  if (!keys.length || !cfg.configured || !cfg.command) return 0;
-  const issues: Issue[] = await runStdioSession(
-    { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira (board briefing)" },
+  if (!keys.length || ((!cfg.configured || !cfg.command) && !(await jiraPortOn()))) return 0;
+  const issues: Issue[] = await runJiraSession("Jira (board briefing)",
     async (call) => {
       const out: Issue[] = [];
       for (let i = 0; i < keys.length; i += 50) {
