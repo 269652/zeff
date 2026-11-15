@@ -153,8 +153,8 @@ test("a wait goes on when its time has come (the scheduler)", async () => {
   const f = s.createFlow({ name: name("later"), nodes: [{ id: "w", kind: "wait", minutes: 30 }, { id: "x", kind: "set", vars: { at: "after" } }], output: "{{ vars.at }}" });
   const r = await e.runFlow(f);
   assert.equal(r.status, "waiting");
-  assert.equal(await e.resumeDueFlows(new Date()), 0, "not yet");
-  assert.equal(await e.resumeDueFlows(new Date(Date.now() + 31 * 60000)), 1);
+  assert.equal(await e.resumeDueFlows(new Date(), { wait: true }), 0, "not yet");
+  assert.equal(await e.resumeDueFlows(new Date(Date.now() + 31 * 60000), { wait: true }), 1);
   const run = s.getFlowRun(r.runId)!;
   assert.equal(run.status, "waiting", "Date.now() itself hasn't moved: the wait holds until it has");
 });

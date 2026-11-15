@@ -2,13 +2,14 @@
  * The Jira plugin's actions, run: in one session of Zeff's Jira connection (the Jira MCP server)
  * for the ones in a row — afterwards the tickets read anew. Server only.
  */
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { norm, transitionsOf } from "@/lib/runs/actions";
 import type { TodoOp } from "@/lib/todos/shared";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload, runStdioSession } from "@/lib/mcp/stdio";
 import { extractIssues, normalizeIssue, type NormalizedTicket } from "@/lib/jira/normalize";
 import { getJiraTicket, upsertTickets } from "@/lib/jira/store";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
@@ -134,12 +135,29 @@ async function jiraOp(call: Call, op: JiraOp): Promise<string> {
  * (`done`) and the error.
  */
 export async function runJiraOps(run: JiraOp[], note: (line: string) => void): Promise<string[]> {
+  // The Jira plugin does the changes while it is on (lib/jira/port-ops.ts): the same session, the same words, the tickets read anew.
+  const { jiraPortOn, runJiraPortOps } = await import("@/lib/jira/port-ops");
+  if (await jiraPortOn()) {
+    const ops = run.map((o) =>
+      o.type === "jira-transition"
+        ? { type: "transition" as const, ticket: o.ticket, to: o.to }
+        : o.type === "jira-assign"
+          ? { type: "assign" as const, ticket: o.ticket, assignee: o.assignee }
+          : o.type === "jira-create"
+            ? { type: "create" as const, ticket: o.ticket, summary: o.summary, body: o.body, assignee: o.assignee, issueTypes: issueTypesFor(o.issueType, o.ticket), browseUrl: getJiraTicket(o.ticket)?.url ?? undefined }
+            : { type: "comment" as const, ticket: o.ticket, body: (o as { body: string }).body },
+    );
+    const done = await runJiraPortOps(ops);
+    for (const line of done) note(`[Zeff] ✓ ${line}`);
+    note(`[Zeff] ${[...new Set(run.map((o) => o.ticket.toUpperCase()))].join(", ")} re-read from Jira`);
+    return done;
+  }
   const cfg = getJiraSyncConfig();
   if (!cfg.configured || !cfg.command) throw new Error(t("Zeff's Jira connection isn't set up (Jira tab)."));
   const results: string[] = [];
   try {
     await runStdioSession(
-      { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+      { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
       async (call) => {
         for (const o of run) {
           results.push(await jiraOp(call, o));

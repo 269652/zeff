@@ -1,5 +1,5 @@
 /**
- * The connectors' ports (zeff-plugins/plugins/<id>-ext) — Teams, WhatsApp, Signal: each a package with one sync flow, a step of the Sync
+ * The connectors' ports (zeff-plugins/plugins/<id>-ext) — the mail plugins (WhatsApp, Signal, GitLab, Teams: scripts/port-drivers.mts; Jira: scripts/port-jira.mts; scripts/port-drivers.mts — their scrapers in the plugin): each a package with one sync flow, a step of the Sync
  * menu in the place of the built-in's (`replaces`), that calls the kernel's connector.sync for its source. Reading the source stays the
  * kernel's driver (the automation Chrome, Signal Desktop, Teams' API); the built-in counts as there while its port is on (state.ts
  * PROVIDED_BY), so its actions (a reply sent), its settings and pages keep working.
@@ -12,26 +12,30 @@ import path from "node:path";
 const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 
 const CONNECTORS = [
+  // The mail plugins share the mail step: each port's flow reads its own mailboxes (connector.sync "outlook-mail" …), the step the others'.
   {
-    builtin: "teams",
-    name: "Teams",
-    icon: "🟣",
-    what: "Your Teams mentions and 1:1 messages — read through Teams' API or the automation Chrome, as the Connections page says.",
-    description: "Reads your Teams mentions and 1:1 messages into Zeff — the inbox, the chats, the todos found in them. Through Teams' API or the account's automation Chrome, as the Connections page says. Replies are sent from Zeff on your click.",
+    builtin: "outlook-mail",
+    name: "Outlook Mail",
+    icon: "✉️",
+    what: "Your Outlook inbox's latest mails — read through Microsoft's API or the automation Chrome, as the Connections page says; none marked read.",
+    description: "Reads your Outlook inbox's latest mails into Zeff — through Microsoft's API or Outlook Web in the account's automation Chrome, as the Connections page says; none marked read. Replies open as drafts in Outlook.",
+    shared: true,
   },
   {
-    builtin: "whatsapp",
-    name: "WhatsApp",
-    icon: "🟢",
-    what: "Your chats' latest messages (WhatsApp Web's chat list — no chat opened, nothing marked read).",
-    description: "Reads your WhatsApp chats' latest messages into Zeff from WhatsApp Web in the account's automation Chrome — no chat opened, nothing marked read. Replies are sent from Zeff on your click.",
+    builtin: "gmail",
+    name: "Gmail",
+    icon: "📮",
+    what: "Your Gmail accounts' latest mails — read through Gmail's API or the automation Chrome, as the Connections page says; none marked read.",
+    description: "Reads your Gmail accounts' latest mails into Zeff — through Gmail's API or Gmail in the account's automation Chrome, as the Connections page says; none marked read. With Gmail's write access, replies are sent from Zeff on your click.",
+    shared: true,
   },
   {
-    builtin: "signal",
-    name: "Signal",
-    icon: "🔵",
-    what: "Your Signal chats' latest messages (from Signal Desktop — no chat opened, nothing marked read).",
-    description: "Reads your Signal chats' latest messages into Zeff from Signal Desktop on this computer — no chat opened, nothing marked read. Replies are sent from Zeff on your click.",
+    builtin: "imap-mail",
+    name: "E-Mail (IMAP / POP3)",
+    icon: "📧",
+    what: "Your mail accounts' latest mails (IMAP / POP3, each under its name) — read from their servers; none marked read.",
+    description: "Reads your mail accounts (IMAP / POP3) into Zeff — each under its name, from its own server; none marked read. Replies are sent over the account's SMTP server on your click.",
+    shared: true,
   },
 ] as const;
 
@@ -55,7 +59,8 @@ for (const c of CONNECTORS) {
     output: "{{ steps.read }}",
     requested: { sync: [c.builtin] },
     triggers: [{ kind: "schedule", everyMinutes: 15, from: "08:00", to: "19:00" }],
-    sync: { label: c.name, what: c.what, replaces: c.builtin },
+    // (a mail plugin's flow stands beside the shared mail step, replacing none of it)
+    sync: { label: c.name, what: c.what, ...("shared" in c ? {} : { replaces: c.builtin }) },
   };
   const pkg = {
     format: 1,

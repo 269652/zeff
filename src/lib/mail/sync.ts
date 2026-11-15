@@ -1,4 +1,4 @@
-import { automationEnv, automationUp, driverPath } from "@/plugins/drivers";
+import { automationUp, runDriver } from "@/plugins/drivers";
 import { driverOf } from "@/lib/connectors/store";
 import { clearAttention, needsSignIn, raiseLogin } from "@/lib/attention";
 import { sql } from "drizzle-orm";
@@ -14,7 +14,7 @@ const FULL_DAYS = 60;
 
 /** One sync at a time across the whole server (actions and the scheduler are separate module copies). */
 
-function record(ok: boolean, message: string): { ok: boolean; message: string } {
+function recordShared(ok: boolean, message: string): { ok: boolean; message: string } {
   updateMailSettings({ lastSyncAt: new Date().toISOString(), lastResult: message, lastOk: ok });
   return { ok, message };
 }
@@ -41,7 +41,7 @@ const chromeless = (source: Source) => isApi(source) || source === "imap";
 
 /** WhatsApp: the active chats' messages — else (WhatsApp Web doesn't offer them) each chat's last one from the list. */
 async function whatsappRead(call: (name: string, args: Record<string, unknown>) => Promise<unknown>, days: number, background: boolean): Promise<unknown> {
-  const { resultToPayload } = await import("@/lib/jira/mcp-client");
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
   const r = await call("whatsapp_messages", { days, maxLoads: days > DAYS ? 8 : 3, openIfMissing: true, launch: !background });
   const p = resultToPayload(r);
   const data = typeof p === "string" ? (p.trim().startsWith("{") ? JSON.parse(p) : null) : p;
@@ -71,9 +71,10 @@ async function readMailbox(source: Source, days: number, background: boolean, gm
   }
   // Outlook through Microsoft Graph: no automation Chrome.
   if (source === "outlook" && isApi(source)) return (await import("@/lib/microsoft/mail-api")).readMail({ days, folders: getMailSettings().folders });
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-  const out = await runStdioSession(
-    { command: process.execPath, args: [driverPath(source)], env: automationEnv(), label: `${SOURCE_LABELS[source]} sync` },
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
+  const out = await runDriver(
+    source,
+    `${SOURCE_LABELS[source]} sync`,
     async (call) =>
       resultToPayload(
         source === "gmail"
@@ -142,15 +143,25 @@ async function syncSource(source: Source, days: number, background: boolean, pre
  * the account's automation Chrome — and keep them. `background`: only while Chrome runs; by hand it
  * may start it. A mailbox that fails doesn't stop the other.
  */
-export async function syncMail({ background = false } = {}): Promise<{ ok: boolean; message: string }> {
+/** The mailboxes the shared mail step reads: those of the installed mail plugins — not one whose built-in runs through its port (state.ts PROVIDED_BY: its sync flow reads it, connector.sync). */
+export async function mailStepSources(): Promise<("outlook" | "gmail" | "imap")[]> {
+  const { isInstalled, onlyThroughPort } = await import("@/plugins/state");
+  return (["outlook", "gmail", "imap"] as const).filter((s) => isInstalled(SOURCE_PLUGINS[s]) && !onlyThroughPort(SOURCE_PLUGINS[s]));
+}
+
+/**
+ * `only`: just these mailboxes — a port's sync flow (connector.sync: "outlook-mail", "gmail", "imap-mail"), its own run: the shared mail
+ * step's record (its last run, its health) stays the step's.
+ */
+export async function syncMail({ background = false, only }: { background?: boolean; only?: ("outlook" | "gmail" | "imap")[] } = {}): Promise<{ ok: boolean; message: string }> {
   if (accountFlag("__zeffMailSyncing")) return { ok: false, message: t("A mail sync is already running.") };
   setAccountFlag("__zeffMailSyncing", true);
   try {
     // In the background without the automation Chrome: later, as for the other sources — not a failure
     // (that would also make the next sync read two months again).
     // Gmail through the API doesn't need it: that part runs, the Chrome-driven ones wait.
-    const { isInstalled } = await import("@/plugins/state");
-    const sources = (["outlook", "gmail", "imap"] as const).filter((s) => isInstalled(SOURCE_PLUGINS[s]));
+    const sources = only ?? (await mailStepSources());
+    const record = only ? (ok: boolean, message: string) => ({ ok, message }) : recordShared;
     // (Only the mailboxes read in the automation Chrome need it: an IMAP mailbox alone never starts or asks for it.)
     const chromeDown = background && sources.some((s) => !chromeless(s)) && !(await chromeUp());
     if (chromeDown && !sources.some(chromeless)) return { ok: true, message: t("The automation Chrome isn't running — later.") };

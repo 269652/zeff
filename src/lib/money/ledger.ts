@@ -51,6 +51,10 @@ function recompute(ref: string): void {
       console.warn(`[ledger] ${ref}:`, e instanceof Error ? e.message : e);
     }
   }
+  // (and the flows that listen — a port's: its figures follow the ledger the same way; event "ledger.changed", name the kind, value the ref)
+  void import("@/plugins/workspace/flows/engine")
+    .then((m) => m.fireFlowEvent({ event: "ledger.changed", name: ref.split(":")[0], value: ref, payload: { ref } }))
+    .catch((e) => console.warn(`[ledger] the flows of ${ref}:`, e instanceof Error ? e.message : e));
 }
 
 /** A payment kept — once per key (the proof it comes from: "tx:<booking>", "todo:<id>", "hand:<n>"). */

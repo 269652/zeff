@@ -62,15 +62,15 @@ test("bank: a statement read — Revolut's export or any CSV with a date, an amo
   await seed();
   const { importStatement } = await import("@/plugins/revolut/statement");
   const { listTransactions } = await import("@/plugins/cases/bank");
-  const r = importStatement(REVOLUT, "Revolut");
+  const r = await importStatement(REVOLUT, "Revolut");
   assert.equal(r.added, 3);
-  assert.equal(importStatement(REVOLUT, "Revolut").added, 0, "not twice");
+  assert.equal((await importStatement(REVOLUT, "Revolut")).added, 0, "not twice");
   assert.equal(listTransactions().length, 3);
 });
 
 test("bank: a payment out matched to its transfer and its case — the todo done with a note, the case's paid and open follow; the rest unmatched", async () => {
   await seed();
-  (await import("@/plugins/revolut/statement")).importStatement(REVOLUT, "Revolut"); // (read by the first test already: not twice — here so this one runs on its own too)
+  await (await import("@/plugins/revolut/statement")).importStatement(REVOLUT, "Revolut"); // (read by the first test already: not twice — here so this one runs on its own too)
   const { matchPayments, paymentsOf } = await import("@/plugins/cases/bank");
   const r = matchPayments();
   assert.equal(r.matched, 1, "the 11,52 € — the 23,10 € at Rewe and the salary are no case's");
@@ -102,7 +102,7 @@ test("debts: one overview of every creditor — case number, who for, total, ope
   await seed();
   // Its own state, whatever ran before: the 11,52 € paid (read and matched once — again nothing), so that case is done
   // and no debt any more; a third one running, without an instalment.
-  (await import("@/plugins/revolut/statement")).importStatement(REVOLUT, "Revolut");
+  await (await import("@/plugins/revolut/statement")).importStatement(REVOLUT, "Revolut");
   const { debtOverview, matchPayments } = await import("@/plugins/cases/bank");
   matchPayments();
   const { ensureCase, updateCase, caseByKey } = await import("@/plugins/cases/store");
@@ -138,10 +138,10 @@ test("bank: a statement that comes in as a document (a CSV from your Drive folde
   const { importStatementDocuments } = await import("@/plugins/revolut/statement");
   const { listTransactions } = await import("@/plugins/cases/bank");
   const before = listTransactions().length;
-  const r = importStatementDocuments();
+  const r = await importStatementDocuments();
   assert.equal(r.documents, 1, "the shopping list is no statement");
   assert.equal(listTransactions().length, before + 1);
-  assert.equal(importStatementDocuments().documents, 0, "once");
+  assert.equal((await importStatementDocuments()).documents, 0, "once");
 });
 
 test("revolut: a statement among the documents is kept as a note, not as its text — its bookings don't go to the knowledge, the people or the cases", async () => {
@@ -158,8 +158,8 @@ test("revolut: a statement among the documents is kept as a note, not as its tex
   assert.doesNotMatch(text, /Nathanael|Rewe|Gehalt/, "none of its bookings");
   const { statementNote } = await import("@/plugins/revolut/statement");
   // An ordinary list or letter: none.
-  assert.equal(statementNote("Einkaufsliste.csv", "Ding,Menge\nMilch,1\n"), null);
-  assert.equal(statementNote("Brief.txt", "Sehr geehrter Herr Roessler, am 23.02.2026 haben wir 76,50 € erhalten."), null);
+  assert.equal(await statementNote("Einkaufsliste.csv", "Ding,Menge\nMilch,1\n"), null);
+  assert.equal(await statementNote("Brief.txt", "Sehr geehrter Herr Roessler, am 23.02.2026 haben wir 76,50 € erhalten."), null);
   // Without the Revolut plugin a CSV is read as it is.
   const { setInstalled } = await import("@/plugins/state");
   setInstalled("revolut", false);

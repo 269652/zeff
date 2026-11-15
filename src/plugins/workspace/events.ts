@@ -21,6 +21,23 @@ const sourceScope = new AsyncLocalStorage<boolean>();
 export const viaSource = <T>(fn: () => T): T => sourceScope.run(true, fn);
 export const isViaSource = (): boolean => sourceScope.getStore() === true;
 
+const flowScope = new AsyncLocalStorage<string>();
+
+/** `fn` runs as the flow `name`: what it changes never starts that same flow again (an event it causes skips it — no echo). */
+export const asFlow = <T>(name: string, fn: () => T): T => flowScope.run(name, fn);
+/** The flow whose run this is, if any. */
+export const currentFlow = (): string | null => flowScope.getStore() ?? null;
+
+/**
+ * What happens to pages (any page — a document, a database, a row's page): made, its title, text, icon, cover or place changed, moved to
+ * the trash. Told to the flows that listen (a sync keeping a copy elsewhere up to date); like the rows' events, quiet while quiet.
+ */
+export type PageEvent = "page.added" | "page.changed" | "page.removed";
+export function emitPageEvent(event: PageEvent, page: number, field?: string): void {
+  if (isQuiet()) return;
+  void import("./flows/engine").then((m) => m.fireFlowEvent({ event, page, ...(field ? { field } : {}) })).catch(() => undefined);
+}
+
 /** Tell the routines (in the background; a failure there never touches the store). */
 export function emitRowEvent(event: RowEvent, info: RowEventInfo): void {
   if (isQuiet()) return;

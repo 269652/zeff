@@ -2,13 +2,12 @@
 import type { TodoOp } from "@/lib/todos/shared";
 import { formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload } from "@/lib/mcp/stdio";
 import type { ActionResult } from "../actions/run-types";
-import { automationEnv, driverPath } from "../drivers";
+import { runDriver } from "../drivers";
 
 export async function runSignalMessage(op: Extract<TodoOp, { type: "signal-message" }>): Promise<ActionResult> {
-  const out = await runStdioSession(
-    { command: process.execPath, args: [driverPath("signal")], env: automationEnv(), label: "Signal" },
+  const out = await runDriver("signal", "Signal",
     async (call) => resultToPayload(await call("signal_send", { chat: op.chat, text: op.body })),
     120000,
   );

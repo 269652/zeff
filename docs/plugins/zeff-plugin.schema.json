@@ -785,20 +785,40 @@
                 "maxLength": 200
               },
               "read": {
+                "description": "The plugin function that reads the records: gives back a list of { ref, title, key?, fields?, text?, url?, updatedAt? }.",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,39}$",
-                "description": "The plugin function that reads the records: gives back a list of { ref, title, key?, fields?, text?, url?, updatedAt? }."
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "lambda": {
+                "description": "Or a lambda of the plugin (kind function) that reads them — no Notebook needed; its records may also say status, typed (fields of fixed id and type) and dataType.",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+              },
+              "replaces": {
+                "description": "A port's: the built-in's source it stands in for (its id, as the databases name it) — only its own built-in's (lib/ext/stores.ts REPLACEABLE_SOURCES).",
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
               },
               "noNewRows": {
                 "default": true,
                 "description": "The records are only read from where they live: a row cannot be made by hand.",
                 "type": "boolean"
+              },
+              "lockedFields": {
+                "default": [],
+                "description": "Fields (by their id) the records fix: not changed by hand on the rows the source brings.",
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "maxLength": 40
+                }
               }
             },
             "required": [
               "id",
-              "label",
-              "read"
+              "label"
             ]
           }
         },
@@ -955,9 +975,30 @@
                 "maxLength": 200
               },
               "function": {
+                "description": "The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows.",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,39}$",
-                "description": "The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows."
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "lambda": {
+                "description": "Or a lambda of the plugin (kind function) that gives it — called with `args` (one lambda may answer several Kennzahlen).",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+              },
+              "args": {
+                "default": {},
+                "description": "What a lambda is called with: { \"which\": \"owe-open\" }.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
               },
               "everyMinutes": {
                 "default": 15,
@@ -969,8 +1010,94 @@
             },
             "required": [
               "id",
-              "label",
-              "function"
+              "label"
+            ]
+          }
+        },
+        "stores": {
+          "default": [],
+          "description": "Data of its own, beyond Workspace databases (many rows, looked up by key): tables the kernel keeps for it — read and written through the store actions, by its flows with the permission, read by its lambdas.",
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{0,39}$",
+                "description": "Its name (unique in the plugin): <plugin>.<name> in the store actions and a flow's permissions."
+              },
+              "columns": {
+                "minItems": 1,
+                "maxItems": 40,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                    },
+                    "type": {
+                      "default": "text",
+                      "description": "json: any value, kept as JSON and read back as it was.",
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "integer",
+                        "real",
+                        "json"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "key": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                  },
+                  {
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                    }
+                  }
+                ],
+                "description": "The column — or columns together — that tell its rows apart (store.put replaces the row with the same key)."
+              },
+              "indexes": {
+                "default": [],
+                "description": "Columns looked up together often.",
+                "maxItems": 8,
+                "type": "array",
+                "items": {
+                  "minItems": 1,
+                  "maxItems": 4,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                  }
+                }
+              },
+              "adopts": {
+                "description": "A port's: the built-in's own table it keeps using (only one the kernel lets the built-in's port adopt — lib/ext/stores.ts ADOPTABLE).",
+                "type": "string",
+                "pattern": "^[a-z_][a-z0-9_]{0,59}$"
+              }
+            },
+            "required": [
+              "name",
+              "columns",
+              "key"
             ]
           }
         },
@@ -1294,7 +1421,8 @@
               "name": {
                 "type": "string",
                 "enum": [
-                  "web.search"
+                  "web.search",
+                  "bank.statement"
                 ],
                 "description": "A service of the kernel (lib/kernel/contract.ts KERNEL_SERVICES)."
               },

@@ -14,7 +14,7 @@ import type { SyncKey } from "./sync/shared";
 import { stepMinutes } from "./sync/intervals";
 import { noteSyncResult } from "./sync/health";
 import { ABORTED } from "./abort";
-import { onlyThroughPort } from "@/plugins/state";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
 
 /** The automation Chrome is running (its debug port answers) — the Chrono, Punch and Outlook drivers would start it otherwise. */
 async function chromeUp(): Promise<boolean> {
@@ -49,13 +49,13 @@ export function startSyncScheduler(): void {
   state.__zeffSyncScheduler = true;
   const jobs: { name: string; settings: () => { syncMinutes: number; lastSyncAt: string | null }; run: () => Promise<{ ok: boolean; message: string }> }[] = [
     // Jira: every 15 minutes (through the sync menu's step, so the menu shows it and records how it went).
-    { name: "jira", settings: () => ({ syncMinutes: stepMinutes("jira"), lastSyncAt: jiraLastSyncAt() }), run: async () => startSync("jira") },
+    { name: "jira", settings: () => (onlyThroughPort("jira") ? { syncMinutes: 0, lastSyncAt: null } : { syncMinutes: stepMinutes("jira"), lastSyncAt: jiraLastSyncAt() }), run: async () => startSync("jira") },
     // Outlook's calendar, WhatsApp (read only): as set on the Sync settings page — while the automation Chrome runs.
     { name: "calendar", settings: () => ({ syncMinutes: stepMinutes("calendar"), lastSyncAt: lastSyncOf("calendar") }), run: async () => ((await import("@/lib/connectors/store")).driverOf("outlook-calendar") !== "cdp" ? startSync("calendar") : whileChromeRuns("calendar")()) },
     { name: "whatsapp", settings: () => ({ syncMinutes: stepMinutes("whatsapp"), lastSyncAt: lastSyncOf("whatsapp") }), run: whileChromeRuns("whatsapp") },
     // Signal: while Signal Desktop runs — without its debug port the sync fails, so the menu tells you.
     { name: "signal", settings: () => ({ syncMinutes: stepMinutes("signal"), lastSyncAt: lastSyncOf("signal") }), run: whileSignalRuns },
-    { name: "keep", settings: () => ({ syncMinutes: stepMinutes("keep"), lastSyncAt: lastSyncOf("keep") }), run: whileChromeRuns("keep") },
+    { name: "keep", settings: () => (onlyThroughPort("keep") ? { syncMinutes: 0, lastSyncAt: null } : { syncMinutes: stepMinutes("keep"), lastSyncAt: lastSyncOf("keep") }), run: whileChromeRuns("keep") },
     // News: public feeds — no Chrome needed.
     { name: "news", settings: () => ({ syncMinutes: stepMinutes("news"), lastSyncAt: lastSyncOf("news") }), run: async () => startSync("news") },
     { name: "gcalendar", settings: () => ({ syncMinutes: stepMinutes("gcalendar"), lastSyncAt: lastSyncOf("gcalendar") }), run: async () => ((await import("@/lib/connectors/store")).driverOf("gcalendar") === "api" ? startSync("gcalendar") : whileChromeRuns("gcalendar")()) },
@@ -66,8 +66,9 @@ export function startSyncScheduler(): void {
     { name: "localdocs", settings: () => ({ syncMinutes: stepMinutes("localdocs"), lastSyncAt: lastSyncOf("localdocs") }), run: async () => startSync("localdocs") },
     // (Teams through its port: the port's sync flow runs it — not this job too)
     { name: "teams", settings: () => (onlyThroughPort("teams") ? { syncMinutes: 0, lastSyncAt: null } : getTeamsSettings()), run: () => syncTeams({ background: true }) },
-    { name: "mail", settings: getMailSettings, run: async () => (await import("@/lib/mail/sync")).syncMail({ background: true }) },
-    { name: "gitlab", settings: getGitlabSettings, run: () => syncGitlab({ background: true }) },
+    // (no mailbox left for the shared step — each read by its port's flow: none)
+    { name: "mail", settings: () => (["outlook-mail", "gmail", "imap-mail"].some((p) => isInstalled(p as never) && !onlyThroughPort(p as never)) ? getMailSettings() : { syncMinutes: 0, lastSyncAt: null }), run: async () => (await import("@/lib/mail/sync")).syncMail({ background: true }) },
+    { name: "gitlab", settings: () => (onlyThroughPort("gitlab") ? { syncMinutes: 0, lastSyncAt: null } : getGitlabSettings()), run: () => syncGitlab({ background: true }) },
     // The Ticket-Lage run (through the AI provider): every N minutes, on workdays only.
     {
       name: "boards",
@@ -233,4 +234,24 @@ export function startSyncScheduler(): void {
     }
   };
   setTimeout(tick, 60000).unref(); // a minute after the server starts
+  // The flows' watch triggers (a sync kept close to live): every few seconds each account's watches that are due — a cheap question
+  // to a lambda, a run only when it says something changed. Not in safe mode, not in the demo.
+  const watchTick = async () => {
+    try {
+      const { activeAccountId, listAccounts, withAccount, accountsInstalled } = await import("@/db/accounts");
+      if ((await import("@/lib/kernel/safe-mode")).safeMode()) return;
+      const accounts = accountsInstalled() ? listAccounts().filter((a) => !a.demo) : [{ id: activeAccountId(), name: "" }];
+      for (const a of accounts) {
+        await withAccount(a.id, async () => {
+          if (!(await import("@/plugins/state")).isInstalled("workspace")) return;
+          await (await import("@/plugins/workspace/flows/engine")).runDueWatches();
+        });
+      }
+    } catch (e) {
+      console.error("[flow watches]", e);
+    } finally {
+      setTimeout(watchTick, 5000).unref();
+    }
+  };
+  setTimeout(watchTick, 30000).unref();
 }

@@ -1,3 +1,4 @@
+import { runJiraSession, jiraPortOn } from "@/lib/jira/port-ops";
 import { createHash } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -142,12 +143,11 @@ export type JiraLookup = (username: string) => Promise<JiraProfile | null>;
 /** Jira's user lookup through its MCP server (one session for the whole run): null for a user that isn't there. */
 async function withJiraLookup<T>(fn: (lookup: JiraLookup) => Promise<T>): Promise<T> {
   const { getJiraSyncConfig } = await import("@/lib/jira/sync");
-  const { resultToPayload, runStdioSession } = await import("@/lib/jira/mcp-client");
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new Error("Jira isn't set up.");
+  if ((!cfg.configured || !cfg.command) && !(await jiraPortOn())) throw new Error("Jira isn't set up.");
   let out!: T;
-  await runStdioSession(
-    { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+  await runJiraSession("Jira",
     async (call) => {
       out = await fn(async (username) => {
         try {

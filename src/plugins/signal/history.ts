@@ -3,7 +3,7 @@ import { errorMessage } from "@/lib/errors";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
 import { saveMails, type MailInput } from "@/lib/mail/store";
-import { automationEnv, driverPath } from "@/plugins/drivers";
+import { runDriver } from "@/plugins/drivers";
 
 /**
  * One Signal chat's whole history (Signal plugin), by hand: its earlier messages loaded from Signal
@@ -20,9 +20,8 @@ async function pullHistory(chat: string): Promise<{ ok: boolean; message: string
   if (flag.__zeffSignalHistory) return { ok: false, message: t("A history is already running ({chat}).", { chat: flag.__zeffSignalHistory }) };
   flag.__zeffSignalHistory = chat;
   try {
-    const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-    const out = await runStdioSession(
-      { command: process.execPath, args: [driverPath("signal")], env: automationEnv(), label: "Signal history" },
+    const { resultToPayload } = await import("@/lib/mcp/stdio");
+    const out = await runDriver("signal", "Signal history",
       async (call) => resultToPayload(await call("signal_history", { chat, launch: true })),
       15 * 60000,
     );

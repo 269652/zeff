@@ -15,6 +15,7 @@ import { PEOPLE_FORMULAS } from "./formulas";
 import { workspaceFormulaFunctions } from "@/plugins/workspace/formula-point";
 import { PEOPLE_SOURCE } from "./workspace-source";
 import "./todo-settle"; // (a promise kept when its todo is done)
+import "./flow-actions"; // (people.names, people.accounts for lambdas and flows)
 
 /** What People registers for other plugins (loaded through plugins/contributions): its profiles as a source of the Workspace's pipelines. */
 workspaceSources.contribute("people", [PEOPLE_SOURCE]);

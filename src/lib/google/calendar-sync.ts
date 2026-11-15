@@ -11,7 +11,7 @@ import { driverOf } from "@/lib/connectors/store";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
 import { getPref, setPref } from "@/lib/prefs";
-import { automationEnv, automationUp, driverPath } from "@/plugins/drivers";
+import { automationUp, runDriver } from "@/plugins/drivers";
 import { accountFlag, setAccountFlag } from "@/lib/sync/account-flags";
 
 /** `weeks`: how far ahead it reads; `pastMonths`: how far back (the API — from the 1st of that month). */
@@ -110,9 +110,8 @@ export async function syncGoogleCalendar({ background = false, range }: { backgr
       const { readCalendar } = await import("@/lib/google/calendar-api");
       for (const r of rangesToRead(syncWindow(s), range)) reads.push({ data: await readCalendar(r), range: r });
     } else {
-      const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-      const out = await runStdioSession(
-        { command: process.execPath, args: [driverPath("google-calendar")], env: automationEnv(), label: "Google Calendar sync" },
+      const { resultToPayload } = await import("@/lib/mcp/stdio");
+      const out = await runDriver("google-calendar", "Google Calendar sync",
         async (call) => resultToPayload(await call("gcal_events", { account: s.account, weeks: s.weeks, launch: !background })),
         300000,
       );
@@ -148,9 +147,8 @@ export type SignedInGoogle = { email: string; name: string; number: number };
 export async function signedInGoogleAccounts(): Promise<SignedInGoogle[] | null> {
   if (!(await chromeUp())) return null;
   try {
-    const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-    const out = await runStdioSession(
-      { command: process.execPath, args: [driverPath("google-calendar")], env: automationEnv(), label: "Google accounts" },
+    const { resultToPayload } = await import("@/lib/mcp/stdio");
+    const out = await runDriver("google-calendar", "Google accounts",
       async (call) => resultToPayload(await call("gcal_accounts", {})),
       30000,
     );

@@ -14,7 +14,7 @@ import { isSystemPage, systemPageIds } from "@/lib/prompts/system-pages";
 import { inAgentScope, runAgentGuards } from "./agent-scope";
 import { keepPartVersion } from "./part-versions";
 import { emitChange } from "@/lib/events";
-import { emitRowEvent, isViaSource } from "./events";
+import { emitPageEvent, emitRowEvent, isViaSource } from "./events";
 import { allSources } from "./source-point";
 import { logChange } from "./activity";
 import { withCause } from "@/lib/cause";
@@ -253,6 +253,8 @@ export function createPage(v: NewPage = {}): number {
   relink(id, doc);
   logChange(id, "created");
   changed();
+  // (Flows that keep a copy elsewhere — a row's own event comes from where its cells are set.)
+  if (!v.template) emitPageEvent("page.added", id);
   return id;
 }
 
@@ -373,6 +375,7 @@ export function updatePage(id: number, patch: PagePatch, rev?: number): SaveResu
   if (cur.db_id && (patch.title !== undefined || doc)) syncLinkedFrom(id); // (its copies in other databases follow — links.ts)
   // A page with to-do lists that feed the Todo engine (or did): the engine follows (task-lists.ts).
   if (doc && (cur.content.includes('"engine":true') || JSON.stringify(doc).includes('"engine":true'))) void import("./task-lists").then((m) => m.syncPageLists(id)).catch(() => undefined);
+  if (editing && !cur.template) emitPageEvent("page.changed", id, patch.content !== undefined ? "content" : patch.title !== undefined ? "title" : patch.icon !== undefined ? "icon" : "cover");
   return { ok: true, rev: newRev, updatedAt: editing ? at : cur.updated_at };
 }
 
@@ -433,6 +436,7 @@ export function movePage(id: number, parentId: number | null, beforeId?: number 
   touch(id);
   d.prepare("update ws_pages set parent_id = ?, position = ?, updated_at = ? where id = ?").run(parentId, position, now(), id);
   changed();
+  if (p.parentId !== parentId) emitPageEvent("page.changed", id, "parent");
 }
 
 /** To the trash: the page, what is below it, and its rows. */
@@ -479,6 +483,7 @@ export function archivePage(id: number): void {
   })();
   changed();
   if (was?.dbId && !was.archivedAt) emitRowEvent("row.removed", { db: was.dbId, row: id });
+  if (was && !was.archivedAt) emitPageEvent("page.removed", id);
   if (was?.dbId) afterTodoRowChange(id);
 }
 

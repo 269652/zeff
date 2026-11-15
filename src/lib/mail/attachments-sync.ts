@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { currentAccountId } from "@/db/accounts";
 import { driverOf } from "@/lib/connectors/store";
-import { automationEnv, driverPath } from "@/plugins/drivers";
+import { runDriver } from "@/plugins/drivers";
 import { throwIfAborted } from "@/lib/abort";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
@@ -39,9 +39,10 @@ const defaultOpener: SessionOpener = async (source, body, timeoutMs) => {
   if (source === "gmail" && driverOf("gmail") === "api") return body((await import("@/lib/google/gmail-api")).gmailApiCall);
   // Outlook through Microsoft Graph: no driver process, no mail opened (so none marked read).
   if (source === "outlook" && driverOf("outlook-mail") === "api") return body((await import("@/lib/microsoft/mail-api")).outlookApiCall);
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-  return runStdioSession(
-    { command: process.execPath, args: [driverPath(source)], env: automationEnv(), label: `${SOURCE_LABELS[source]} attachments` },
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
+  return runDriver(
+    source,
+    `${SOURCE_LABELS[source]} attachments`,
     async (call) =>
       body(async (tool, args) => {
         const p = resultToPayload(await call(tool, args));

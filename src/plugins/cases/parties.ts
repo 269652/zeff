@@ -1,5 +1,4 @@
 import { emitChange } from "@/lib/events";
-import { createPerson, listPeople, namesThem, setCircle, setKind } from "@/plugins/people/store";
 import { isInstalled } from "@/plugins/state";
 import { casesDb, getCase, listCases } from "./store";
 
@@ -14,7 +13,6 @@ export const PARTY_ROLES = ["creditor", "collector", "payee"] as const;
 export type PartyRole = (typeof PARTY_ROLES)[number];
 export type PartySource = "ai" | "manual";
 export type Party = { personId: number; name: string; source: PartySource };
-type Kind = "person" | "organization";
 
 const RANK: Record<PartySource, number> = { ai: 1, manual: 2 };
 
@@ -47,26 +45,9 @@ export function setParty(caseId: number, role: PartyRole, personId: number | nul
   return true;
 }
 
-/**
- * The contact a name in a case means: one called so (or with that alias), else one whose name is in it — else, `make`, a new
- * one, a person or an organisation as the AI said (`kind`); a creditor that is an organisation in "authorities & creditors".
- */
-export function contactFor(name: string, make: boolean, kind?: Kind, creditor = false): number | null {
-  const n = name.trim();
-  if (!n || !isInstalled("people")) return null;
-  const people = listPeople();
-  const low = n.toLowerCase();
-  const exact = people.find((p) => [p.name, ...p.aliases].some((x) => x.toLowerCase() === low));
-  if (exact) return exact.id;
-  // The longest name in it wins ("Gerichtsvollzieherin Wagner, AG Musterstadt" → the one with the alias "Wagner").
-  const named = people.filter((p) => namesThem(p, n)).sort((a, b) => b.name.length - a.name.length)[0];
-  if (named) return named.id;
-  if (!make) return null;
-  const id = createPerson({ name: n.slice(0, 120) });
-  if (kind) setKind(id, kind, "ai");
-  if (kind === "organization" && creditor) setCircle(id, "authorities", "ai");
-  return id;
-}
+// (who a name means is the People plugin's: people/contact.ts — the port's flow asks it through people.contacts)
+export { contactFor } from "@/plugins/people/contact";
+import { contactFor } from "@/plugins/people/contact";
 
 /** A case's parties as the AI named them in its summary — what you chose stays. A summary without them (older): none yet. */
 export function assignParties(caseId: number): void {

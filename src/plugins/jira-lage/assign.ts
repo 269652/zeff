@@ -3,9 +3,10 @@
  * — then read back from Jira who has it now, and that put on the card at once (the next sync would bring the same; you
  * see it right away). Only on your click. Server only.
  */
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { ValidationError } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload, runStdioSession } from "@/lib/mcp/stdio";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
 import { databaseSource, KEY_PROP } from "@/plugins/workspace/collections";
 import { getPage, rawRows, setCell } from "@/plugins/workspace/store";
@@ -25,12 +26,17 @@ export async function assignJiraRowToMe(rowId: number): Promise<{ key: string; a
   const row = rawRows(dbId).find((r) => r.id === rowId);
   const key = typeof row?.cells[KEY_PROP] === "string" ? String(row.cells[KEY_PROP]).trim() : "";
   if (!key) throw new ValidationError(t("This card has no Jira key."));
+  const { jiraPortOn, runJiraPortOps } = await import("@/lib/jira/port-ops");
+  const viaPort = await jiraPortOn();
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
+  if (!viaPort && (!cfg.configured || !cfg.command)) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
   const user = me();
   if (!user) throw new ValidationError(t("Zeff doesn't know your Jira user — its Jira connection has no JIRA_USERNAME."));
-  const assignee = await runStdioSession(
-    { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+  // (the Jira plugin does it while it is on: you, as Jira names you)
+  const assignee = viaPort
+    ? (await runJiraPortOps([{ type: "assign-as-jira-names", ticket: key, assignee: user }], { plain: true }))[0]
+    : await runStdioSession(
+    { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
     async (call) => {
       await call("jira_update_issue", { issue_key: key, fields: JSON.stringify({ assignee: user }) });
       // Who has it now, as Jira names them (the board shows display names).

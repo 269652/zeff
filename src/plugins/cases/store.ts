@@ -1,6 +1,7 @@
 import { getSqlite } from "@/db";
 import { emitChange } from "@/lib/events";
 import type { Case, CaseSource, CaseStatus, CaseSummary } from "./shared";
+import { caseFromRow } from "./core";
 
 /**
  * The cases and what they are made of (the Cases plugin): one row per case number, its sources (refs to
@@ -29,25 +30,8 @@ const changed = () => emitChange("todos");
 
 type Row = { id: number; key: string; label: string; status: string; person_id: number | null; note: string; compiled: string | null; overrides?: string | null; created_at: string; updated_at: string; last_at: string };
 
-const toCase = (r: Row): Case => ({
-  id: r.id,
-  key: r.key,
-  label: r.label,
-  status: r.status === "closed" || r.status === "ignored" ? r.status : "open",
-  personId: r.person_id,
-  note: r.note,
-  compiled: (() => {
-    try {
-      // What the AI summed up, your corrections over it.
-      return r.compiled ? ({ ...(JSON.parse(r.compiled) as CaseSummary), ...(r.overrides ? (JSON.parse(r.overrides) as Partial<CaseSummary>) : {}) } as CaseSummary) : null;
-    } catch {
-      return null;
-    }
-  })(),
-  createdAt: r.created_at,
-  updatedAt: r.updated_at,
-  lastAt: r.last_at,
-});
+// (the pure core's — the port reads its rows the same way: core.ts)
+const toCase = (r: Row): Case => caseFromRow(r) as Case;
 
 /** The cases (not those set aside), the newest activity first. */
 export const listCases = (opts: { all?: boolean } = {}): Case[] => (db().prepare(`select * from cases ${opts.all ? "" : "where status != 'ignored'"} order by last_at desc`).all() as Row[]).map(toCase);

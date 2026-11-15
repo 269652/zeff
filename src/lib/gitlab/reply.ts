@@ -1,4 +1,4 @@
-import { automationEnv, driverPath } from "@/plugins/drivers";
+import { runDriver } from "@/plugins/drivers";
 import { driverOf } from "@/lib/connectors/store";
 import { t } from "@/lib/i18n/server";
 import { getGitlabSettings } from "./store";
@@ -11,10 +11,8 @@ import { getGitlabSettings } from "./store";
 export async function postGitlabReply(noteUrl: string, body: string, opts: { dryRun?: boolean } = {}): Promise<{ via: "api" | "page"; url: string; apiFailed?: string }> {
   if (driverOf("gitlab") === "api") return (await import("./api")).replyTo(noteUrl, body, !!opts.dryRun);
   const base = getGitlabSettings().baseUrl.replace(/\/+$/, "");
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-  const script = driverPath("gitlab");
-  const out = await runStdioSession(
-    { command: process.execPath, args: [script], env: automationEnv(), label: "GitLab" },
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
+  const out = await runDriver("gitlab", "GitLab",
     async (call) => resultToPayload(await call("gitlab_reply", { baseUrl: base, noteUrl, body, dryRun: !!opts.dryRun })),
     180000,
   );
@@ -27,10 +25,8 @@ export async function postGitlabReply(noteUrl: string, body: string, opts: { dry
 export async function commentOnMr(project: string, iid: number, body: string, opts: { dryRun?: boolean } = {}): Promise<{ url: string }> {
   if (driverOf("gitlab") === "api") return (await import("./api")).commentOn(project, iid, body, !!opts.dryRun);
   const base = getGitlabSettings().baseUrl.replace(/\/+$/, "");
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-  const script = driverPath("gitlab");
-  const out = await runStdioSession(
-    { command: process.execPath, args: [script], env: automationEnv(), label: "GitLab" },
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
+  const out = await runDriver("gitlab", "GitLab",
     async (call) => resultToPayload(await call("gitlab_comment", { baseUrl: base, project, iid, body, dryRun: !!opts.dryRun })),
     120000,
   );
@@ -47,10 +43,8 @@ export async function commentOnMr(project: string, iid: number, body: string, op
 export async function resolveGitlabThread(noteUrl: string, resolved: boolean, opts: { dryRun?: boolean } = {}): Promise<{ resolvable: boolean; resolved?: boolean }> {
   if (driverOf("gitlab") === "api") return (await import("./api")).resolveThread(noteUrl, resolved, !!opts.dryRun);
   const base = getGitlabSettings().baseUrl.replace(/\/+$/, "");
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-  const script = driverPath("gitlab");
-  const out = await runStdioSession(
-    { command: process.execPath, args: [script], env: automationEnv(), label: "GitLab" },
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
+  const out = await runDriver("gitlab", "GitLab",
     async (call) => resultToPayload(await call("gitlab_resolve", { baseUrl: base, noteUrl, resolved, dryRun: !!opts.dryRun })),
     120000,
   );
@@ -73,10 +67,8 @@ export async function openGitlabMr(
   if (driverOf("gitlab") === "api") r = await (await import("./api")).openMr(v, !!opts.dryRun);
   else {
     const base = getGitlabSettings().baseUrl.replace(/\/+$/, "");
-    const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-    const script = driverPath("gitlab");
-    const out = await runStdioSession(
-      { command: process.execPath, args: [script], env: automationEnv(), label: "GitLab" },
+    const { resultToPayload } = await import("@/lib/mcp/stdio");
+  const out = await runDriver("gitlab", "GitLab",
       async (call) => resultToPayload(await call("gitlab_open_mr", { baseUrl: base, ...v, dryRun: !!opts.dryRun })),
       180000,
     );
@@ -96,10 +88,8 @@ export async function openGitlabMr(
 export async function mergeGitlabMr(project: string, iid: number, opts: { dryRun?: boolean } = {}): Promise<{ url: string; state?: string; already?: boolean }> {
   if (driverOf("gitlab") === "api") return (await import("./api")).mergeMr(project, iid, !!opts.dryRun);
   const base = getGitlabSettings().baseUrl.replace(/\/+$/, "");
-  const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-  const script = driverPath("gitlab");
-  const out = await runStdioSession(
-    { command: process.execPath, args: [script], env: automationEnv(), label: "GitLab" },
+  const { resultToPayload } = await import("@/lib/mcp/stdio");
+  const out = await runDriver("gitlab", "GitLab",
     async (call) => resultToPayload(await call("gitlab_merge_mr", { baseUrl: base, project, iid, dryRun: !!opts.dryRun })),
     120000,
   );

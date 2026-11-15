@@ -133,6 +133,12 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // kit pieces the mail client's port reads by the row picked.
   suggested: T({ row: "text" }, true),
   know: T({ row: "text", compact: { oneOf: ["true", "false"] } }, true),
+  // Mails, letters and appointments by their refs ("mail:<key>", "doc:<id>", "event:…") as cards, as a todo's sources are shown (open=true: unfolded).
+  sources: T({ refs: "text", open: { oneOf: ["true", "false"] } }, true),
+  // What happened with a row, by day (the Timeline plugin — nothing while it is off).
+  rowtimeline: T({ row: "text", limit: "int", title: "text" }, true),
+  // A transfer as a GiroCode (EPC QR code) to scan with a banking app, its fields beside it.
+  girocode: T({ name: "text", iban: "text", bic: "text", amount: "text", purpose: "text" }, true),
   panes: T({}),
   pane: T({ title: "text", aside: "text", width: "int", flush: { oneOf: ["true", "false"] } }),
   cover: T({ src: "url", h: "int", title: "text", subtitle: "text" }, true),
@@ -175,7 +181,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   ask: T({ placeholder: "text", suggest: "text", intro: "text" }, true),
   dossier: T({ focus: "text", empty: "text", plain: { oneOf: ["true", "false"] } }, true),
   lookup: T({ source: "text", map: "text", placeholder: "text", unique: "text", language: "text", open: { oneOf: ["true", "false"] } }, true),
-  select: T({ bind: "text", options: "text", label: "text", /** Typed to find (an autocomplete), as wide as there is room. */ search: { oneOf: ["true", "false"] } }, true),
+  select: T({ bind: "text", options: "text", label: "text", /** Typed to find (an autocomplete), as wide as there is room. */ search: { oneOf: ["true", "false"] }, /** An event sent once a value is picked (its value in the state): saved at once. */ emit: "text" }, true),
   toggle: T({ bind: "text", label: "text" }, true),
   field: T({ name: "text" }, true),
   part: T(ANY),
@@ -213,7 +219,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // Settings of the app: declared with <setting>, edited in <settings/>, read as settings.<name>.
   setting: T({ name: "text", label: "text", type: { oneOf: ["text", "number", "toggle", "select"] }, options: "text", default: "text" }, true),
   settings: T({ title: "text" }, true),
-  upload: T({ bind: "text", label: "text", accept: "text", max: "int" }, true),
+  upload: T({ bind: "text", label: "text", accept: "text", max: "int", /** An event sent once the file is read (its text in the state): what the view does with it at once. */ emit: "text" }, true),
   switch: T({ on: "text" }),
   case: T({ value: "text" }),
   otherwise: T({}),
@@ -222,7 +228,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   tab: T({ id: "text", label: "text", n: "text" }),
   // A dialog (center) or a drawer (side=right), open while state.<bind> is filled.
   dialog: T({ bind: "text", title: "text", side: { oneOf: ["center", "right"] }, wide: { oneOf: ["true", "false"] } }),
-  input: T({ /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** A textarea's height in lines. */ rows: "int", bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
+  input: T({ /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
   slider: T({ bind: "text", min: "num", max: "num", step: "num", label: "text", value: "text", unit: "text" }, true),
   calendar: T({ source: "list", date: "list", bind: "text", empty: "text" }),
   heatmap: T({ source: "list", date: "list", value: "list", calc: { oneOf: ["count", "sum"] }, weeks: "int", label: "text", unit: "text" }, true),
@@ -1483,6 +1489,15 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "transitions":
       if (!ctx.row) return (err("<transitions/> shows a row's lifecycle — put it in <selected> or a row's own page."), []);
       return [{ t: "transitions", a: { ...a, row: String(ctx.row.id) }, c: [] }];
+    case "girocode":
+      if (!a.iban?.trim()) return [];
+      return [{ t: "girocode", a, c: [] }];
+    case "sources":
+      return a.refs?.trim() && a.refs.trim() !== "[]" ? [{ t: "sources", a, c: [] }] : [];
+    case "rowtimeline": {
+      const id = Number(a.row ?? ctx.row?.id);
+      return Number.isInteger(id) && id > 0 ? [{ t: "rowtimeline", a: { ...a, row: String(id) }, c: [] }] : [];
+    }
     case "suggested":
     case "know": {
       const id = Number(a.row ?? ctx.row?.id);

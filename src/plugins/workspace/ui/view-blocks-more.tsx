@@ -137,13 +137,21 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
         env.emitLater?.(a.enter);
       }
     : undefined;
+  // leave="event": leaving the field after a change sets it at once and sends the event — a note saved when you leave it.
+  const onBlur = a.leave
+    ? () => {
+        if (v === (a.current ?? "")) return;
+        env.setState(a.bind, v);
+        env.emitLater?.(a.leave);
+      }
+    : undefined;
   // (rows=: a textarea's height in lines — one: a chat's line, no handle)
   const rows = Number(a.rows) > 0 ? Math.min(40, Number(a.rows)) : undefined;
   const field =
     type === "textarea" ? (
-      <textarea className={`input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} />
+      <textarea className={`input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     ) : (
-      <input type={type} className={`input py-1 text-sm ${type === "color" ? "h-8 w-12 p-0.5" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} />
+      <input type={type} className={`input py-1 text-sm ${type === "color" ? "h-8 w-12 p-0.5" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     );
   if (!a.label) return <span className={`print:hidden ${type === "textarea" ? "block w-full" : "inline-flex"}`}>{field}</span>;
   return (
@@ -283,6 +291,8 @@ function UploadBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
       const text = await file.text();
       env.setState(a.bind, text);
       env.setState(`${a.bind}_name`, file.name);
+      // (emit=: what the view does with it at once — a statement read in)
+      if (a.emit) env.emitLater?.(a.emit);
     } catch {
       toast(t("The file could not be read."), { tone: "error" });
     }

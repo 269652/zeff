@@ -1,13 +1,12 @@
-import { automationEnv, driverPath, type DriverId } from "@/plugins/drivers";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { runDriver, type DriverId } from "@/plugins/drivers";
+import { resultToPayload } from "@/lib/mcp/stdio";
 
 /**
  * One call to one of Zeff's automation-Chrome drivers (scripts/<name>-mcp.mjs, no LLM), its
  * answer as text. The pulls only read: nothing changes there (Outlook's here; the booking systems' in their integration).
  */
 export async function callDriver(name: DriverId, tool: string, args: Record<string, unknown>, label: string, timeoutMs: number): Promise<string> {
-  const script = driverPath(name);
-  const out = await runStdioSession({ command: process.execPath, args: [script], env: automationEnv(), label }, async (call) => resultToPayload(await call(tool, args)), timeoutMs);
+  const out = await runDriver(name, label, async (call) => resultToPayload(await call(tool, args)), timeoutMs);
   return typeof out === "string" ? out : JSON.stringify(out);
 }
 

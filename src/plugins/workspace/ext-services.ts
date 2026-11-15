@@ -5,6 +5,7 @@
  */
 import { enabledPlugins } from "@/lib/ext/registry";
 import type { KernelService } from "@/lib/kernel/contract";
+import { bookingOf } from "@/lib/bank/statements";
 import { runOwnLambda } from "./mcp-plugin-tools";
 
 /** Who fills a service now: the plugin and its lambda (none: undefined). */
@@ -38,6 +39,12 @@ const SHAPES: Record<KernelService, (v: unknown) => unknown> = {
         return url ? [{ title: clean(o.title, 200), url, snippet: clean(o.snippet, 500) }] : [];
       }),
     };
+  },
+  // (each booking checked — lib/bank/statements.ts)
+  "bank.statement": (v) => {
+    const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+    if (!Array.isArray(o.bookings)) throw new Error("The statement was read without bookings.");
+    return { account: clean(o.account, 40) || "Bank", bookings: o.bookings.slice(0, 50000).flatMap((b) => bookingOf(b) ?? []) };
   },
 };
 

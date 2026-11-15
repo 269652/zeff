@@ -56,6 +56,17 @@ export async function runUserAction(name: string, input: Record<string, unknown>
   });
 }
 
+/** Mails, letters, appointments by their refs as a todo's sources are shown (<sources>): those found, in the order asked. */
+export async function sourceCardsAction(refs: string[]) {
+  return run(async () => {
+    const wanted = (Array.isArray(refs) ? refs : []).map(String).slice(0, 200);
+    if (!wanted.length) return { sources: [] as import("@/lib/todos/shared").TodoSource[] };
+    const { todoSources } = await import("@/lib/todos/sources");
+    const found = todoSources([{ refs: wanted } as unknown as import("@/lib/todos/shared").TodoView], []);
+    return { sources: wanted.map((r) => found[r]).filter((s): s is import("@/lib/todos/shared").TodoSource => !!s) };
+  });
+}
+
 /** Every flow (name, title, inputs, whether it is a lookup), for the Studio and a template's checks. */
 export async function listFlowsAction() {
   return run(async () => ({ flows: (await import("../flows/store")).listFlows().map((f) => ({ pageId: f.pageId, parentId: f.parentId, name: f.name, title: f.title, description: f.description ?? "", inputs: f.inputs, lookup: !!f.lookup, enabled: f.enabled !== false, triggers: f.triggers, lastRunAt: f.lastRunAt })) }));

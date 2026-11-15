@@ -1,8 +1,9 @@
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { isOwnKey } from "@/lib/ticket-keys";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { errorMessage, NotFoundError, ValidationError } from "@/lib/errors";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload, runStdioSession } from "@/lib/mcp/stdio";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
 import { t } from "@/lib/i18n/server";
 import type { TicketAction } from "./shared";
@@ -21,22 +22,9 @@ export function actionsDone(runId: number): Record<string, ActionDone> {
   return out;
 }
 
-/** A ticket's transitions as mcp-atlassian lists them. */
-export function transitionsOf(payload: unknown): { id: string; name: string; to: string | null }[] {
-  const list = Array.isArray(payload) ? payload : ((payload as { transitions?: unknown[] })?.transitions ?? []);
-  return list.flatMap((item) => {
-    const x = (item ?? {}) as { id?: string | number; name?: string; to_status?: string | { name?: string }; to?: { name?: string } };
-    const to = typeof x.to_status === "string" ? x.to_status : (x.to_status?.name ?? x.to?.name ?? null);
-    return x.id !== undefined && x.name ? [{ id: String(x.id), name: x.name, to }] : [];
-  });
-}
-
-export const norm = (s: string | null | undefined) =>
-  (s ?? "")
-    .toLowerCase()
-    .replace(/\(→[^)]*\)/g, "")
-    .replace(/[^a-z0-9äöüß]+/g, " ")
-    .trim();
+// (the transitions and the names compared are pure — lib/jira/transitions.ts, which the Jira port bundles too)
+export { norm, transitionsOf } from "@/lib/jira/transitions";
+import { norm, transitionsOf } from "@/lib/jira/transitions";
 
 /**
  * Do one of a run's suggested ticket changes in Jira, through Zeff's Jira connection — a
@@ -65,12 +53,22 @@ export async function runTicketAction(runId: number, ticket: string, idx: number
       throw e;
     }
   }
+  // (the Jira plugin does the change while it is on — lib/jira/port-ops.ts; else the built-in's own session)
+  const { jiraPortOn, runJiraPortOps } = await import("@/lib/jira/port-ops");
+  const viaPort = await jiraPortOn();
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
+  if (!viaPort && (!cfg.configured || !cfg.command)) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
 
   try {
-    const detail = await runStdioSession(
-      { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+    const detail = viaPort
+      ? (
+          await runJiraPortOps(
+            [action.type === "transition" ? { type: "transition" as const, ticket, to: action.to } : action.type === "assign" ? { type: "assign" as const, ticket, assignee: action.assignee } : { type: "comment" as const, ticket, body: action.comment }],
+            { plain: true },
+          )
+        )[0]
+      : await runStdioSession(
+      { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
       async (call) => {
         if (action.type === "transition") {
           const list = transitionsOf(resultToPayload(await call("jira_get_transitions", { issue_key: ticket })));

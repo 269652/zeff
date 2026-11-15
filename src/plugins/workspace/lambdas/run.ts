@@ -25,6 +25,17 @@ import { checkFields, checkHits, checkSchema, type FieldValue, type LookupHitOut
 export type LambdaRun = { ok: true; result: unknown; logs: string[]; ms: number } | { ok: false; error: string; problems?: string[]; stack?: string; logs: string[]; ms: number };
 
 // (turbopackIgnore: a file run at runtime, not a module of the build — the production build fails to resolve it otherwise.)
+const DRIVER_RUNNER = () => path.join(/*turbopackIgnore: true*/ process.cwd(), "src", "plugins", "workspace", "lambdas", "driver-runner.mjs");
+
+/** What a driver gets besides the job: the account's automation Chrome and Zeff's generic Chrome helper (scripts/chrome-cdp.mjs). */
+async function driverJob(): Promise<{ cdp: string; chromeHelper: string; commands: Record<string, string> }> {
+  const { automationCdp } = await import("@/plugins/drivers");
+  const { pathToFileURL } = await import("node:url");
+  // (uv and uvx where this computer has them, even when Zeff's own PATH doesn't — what context.resolveCommand answers)
+  const { resolveBareCommand } = await import("@/lib/prerequisites-shared");
+  return { cdp: automationCdp(), commands: { uvx: resolveBareCommand("uvx"), uv: resolveBareCommand("uv") }, chromeHelper: pathToFileURL(path.join(/*turbopackIgnore: true*/ process.cwd(), "scripts", "chrome-cdp.mjs")).href };
+}
+
 const RUNNER = () => path.join(/*turbopackIgnore: true*/ process.cwd(), "src", "plugins", "workspace", "lambdas", "runner.mjs");
 const MAX_BODY = 5_000_000;
 const PARALLEL = 4;
@@ -135,12 +146,12 @@ export async function materialize(l: Lambda): Promise<{ dir: string; install: { 
 }
 
 /** A fetch of the lambda's, done here: the address checked (each redirect too), 5 MB at most, the answer whole. */
-async function proxyFetch(m: LambdaManifest, req: { url: string; method?: string; headers?: Record<string, string>; body?: string }, resolve?: (host: string) => Promise<string[]>) {
+async function proxyFetch(m: LambdaManifest, req: { url: string; method?: string; headers?: Record<string, string>; body?: string; bodyBase64?: string }, resolve?: (host: string) => Promise<string[]>) {
   const perms: FlowPermissions = { web: m.web ?? [] };
   let url = await checkedUrl(req.url, perms, resolve);
   const method = (req.method ?? "GET").toUpperCase();
   for (let hop = 0; hop < 5; hop++) {
-    const r = await fetch(url, { method, headers: { "user-agent": "Zeff/0.1 (personal app; https://getzeff.com)", ...(req.headers ?? {}) }, body: method === "GET" || method === "HEAD" ? undefined : req.body, redirect: "manual", signal: AbortSignal.timeout(20000) });
+    const r = await fetch(url, { method, headers: { "user-agent": "Zeff/0.1 (personal app; https://getzeff.com)", ...(req.headers ?? {}) }, body: method === "GET" || method === "HEAD" ? undefined : typeof req.bodyBase64 === "string" ? Buffer.from(req.bodyBase64, "base64") : req.body, redirect: "manual", signal: AbortSignal.timeout(20000) });
     if (r.status >= 300 && r.status < 400 && r.headers.get("location")) {
       url = await checkedUrl(new URL(r.headers.get("location")!, url).toString(), perms, resolve);
       continue;
@@ -159,7 +170,9 @@ async function proxyCall(m: LambdaManifest, name: string, input: unknown, plugin
   const a = flowAction(name);
   if (!a) throw new Error(`There is no Zeff function “${name}”.`);
   if (a.writes) throw new Error(`“${name}” changes something — a lambda only reads; a flow can write what it returns.`);
-  const perms: FlowPermissions = { web: m.web ?? [], ai: true };
+  // (an external plugin's lambda reads its own plugin's stores — it never writes: store.put is refused above)
+  const own = plugin?.startsWith("ext:") ? ((getPlugin(plugin.slice(4))?.manifest.contributes as { stores?: { name: string }[] } | undefined)?.stores ?? []).map((x) => `${plugin.slice(4)}.${x.name}`) : [];
+  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}) };
   return a.run((input && typeof input === "object" ? input : {}) as Record<string, unknown>, {
     flow: `lambda:${m.name}`,
     runId: null,
@@ -175,22 +188,43 @@ async function proxyCall(m: LambdaManifest, name: string, input: unknown, plugin
 }
 
 /** A lambda run with this event: what it returned (unchecked — see invokeLookup / invokeFunction), its log, how long it took. */
-export async function runLambda(l: Lambda, event: unknown, opts: { resolve?: (host: string) => Promise<string[]> } = {}): Promise<LambdaRun> {
+/** Where a driver lambda may run: called as a driver (driver.call — the flow allowed it), a plugin's only while granted exec. Null: it may. */
+function driverRefused(l: Lambda, asDriver: boolean): string | null {
+  if (!asDriver) return `“${l.manifest.name}” is a driver: only a flow calls it, through driver.call with its driver permission.`;
+  if (l.plugin?.startsWith("ext:")) {
+    const p = getPlugin(l.plugin.slice(4));
+    if (!p?.enabled || !p.permissions.has("exec")) return `The plugin ${l.plugin.slice(4)} may not run programs — its “exec” permission isn't granted (switch it on again to grant it).`;
+  }
+  return null;
+}
+
+export async function runLambda(l: Lambda, event: unknown, opts: { resolve?: (host: string) => Promise<string[]>; asDriver?: boolean } = {}): Promise<LambdaRun> {
   const t0 = Date.now();
+  const driver = l.manifest.kind === "driver";
+  if (driver) {
+    const no = driverRefused(l, opts.asDriver === true);
+    if (no) return { ok: false, error: no, logs: [], ms: 0 };
+  }
   const secrets = secretsFor(l.manifest, l.plugin);
   const { dir, install } = await materialize(l);
   if (!install.ok) return { ok: false, error: `Its dependencies couldn't be installed: ${install.log}`, logs: [], ms: Date.now() - t0 };
   const release = await slot();
   try {
+    // (a driver: the account's automation Chrome and where uv is — worked out here, the Promise below isn't async)
+    const driverExtra = driver ? await driverJob() : {};
+    const driverEnv = driver ? (await import("@/plugins/drivers")).automationEnv() : {};
     return await new Promise<LambdaRun>((resolve) => {
-      const runner = RUNNER();
-      const child = fork(/*turbopackIgnore: true*/ runner, [], {
-        execPath: process.execPath,
-        execArgv: ["--permission", `--allow-fs-read=${dir}${path.sep}`, `--allow-fs-read=${runner}`, `--max-old-space-size=${l.manifest.memoryMb ?? 128}`, "--disallow-code-generation-from-strings"],
-        cwd: dir,
-        env: { ...(process.env.SYSTEMROOT ? { SYSTEMROOT: process.env.SYSTEMROOT } : {}), NODE_ENV: "production" },
-        stdio: ["ignore", "pipe", "pipe", "ipc"],
-      });
+      const runner = driver ? DRIVER_RUNNER() : RUNNER();
+      // (a driver: not sandboxed — the account's Chrome and the network, as a plugin's program; a lambda: its own folder only)
+      const child = driver
+        ? fork(/*turbopackIgnore: true*/ runner, [], { execPath: process.execPath, execArgv: [`--max-old-space-size=${Math.max(256, l.manifest.memoryMb ?? 256)}`], cwd: dir, env: { ...process.env, ...driverEnv, NODE_ENV: "production" }, stdio: ["ignore", "pipe", "pipe", "ipc"] })
+        : fork(/*turbopackIgnore: true*/ runner, [], {
+            execPath: process.execPath,
+            execArgv: ["--permission", `--allow-fs-read=${dir}${path.sep}`, `--allow-fs-read=${runner}`, `--max-old-space-size=${l.manifest.memoryMb ?? 128}`, "--disallow-code-generation-from-strings"],
+            cwd: dir,
+            env: { ...(process.env.SYSTEMROOT ? { SYSTEMROOT: process.env.SYSTEMROOT } : {}), NODE_ENV: "production" },
+            stdio: ["ignore", "pipe", "pipe", "ipc"],
+          });
       let stderr = "";
       child.stderr?.on("data", (d) => (stderr = (stderr + String(d)).slice(-4000)));
       let done = false;
@@ -209,12 +243,12 @@ export async function runLambda(l: Lambda, event: unknown, opts: { resolve?: (ho
             (value) => !done && child.connected && child.send({ id: msg.id, value }),
             (e: unknown) => !done && child.connected && child.send({ id: msg.id, error: hide(e instanceof Error ? e.message : String(e), secrets) }),
           );
-        if (msg.type === "fetch") void answer(proxyFetch(l.manifest, { url: String(msg.url), method: msg.method, headers: msg.headers, body: msg.body }, opts.resolve));
+        if (msg.type === "fetch") void answer(proxyFetch(l.manifest, { url: String(msg.url), method: msg.method, headers: msg.headers, body: msg.body, bodyBase64: msg.bodyBase64 }, opts.resolve));
         else if (msg.type === "call") void answer(Promise.resolve().then(() => proxyCall(l.manifest, String(msg.name), msg.input, l.plugin)));
       });
       child.on("exit", (code) => finish({ ok: false, error: `the process ended (${code ?? "killed"})${stderr ? `: ${stderr.trim().split("\n").slice(-3).join(" ")}` : ""}`, logs: [], ms: Date.now() - t0 }));
       child.on("error", (e) => finish({ ok: false, error: e.message, logs: [], ms: Date.now() - t0 }));
-      child.send({ type: "job", dir, name: l.manifest.name, event, secrets, timeoutMs: l.manifest.timeoutMs ?? 20000, language: languageNow() });
+      child.send({ type: "job", dir, name: l.manifest.name, event, secrets, timeoutMs: l.manifest.timeoutMs ?? 20000, language: languageNow(), ...driverExtra });
     });
   } finally {
     release();
@@ -244,7 +278,7 @@ export async function lookupDetails(name: string, id: string, language: string, 
 }
 
 /** Any lambda run, its output checked (a lookup's by its mode, a function's against its schema). */
-export async function invokeLambda(name: string, event: unknown, opts: { resolve?: (host: string) => Promise<string[]> } = {}): Promise<LambdaRun & { problems?: string[] }> {
+export async function invokeLambda(name: string, event: unknown, opts: { resolve?: (host: string) => Promise<string[]>; asDriver?: boolean } = {}): Promise<LambdaRun & { problems?: string[] }> {
   const l = getLambda(name);
   if (!l) throw new Error(`There is no lambda “${name}”.`);
   const r = await runLambda(l, event, opts);

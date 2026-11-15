@@ -94,6 +94,14 @@ export type FlowPermissions = {
   api?: boolean;
   /** The sources it may read into Zeff — a connector's driver ("gcalendar": Google Calendar into Zeff's calendars). */
   sync?: string[];
+  /** The plugins' stores it may read and write ("<plugin>.<store>": contributes.stores). */
+  store?: string[];
+  /** The driver lambdas it may run (their names — kind driver: a scraper in the automation Chrome, a desktop app's reader). */
+  driver?: string[];
+  /** May book money: payments into the ledger, a booking confirming one, what a payment settles (a promise, a debt). */
+  money?: boolean;
+  /** May mark todos done (with a note). */
+  todos?: boolean;
   /** The parts of Zeff's structure it may read or change (read, pages, databases, schema:<id>, blocks, flows, plugins, delete) — the meta.* actions. */
   meta?: string[];
   /** Most nodes one run may take (default 500). */
@@ -103,7 +111,24 @@ export type FlowPermissions = {
 export type FlowTrigger =
   | { kind: "manual" }
   | { kind: "schedule"; everyMinutes?: number; at?: string; days?: number[]; /** Every …: only between these times ("08:00" – "22:00"). */ from?: string; to?: string }
-  | { kind: "event"; event: "row.added" | "row.changed" | "row.removed" | "signal" | "form.submitted" | "transition"; db?: number; field?: string; equals?: string; name?: string };
+  | {
+      kind: "event";
+      event: (typeof EVENTS)[number];
+      db?: number;
+      field?: string;
+      equals?: string;
+      name?: string;
+      /** Only for what is at or below this page (its id, or its place in an installed package: "@my-pkg.i0") — a page, a database, a row of one below it. */
+      under?: number | string;
+      /** Wait this many seconds after the last such event (per page or row) before running once — a page being typed in runs once it rests. */
+      settle?: number;
+    }
+  /**
+   * Watched: every `everySeconds` (10 at least) the lambda `lambda` is asked — with { since } (what it answered last as `token`) — whether
+   * something changed; only when it answers { changed: true } does the flow run (its input: what the lambda answered as `input`).
+   * Cheap checks often, a run only when there is work: a sync with another service kept close to live.
+   */
+  | { kind: "watch"; lambda: string; everySeconds: number };
 
 /** A flow as a lookup source: search(q) gives hits, details(id) the fields — the flow is called with input.mode "search" | "details". */
 export type FlowLookup = { label: string; what: string; /** The fields its details give: name → what it is. */ fields: Record<string, string>; /** Searches take long or cost (the AI, a slow site): only on Enter. */ slow?: boolean };
@@ -217,7 +242,11 @@ export function normalizeNodes(raw: unknown, depth = 0, ids = new Set<string>())
 }
 
 /** The connectors' drivers a flow can be allowed to read into Zeff (FlowPermissions.sync). */
-export const SYNC_SOURCES = ["gcalendar", "teams", "whatsapp", "signal"];
+/** A plugin's store by its full name: "<plugin>.<store>". */
+export const STORE_NAME = /^[a-z][a-z0-9-]{0,39}.[a-z][a-z0-9_]{0,39}$/;
+export const DRIVER_NAME = /^[a-z0-9_-]+(\.[a-z0-9_-]+)*$/;
+
+export const SYNC_SOURCES = ["gcalendar", "teams", "whatsapp", "signal", "outlook-mail", "gmail", "imap-mail", "gitlab", "jira"];
 
 function normalizePermissions(raw: unknown): FlowPermissions {
   const o = obj(raw);
@@ -232,13 +261,19 @@ function normalizePermissions(raw: unknown): FlowPermissions {
     ...(o.ai === true ? { ai: true } : {}),
     ...(o.send === true ? { send: true } : {}),
     ...(o.api === true ? { api: true } : {}),
+    ...(o.money === true ? { money: true } : {}),
+    ...(o.todos === true ? { todos: true } : {}),
     ...(Array.isArray(o.sync) && o.sync.map(str).filter((x) => SYNC_SOURCES.includes(x)).length ? { sync: [...new Set(o.sync.map(str).filter((x) => SYNC_SOURCES.includes(x)))] } : {}),
+    ...(Array.isArray(o.store) && o.store.map(str).filter((x) => STORE_NAME.test(x)).length ? { store: [...new Set(o.store.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
+    ...(Array.isArray(o.driver) && o.driver.map(str).filter((x) => DRIVER_NAME.test(x)).length ? { driver: [...new Set(o.driver.map(str).filter((x) => DRIVER_NAME.test(x)))] } : {}),
     ...(metaOf(o.meta).length ? { meta: metaOf(o.meta) } : {}),
     ...(posInt(o.maxSteps) ? { maxSteps: Math.min(20000, posInt(o.maxSteps)!) } : {}),
   };
 }
 
-const EVENTS = ["row.added", "row.changed", "row.removed", "signal", "form.submitted", "transition"] as const;
+/** ledger.changed: the money ledger's payments to a thing changed (name: its kind — "case", "debt"; value: its ref, "case:12"). */
+/** page.added / page.changed / page.removed: any page (a document, a database, a row's page) made, its title, text, icon, cover or place changed, moved to the trash (field: what changed). */
+export const EVENTS = ["row.added", "row.changed", "row.removed", "signal", "form.submitted", "transition", "ledger.changed", "page.added", "page.changed", "page.removed"] as const;
 
 function normalizeTrigger(raw: unknown): FlowTrigger | null {
   const o = obj(raw);
@@ -254,8 +289,20 @@ function normalizeTrigger(raw: unknown): FlowTrigger | null {
   }
   if (o.kind === "event" && (EVENTS as readonly unknown[]).includes(o.event)) {
     const db = posInt(o.db);
-    return { kind: "event", event: o.event as (typeof EVENTS)[number], ...(db ? { db } : {}), ...(str(o.field) ? { field: str(o.field) } : {}), ...(str(o.equals) ? { equals: str(o.equals) } : {}), ...(str(o.name) ? { name: str(o.name) } : {}) };
+    const under = posInt(o.under) ?? (/^@[a-z0-9][a-z0-9.-]*\.i\d+$/.test(str(o.under)) ? str(o.under) : undefined);
+    const settle = posInt(o.settle);
+    return {
+      kind: "event",
+      event: o.event as (typeof EVENTS)[number],
+      ...(db ? { db } : {}),
+      ...(str(o.field) ? { field: str(o.field) } : {}),
+      ...(str(o.equals) ? { equals: str(o.equals) } : {}),
+      ...(str(o.name) ? { name: str(o.name) } : {}),
+      ...(under ? { under } : {}),
+      ...(settle ? { settle: Math.min(3600, settle) } : {}),
+    };
   }
+  if (o.kind === "watch" && /^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/.test(str(o.lambda))) return { kind: "watch", lambda: str(o.lambda), everySeconds: Math.max(10, Math.min(86400, posInt(o.everySeconds) ?? 60)) };
   return null;
 }
 

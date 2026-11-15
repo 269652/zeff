@@ -1,3 +1,4 @@
+import { runJiraSession, jiraPortOn } from "@/lib/jira/port-ops";
 import { isoDay } from "@/lib/text";
 import { fillPrompt } from "@/lib/prompts";
 import { mailLink } from "@/lib/mail/shared";
@@ -11,7 +12,7 @@ import { listEntries } from "@/lib/entries";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
 import { gitlabTicket } from "@/lib/gitlab/shared";
-import { resultToPayload, runStdioSession } from "@/lib/jira/mcp-client";
+import { resultToPayload } from "@/lib/mcp/stdio";
 import { getJiraTicket, myJiraName } from "@/lib/jira/store";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
 import { keepComments } from "@/lib/jira/comments";
@@ -126,10 +127,9 @@ export async function gather(day: string): Promise<{ facts: RecapFacts; notes: s
 
   // Jira: your comments and changes on the tickets updated since then.
   const cfg = getJiraSyncConfig();
-  if (cfg.configured && cfg.command && me) {
+  if (((cfg.configured && cfg.command) || (await jiraPortOn())) && me) {
     try {
-      const issues = await runStdioSession(
-        { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira" },
+      const issues = await runJiraSession("Jira",
         async (call) => {
           const p = resultToPayload(await call("jira_search", { jql: `updated >= "${day}" ORDER BY updated DESC`, limit: 100, fields: FIELDS, expand: "changelog" })) as { issues?: Issue[] };
           return (p.issues ?? []).filter((i) => i?.key);

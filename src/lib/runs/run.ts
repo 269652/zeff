@@ -218,17 +218,20 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
         }
         // The Cases plugin: the case numbers in what came in (by rule), then the cases with new sources summed up (AI) — a
         // failure there doesn't stop the run.
-        if ((await import("@/plugins/state")).isInstalled("cases")) {
+        // (kept by the built-in, or by its port — cases-ext: its flows cases.detect and cases.summarize; lib/cases/there.ts)
+        const keeper = (await import("@/lib/cases/there")).casesKeeper();
+        if (keeper) {
           try {
-            (await import("@/plugins/cases/detect")).detectCases();
-            if ((await import("@/plugins/state")).isInstalled("llm")) await (await import("@/plugins/cases/compile")).compileCases();
-            (await import("@/plugins/cases/payments")).attachPayments();
+            if (keeper === "builtin") {
+              (await import("@/plugins/cases/detect")).detectCases();
+              if ((await import("@/plugins/state")).isInstalled("llm")) await (await import("@/plugins/cases/compile")).compileCases();
+            } else await (await import("@/lib/cases/there")).casesPortFlows(["cases.detect", "cases.summarize"]);
+            (await import("@/lib/todos/attach-payments")).attachPayments();
             // The bank: payments made settle their todos and cases; an instalment ten days late warns.
-            const bank = await import("@/plugins/cases/bank");
-            if ((await import("@/plugins/cases/bank-sync")).bankConnected()) await (await import("@/plugins/cases/bank-sync")).syncBank().catch((e) => console.error("[cases] the bank:", errorMessage(e)));
-            if ((await import("@/plugins/state")).isInstalled("revolut")) (await import("@/plugins/revolut/statement")).importStatementDocuments();
-            bank.matchPayments();
-            bank.overdueWarnings(localDay());
+            const sync = await import("@/lib/bank/sync");
+            if (sync.bankConnected()) await sync.syncBank().catch((e) => console.error("[cases] the bank:", errorMessage(e)));
+            await (await import("@/lib/bank/statements")).importStatementDocuments();
+            await (await import("@/lib/cases/there")).casesAfterBookings(localDay());
             // Your income as the knowledge read it off your statements (it compiles them as a source of its own).
             if ((await import("@/plugins/state")).isInstalled("finances")) await (await import("@/plugins/finances/income")).refreshIncome();
           } catch (e) {

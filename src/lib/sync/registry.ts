@@ -9,7 +9,7 @@ import { getGitlabSettings } from "@/lib/gitlab/store";
 import { getTeamsSettings } from "@/lib/teams/store";
 import { getMailSettings } from "@/lib/mail/store";
 import { SYNC_KEYS, type SyncKey, type SyncOverview, type SyncView } from "./shared";
-import { isInstalled, stepAvailable } from "@/plugins/state";
+import { isInstalled, onlyThroughPort, stepAvailable } from "@/plugins/state";
 import { mailAccounts, mailboxName } from "@/plugins/imap-mail/config";
 import { currentAccountId, inThisAccount, isDemoAccount } from "@/db/accounts";
 import { ABORTED, sleep, withAbort } from "@/lib/abort";
@@ -22,7 +22,7 @@ import { delegates } from "@/lib/host/role";
 import { integrationServer, integrationServerIds } from "@/lib/integrations/server";
 import { accountFlag } from "@/lib/sync/account-flags";
 import { runFlow } from "@/plugins/workspace/flows/engine";
-import { flowRuns, listFlows, type Flow } from "@/plugins/workspace/flows/store";
+import { flowByName, flowRuns, listFlows, type Flow } from "@/plugins/workspace/flows/store";
 /** Quiet hours: from 19:00 to 08:00 nothing syncs by itself (by hand it still does). */
 export const QUIET = { from: 19, to: 8 };
 export const quietAt = (at = new Date()) => at.getHours() >= QUIET.from || at.getHours() < QUIET.to;
@@ -232,23 +232,12 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     href: "/jira",
     get what() { return t("Your tickets and the chosen boards' tickets"); },
     run: async () => {
-      const { syncFromJira } = await import("@/lib/jira/sync");
+      const { syncFromJira, jiraStepOutcome } = await import("@/lib/jira/sync");
       const { jiraDown } = await import("@/lib/jira/mcp-client");
       const r = await syncFromJira().catch((e) => {
         throw new Error(jiraDown(errorMessage(e)) ?? errorMessage(e));
       });
-      const unread = r.unreadBoards
-        ? ` ${t("{n} board(s) couldn't be read to the end — nothing deactivated, next sync tries again.", { n: r.unreadBoards })}`
-        : "";
-      const done = t("{total} tickets — {mine} yours ({inserted} new, {updated} updated).", { total: r.total, mine: r.mine, inserted: r.inserted, updated: r.updated });
-      // The Jira boards' databases in the Workspace (Jira as a data source) follow at once.
-      const { isInstalled } = await import("@/plugins/state");
-      if (isInstalled("jira-lage") && isInstalled("workspace"))
-        await (await import("@/plugins/jira-lage/to-workspace")).syncJiraBoardDatabases().catch((e) => console.error("[jira] keeping the boards' databases failed", e));
-      // My briefing replaced by Meine Lage, a pipeline database (once); the databases with a pipeline keep their rows; their AI steps go with the briefing.
-      if (isInstalled("jira-lage") && isInstalled("workspace")) await (await import("@/plugins/jira-lage/to-workspace")).replaceBriefingOnce().catch((e) => console.error("[jira] Meine Lage as a pipeline database failed", e));
-      if (isInstalled("workspace")) await (await import("@/plugins/workspace/pipeline")).runPipelinesAfterSync().catch((e) => console.error("[workspace] the pipelines failed", e));
-      return { ok: !unread, message: `${done}${unread}` };
+      return jiraStepOutcome(r);
     },
     last: () => recordedOr("jira", jiraTickets.syncedAt),
     schedule: () => ({ everyMinutes: stepMinutes("jira"), lastAt: recordedOr("jira", jiraTickets.syncedAt).lastAt }),
@@ -272,6 +261,8 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     run: async () => (await import("@/lib/mail/sync")).syncMail(),
     busy: () => flag("__zeffMailSyncing"),
     last: () => lastOf("mail"),
+    // (every mailbox through its port's flow: nothing left for the shared step)
+    inUse: () => MAIL_PLUGINS.some((p) => isInstalled(p) && !onlyThroughPort(p)),
     schedule: () => ({ everyMinutes: getMailSettings().syncMinutes, lastAt: iso(getMailSettings().lastSyncAt) }),
   },
   whatsapp: {
@@ -748,13 +739,15 @@ async function runStep(key: SyncKey): Promise<void> {
   } finally {
     l.running.delete(key);
   }
+  // (a port's sync flow counts as the built-in step it stands in for)
+  const kind: string = key.startsWith("flow:") ? (flowByName(key.slice(5))?.sync?.replaces ?? key) : key;
   // The mails and messages it brought: into the databases whose pipelines read them (their rows only; the AI goes with the briefing).
-  if (outcome?.ok && (key === "mail" || key === "teams" || key === "whatsapp" || key === "signal")) {
+  if (outcome?.ok && (kind === "mail" || kind === "teams" || kind === "whatsapp" || kind === "signal")) {
     const { isInstalled } = await import("@/plugins/state");
     if (isInstalled("workspace")) await (await import("@/plugins/workspace/pipeline")).runPipelinesAfterSync().catch((e) => console.error("[workspace] the pipelines failed", e));
   }
   // Your answers it brought close the reply todos they answer (by rule, no AI) — at once, not only with the next briefing.
-  if (outcome?.ok && (key === "mail" || key === "teams" || key === "whatsapp" || key === "signal" || key === "gmail" || key === "jira")) {
+  if (outcome?.ok && (kind === "mail" || kind === "teams" || kind === "whatsapp" || kind === "signal" || kind === "gmail" || kind === "jira")) {
     const r = await (await import("@/lib/todos/evidence-close")).closeTodosByEvidence().catch((e) => (console.error("[evidence] closing by your replies failed", e), null));
     if (r && (r.closed || r.proposed)) console.log(`[evidence] after ${key}: ${r.closed} todo(s) closed, ${r.proposed} proposed — you replied`);
   }
@@ -858,7 +851,19 @@ export async function lastAndCurrentWeeks(): Promise<string[]> {
 export const liveSyncsAll = (): [string, LiveSyncs][] => Object.entries(state.__zeffSyncsByAccount ?? {});
 
 /** The connectors a port's sync flow may run (connector.sync, the flow's `sync` permission): their reading is the kernel's driver. */
-export const CONNECTOR_STEPS = ["teams", "whatsapp", "signal"] as const;
+export const CONNECTOR_STEPS = ["whatsapp", "signal"] as const;
+/** The mail plugins whose mailboxes a port's flow reads by themselves (connector.sync: syncMail with `only`). */
+export const MAIL_PLUGINS = ["outlook-mail", "gmail", "imap-mail"] as const;
+const MAIL_SOURCE = { "outlook-mail": "outlook", gmail: "gmail", "imap-mail": "imap" } as const;
+
+/** A mail plugin's mailboxes read for its port's flow (background: only while what it reads is there — syncMail's own rule). */
+export async function runMailConnectorSync(plugin: (typeof MAIL_PLUGINS)[number], background: boolean): Promise<{ ok: boolean; message: string }> {
+  if (isDemoAccount()) return { ok: false, message: t("This is the demo: nothing is synced here. Set up your own Zeff to read your mail and chats.") };
+  const key = `mail:${plugin}`;
+  // (one mail sync at a time: another mailbox's, or the shared step — waited for, up to five minutes, instead of failing)
+  for (let i = 0; i < 150 && flag("__zeffMailSyncing"); i++) await sleep(2000);
+  return runStoppable(key, async () => (await import("@/lib/mail/sync")).syncMail({ background, only: [MAIL_SOURCE[plugin]] }));
+}
 
 /**
  * A connector's sync run for its port's flow (the flow action connector.sync) — the kernel's driver, whether or not the built-in step shows:
@@ -876,7 +881,7 @@ export async function runConnectorSync(key: (typeof CONNECTOR_STEPS)[number], ba
   }
   l.running.add(key);
   try {
-    const r = await runStoppable(key, () => (key === "teams" ? import("@/lib/teams/sync").then((m) => m.syncTeams({ background })) : CORE_STEPS[key].run()));
+    const r = await runStoppable(key, () => CORE_STEPS[key].run());
     if (!CORE_STEPS[key].ownRecord) record(key, r.ok, r.message);
     try {
       if (!r.message.includes(ABORTED)) noteSyncResult(key, r.ok, r.message);

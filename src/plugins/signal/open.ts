@@ -1,6 +1,6 @@
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { automationEnv, driverPath } from "../drivers";
+import { runDriver } from "../drivers";
 
 /**
  * "Sign in" for Signal (on your click): Signal Desktop started in the tray with its debug port if it
@@ -8,9 +8,8 @@ import { automationEnv, driverPath } from "../drivers";
  */
 export async function openSignal(): Promise<{ ok: boolean; message: string }> {
   try {
-    const { runStdioSession, resultToPayload } = await import("@/lib/jira/mcp-client");
-    const out = await runStdioSession(
-      { command: process.execPath, args: [driverPath("signal")], env: automationEnv(), label: "Signal" },
+    const { resultToPayload } = await import("@/lib/mcp/stdio");
+    const out = await runDriver("signal", "Signal",
       async (call) => resultToPayload(await call("signal_status", { launch: true })),
       120000,
     );

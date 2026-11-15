@@ -1,3 +1,4 @@
+import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { getDb, schema } from "@/db";
 import { t } from "@/lib/i18n/server";
 import { runStdioSession, resultToPayload, type McpStdioConfig } from "./mcp-client";
@@ -52,6 +53,20 @@ function chunk<T>(arr: T[], size: number): T[][] {
  * on several enabled boards keeps the first (by project, then board order).
  */
 export async function syncBoardsFromJira(): Promise<BoardSyncResult> {
+  // The Jira plugin reads the boards while it is on (lib/jira/port-ops.ts): the same discovery in one session; what Zeff keeps stays here.
+  const { jiraPortOn, runJiraPortTool } = await import("./port-ops");
+  if (await jiraPortOn()) {
+    const byProject = ticketKeysByProject();
+    if (byProject.size === 0) throw new Error(t("No synced tickets yet — sync tickets first, then sync boards."));
+    const knownBefore = getDb().select({ id: schema.jiraBoards.id }).from(schema.jiraBoards).all().map((r) => r.id);
+    const enabledIds = enabledBoardIds();
+    const read = (await runJiraPortTool("boards", { byProject: Object.fromEntries(byProject), enabledIds, knownIds: knownBefore })) as { boards: BoardInput[]; counts: Record<string, number>; owner: Record<string, number> };
+    upsertBoards(read.boards);
+    for (const [id, n] of Object.entries(read.counts)) setBoardMemberCount(Number(id), n);
+    const assignments = Object.entries(read.owner).map(([key, boardId]) => ({ key, boardId }));
+    assignTicketBoards([...byProject.values()].flat(), assignments);
+    return { projects: byProject.size, boards: read.boards.length, enabledBoards: enabledIds.length, mappedTickets: assignments.length };
+  }
   const cfg = getJiraSyncConfig();
   if (!cfg.configured || !cfg.command) {
     throw new Error(t("Jira MCP sync is not configured. Set it up on the Jira tab first (same server as ticket sync)."));
@@ -59,7 +74,7 @@ export async function syncBoardsFromJira(): Promise<BoardSyncResult> {
   const byProject = ticketKeysByProject();
   if (byProject.size === 0) throw new Error(t("No synced tickets yet — sync tickets first, then sync boards."));
 
-  const config: McpStdioConfig = { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira MCP" };
+  const config: McpStdioConfig = { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira MCP", notFoundHint: jiraNotFoundHint };
   const knownBefore = new Set(getDb().select({ id: schema.jiraBoards.id }).from(schema.jiraBoards).all().map((r) => r.id));
 
   const { boardCount, enabledCount, counts, owner, considered } = await runStdioSession(

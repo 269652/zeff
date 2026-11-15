@@ -35,7 +35,7 @@ test("a flow's question: one of the questions to you, checked, replaced by a new
   assert.equal(done.status, "done");
   assert.equal(done.output, 7, "a scale's answer is a number");
   const third = await e.runFlow(f);
-  assert.ok((await e.resumeDueFlows(new Date(Date.now() + 51 * 60000))) >= 1);
+  assert.ok((await e.resumeDueFlows(new Date(Date.now() + 51 * 60000), { wait: true })) >= 1);
   assert.equal(s.getFlowRun(third.runId)!.status, "cancelled");
   assert.match(s.getFlowRun(third.runId)!.error ?? "", /no answer in time/);
 });
