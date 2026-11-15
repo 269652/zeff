@@ -20,6 +20,7 @@ import { WS_CHANGED } from "./ChatPanel";
 import { TodoMark } from "./todo-mark";
 import { Cell } from "./cells";
 import { EmptyState, Sparkline, viewBlock } from "./view-blocks";
+import { CheckBox, QrCode, SeriesChart, type SeriesPoint } from "./view-blocks-apps";
 import { LookupField } from "./view-lookup";
 import { AskBox, DossierBox } from "./view-notebook";
 import { keysMatch } from "../view-keys";
@@ -71,7 +72,16 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   const router = useRouter();
   const schema = props.data.schema;
   const defaults = useMemo(() => viewDefaults(src), [src]);
-  const [own, setOwn] = useState<Record<string, string>>({});
+  // (what a <state keep=true> was left at, kept in this browser for this view: the view opens with it)
+  const keepKey = `zeff:view-state:${props.data.id}:${props.view.id}`;
+  const [own, setOwn] = useState<Record<string, string>>(() => {
+    try {
+      const saved = typeof window === "undefined" ? null : (JSON.parse(localStorage.getItem(keepKey) ?? "null") as unknown);
+      return saved && typeof saved === "object" && !Array.isArray(saved) ? Object.fromEntries(Object.entries(saved).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
+    } catch {
+      return {};
+    }
+  });
   // In the tree, the entry picked there (?nav=state=value) is the view's state — read with it, not set after it is drawn.
   const params = useSearchParams();
   const asked = params.get("nav");
@@ -110,10 +120,40 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   // What the rows' pages say (their first lines — a task ticked or not, a list's bullet): `text` in a row.
   const previews = props.data.extras?.previews;
   const texts = useMemo(() => Object.fromEntries(Object.entries(previews ?? {}).map(([id, lines]) => [id, lines.map((l) => (l.kind === "task" ? `${l.checked ? "☑" : "☐"} ${l.text}` : l.text)).join("\n")])), [previews]);
+  // The time the view is drawn at: a <tick every=…> draws it again every so many seconds, now with it.
+  const [nowAt, setNowAt] = useState(() => Date.now());
   const r = useMemo(
-    () => renderView(src, { rows: props.rows, props: schema.properties, titleName: schema.titleName, state, app: app.data, data: flowData, db: { id: props.data.id, title: props.data.title }, labels, locale: typeof navigator !== "undefined" ? navigator.language : "de-DE", current, texts, outputs, settings, tr: lang === "en" ? undefined : t }, { parts: meta.parts, actions: meta.actions, blocks }),
-    [src, props.rows, schema, state, app.data, flowData, props.data.id, props.data.title, labels, meta, current, texts, blocks, outputs, settings, lang, t],
+    () => renderView(src, { rows: props.rows, props: schema.properties, titleName: schema.titleName, state, app: app.data, data: flowData, db: { id: props.data.id, title: props.data.title }, labels, locale: typeof navigator !== "undefined" ? navigator.language : "de-DE", current, texts, outputs, settings, tr: lang === "en" ? undefined : t, now: new Date() }, { parts: meta.parts, actions: meta.actions, blocks }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nowAt: a <tick> draws it again (now is read inside)
+    [src, props.rows, schema, state, app.data, flowData, props.data.id, props.data.title, labels, meta, current, texts, blocks, outputs, settings, lang, t, nowAt],
   );
+  // <state keep=true>: those names are kept in this browser for this view — written when they change, read when it opens (useState below).
+  const kept = useMemo(() => {
+    const names: string[] = [];
+    const walk = (ns: VNode[]) => ns.forEach((n) => typeof n !== "string" && (n.t === "keep" && names.push(n.a.name), walk(n.c)));
+    walk(r.nodes);
+    return names.sort().join("\n");
+  }, [r.nodes]);
+  const keptJson = useMemo(() => (kept ? JSON.stringify(Object.fromEntries(kept.split("\n").map((k) => [k, state[k] ?? ""]))) : ""), [kept, state]);
+  useEffect(() => {
+    if (!keptJson) return;
+    try {
+      localStorage.setItem(keepKey, keptJson);
+    } catch {
+      /* no storage: not kept */
+    }
+  }, [keptJson, keepKey]);
+  const tickEvery = useMemo(() => {
+    let every = 0;
+    const walk = (ns: VNode[]) => ns.forEach((n) => typeof n !== "string" && (n.t === "tick" && (every = every ? Math.min(every, Number(n.a.every) || 1) : Number(n.a.every) || 1), walk(n.c)));
+    walk(r.nodes);
+    return every;
+  }, [r.nodes]);
+  useEffect(() => {
+    if (!tickEvery) return;
+    const id = setInterval(() => setNowAt(Date.now()), tickEvery * 1000);
+    return () => clearInterval(id);
+  }, [tickEvery]);
   // Its sidebar (a <nav>): beside the view — or, the view's setting, in the Workspace tree, whose entry picked (?nav=) sets the state.
   const nav = useMemo(() => navOf(r.nodes), [r.nodes]);
   const go = (e: ViewNavEntry) => (e.row ? props.openRow(e.row) : e.state ? setState(e.state, e.value ?? "") : e.href ? router.push(e.href) : undefined);
@@ -265,6 +305,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             const i = pair.indexOf("=");
             if (i > 0) setState(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
           }
+          // (what it changed may be what a <data> reads — another database's rows: read again)
+          reloadFlowData();
           props.reload();
           app.reload();
           return;
@@ -292,6 +334,20 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     handlersRef.current = handlers;
     runRef.current = run;
   });
+
+  // <on when="{{ … }}">: done each time its condition turns true (not when the view opens with it true).
+  const wasTrue = useRef<Map<string, boolean> | null>(null);
+  useEffect(() => {
+    const seen = new Map<string, boolean>();
+    handlers.forEach((h, i) => h.t === "on" && h.a.when !== undefined && seen.set(`${i}:${h.a.event ?? ""}:${h.a.action ?? ""}:${h.a.run ?? ""}:${h.a.do ?? ""}`, h.a.when === "true"));
+    const before = wasTrue.current;
+    wasTrue.current = seen;
+    if (!before) return;
+    handlers.forEach((h, i) => {
+      const k = `${i}:${h.a.event ?? ""}:${h.a.action ?? ""}:${h.a.run ?? ""}:${h.a.do ?? ""}`;
+      if (seen.get(k) && before.get(k) === false) void runRef.current(h.a);
+    });
+  }, [handlers]);
 
   /** What a code widget reports: the flow runs with the with= values and the result; its answer may carry a notice to show. */
   const reportWidget = async (a: Record<string, string>, r: { score: number; correct?: number; total?: number; note?: string; done?: boolean; answers?: { q: string; a: string; ok?: boolean }[]; snapshot?: string }) => {
@@ -470,7 +526,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         );
       case "on":
       case "theme":
+      case "tick":
+      case "keep":
         return null;
+      case "check":
+        return <CheckBox key={key} a={a} onChange={(v) => setState(a.bind, v)} />;
+      case "qr":
+        return <QrCode key={key} value={a.value} size={Number(a.size) || 160} label={a.label} />;
       case "chat":
         return (
           <ChatBox
@@ -586,7 +648,10 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           </div>
         );
       case "datatable": {
-        const cols = json<{ label: string; align?: string; foot?: string; nowrap?: string; width?: string }[]>(a.cols, []);
+        const cols = json<{ label: string; align?: string; foot?: string; nowrap?: string; width?: string; sort?: string }[]>(a.cols, []);
+        // (a column that can be sorted: its head a button — again: the other way; where it stands is the view's state)
+        const [sortedCol, sortedDir] = (a.sorted ?? "").split(":");
+        const sortBy = (i: number) => a.sortstate && setState(a.sortstate, `${i + 1}:${sortedCol === String(i + 1) && sortedDir !== "desc" ? "desc" : "asc"}`);
         const rows = n.c.filter((c): c is Extract<VNode, object> => typeof c !== "string");
         const align = (c: { align?: string }) => (c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left");
         if (!rows.length) return a.empty ? <p key={key} className="rounded-xl border border-dashed border-zinc-200 px-3 py-4 text-sm text-zinc-400 dark:border-zinc-800">{a.empty}</p> : null;
@@ -597,8 +662,15 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
               <thead>
                 <tr className="border-b border-zinc-200 bg-zinc-50 text-[11px] font-semibold tracking-wide text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/60">
                   {cols.map((c, i) => (
-                    <th key={i} className={`px-3 py-2 ${align(c)} ${c.nowrap === "true" ? "whitespace-nowrap" : ""}`} style={c.width ? { width: Number(c.width) } : undefined}>
-                      {c.label}
+                    <th key={i} className={`px-3 py-2 ${align(c)} ${c.nowrap === "true" ? "whitespace-nowrap" : ""}`} style={c.width ? { width: Number(c.width) } : undefined} aria-sort={sortedCol === String(i + 1) ? (sortedDir === "desc" ? "descending" : "ascending") : undefined}>
+                      {c.sort === "true" ? (
+                        <button type="button" className="inline-flex items-center gap-1 uppercase hover:text-zinc-800 dark:hover:text-zinc-200" onClick={() => sortBy(i)}>
+                          {c.label}
+                          <span aria-hidden className={sortedCol === String(i + 1) ? "text-indigo-600 dark:text-indigo-400" : "opacity-30"}>{sortedCol === String(i + 1) && sortedDir === "desc" ? "↓" : "↑"}</span>
+                        </button>
+                      ) : (
+                        c.label
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -735,6 +807,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "table":
         return <RowsTable key={key} columns={json<string[]>(a.columns, [])} rows={json<number[]>(a.rows, []).map((id) => byId.get(id)).filter((x): x is Row => !!x)} sum={a.sum} empty={a.empty} props={props} />;
       case "chart":
+        // (series=: a part per value of a second field — stacked, or a line each)
+        if (a.series) return <SeriesChart key={key} kind={a.kind} data={json<SeriesPoint[]>(a.data, [])} series={json<{ name: string; color?: string }[]>(a.series, [])} />;
         return <MiniChart key={key} kind={a.kind} data={json<{ label: string; value: number; color?: string }[]>(a.data, [])} />;
       case "selected":
         return (

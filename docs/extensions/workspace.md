@@ -167,6 +167,17 @@ version **updates those pages in place** — *Workspace settings → Packages*, 
 
 - **What you changed stays.** A page, form, flow or database you did not touch is brought to the new version; one you changed keeps your
   version (a database you changed still gets the properties and views the package adds, and in each of the package's views what the new version changed where you left it as one of the versions before had it — a new template comes in though you hid a column). *Update, replacing my changes* lets the package win. A view of an installed package says when a newer version is there (*Update now*, or *Later* till a still newer one) — Learn's new versions come with Zeff itself.
+- **Updates merged like git.** An update brings in everything only it changed and keeps everything only you changed — field by field,
+  view by view, step by step (matched by their ids), a page's text block by block, and a text of lines (a view's template, a flow step's
+  code) line by line: you changed the header of a template, the update added a line at its end — both are in. Only a spot you **and** the
+  update changed differently is a conflict. The update does not stop there: everything else is in, yours stands at the spot, and the app
+  shows *The update … waits for you* until you settle it. *Settle* opens the merge: every spot with **yours**, **the update's** and
+  **before** (the version installed); keep yours, take the update's (for something the update removed: remove it), **both** (a page's
+  text, one after the other), or **write it yourself** — a text starts with git's markers around the lines both changed
+  (`<<<<<<< mine … ||||||| base … ======= … >>>>>>> theirs`), *Use this* waits until they are gone; ✨ *Merge with AI* proposes a merge you
+  check first. *Finish the update* puts every spot in place and writes it in the history; *Undo the update* takes the whole app back to
+  the save point kept before it (version, structure, flows — your entries stay). While a merge is open, the next update of that app waits.
+  (`package-merge.ts`, `ui/app-merge.tsx`; tested in `tests/merge-parts.test.ts`.)
 - **Data is migrated** by steps the package declares per version (`migrations`): `rename_property`, `remove_property` (before the new
   structure is applied) and `fill`, `copy`, `map` (after it, so they can use a new property).
 - **Requirements** (`requires`: other packages with a version range like `^1.0.0`; `plugins`) are checked before installing; what a
@@ -434,6 +445,31 @@ from blocks: lists, cards, tables, boards, charts, tiles, panes, forms and more.
   `toggle`, `select`; declare them at the top) and `<settings title="Settings"/>` draws the form; every change is saved for the app
   (per database). Read it anywhere as `{{ settings.currency }}`. Together with `<nav>`/`<entry>`, `<tabset>` and `<dialog>` this makes an
   app shell: screens, navigation and a settings panel — all in a template.
+- **Apps of several databases.** A view reads another database's rows as you —
+  `<data name="deals" do="db.query" with="database=Deals, where.Stage=Open, sort=-Amount, raw=true"/>` gives `data.deals.rows`
+  (each `{ id, title, <field>: value }`) and `data.deals.count`; `db.get` reads one row, `db.schema` the fields. Its buttons write there,
+  also as you, on a click: `<button do="db.insert" with="database=Deals, title={{ state.name }}, values.Stage=Open" done="Added." then="name="/>`,
+  `do="db.update" with="row={{ id }}, values.Stage=Won"`, `do="db.archive"`. What a `<data>` reads is read again after any of them.
+  In `with=`, a dotted name is a key of an object (`values.Stage=Open`, `where.Owner=me`), JSON is taken as it is (`rows=[3,4]`), and
+  `true`/`false` are yes and no. (Before, a view needed a flow of its own for each of these.)
+- **Many rows at once.** `<check bind="picked"/>` in a list's item or a table's cell ticks that row (its id goes into `state.picked`,
+  a JSON list), `<check bind="picked" all="rows | …" label="All"/>` ticks all of them (half-ticked when some are). Then
+  `<button do="rows.update" with="rows={{ state.picked }}, values.Status=Done" then="picked=" disabled="{{ not state.picked }}"/>` changes
+  them all — fields by name, as you type them — or `do="rows.archive"` moves them to the trash. `{{ state.picked | fromjson | len }}`
+  counts them.
+- **Time.** `<tick every=1/>` draws the view again every second (1–3600): `now.time` (14:03:09), `now.datetime`, `now.ms` and what is
+  worked out of them go on. `since` and `until` give the seconds from or to a date (or a date with a time, or `now.ms` kept in the state),
+  `clock` shows seconds as `1:02:03`, `duration` as `2 h 5 min` (`duration('min')` of minutes); `month` and `week` give `2026-11` and
+  `2026-W46`. `<on when="{{ left <= 0 }}" …>` does what a button does each time its condition turns true — a countdown that ran out,
+  a sum over a limit (not when the view opens with it already true). A stopwatch, a Pomodoro timer and a countdown are a few lines.
+- **Charts over time and in parts.** `<chart … group="Day" by=month>` gathers a date field by `day`, `week`, `month` or `year`, in
+  time's order; `series="Category"` splits every column or bar into a part per value of a second field (stacked, a legend under it;
+  `kind=line`: a line each). A household book by month and category is one tag.
+- **Tables you sort.** `<datatable sort=true>` sorts by any column on a click of its head (again: the other way); `<column sort="{{ Amount }}">`
+  sorts by that value instead of what the cell shows (numbers as numbers) and makes only that column sortable. `sorted="2:desc"` is how it starts.
+- **QR codes**: `<qr value="{{ URL }}" size=160 label="Ticket"/>` — a link, a ticket, a Wi-Fi login, black on white (at most 331 bytes).
+- **Kept state**: `<state name="tab" value="open" keep=true/>` remembers what the state was left at, in this browser, for this view — a
+  filter, a tab or a search comes back as you left it.
 
 ![A deals view built from blocks: a pipeline summary block of its own (figures, a goal ring, a cross table by owner and stage), tabs for the deals with a slider, a calendar, a heatmap and the deals by owner — every deal drawn by a "deal card" block with stars to rate it](img/workspace-blocks.png)
 
@@ -633,6 +669,9 @@ The plugin has about 280 files; the important ones by area.
 | | [view-template-actions.ts](../../src/plugins/workspace/view-template-actions.ts) | Views written by the AI |
 | Blocks | [blocks.ts](../../src/plugins/workspace/blocks.ts), [block-store.ts](../../src/plugins/workspace/block-store.ts), [block-check.ts](../../src/plugins/workspace/block-check.ts), [mcp-blocks.ts](../../src/plugins/workspace/mcp-blocks.ts), [ui/use-blocks.ts](../../src/plugins/workspace/ui/use-blocks.ts) | Blocks of your own: definition and parameters, storage (their flows are `block.<name>.<flow>` under the page "🧩 Blocks"), the check before saving (drawn on a database's rows, at the top and in a row), the MCP tools, the views' shared read |
 | | [ui/view-blocks-more.tsx](../../src/plugins/workspace/ui/view-blocks-more.tsx) | The tabset, dialog, input, slider, calendar, heatmap, pivot, gauge, rating and copy blocks |
+| | [ui/view-blocks-apps.tsx](../../src/plugins/workspace/ui/view-blocks-apps.tsx) | A chart of several series (stacked, a line each), the tick box of many-at-once (`<check>`), the QR code |
+| | [flows/rows-actions.ts](../../src/plugins/workspace/flows/rows-actions.ts) | `rows.update` and `rows.archive`: rows of any database changed or trashed many at once |
+| | [flows/user-actions.ts](../../src/plugins/workspace/flows/user-actions.ts) | What a view may do as you: by itself (reading, `db.query`) and on a click (`db.insert`, `rows.update` …); `shapeInput` makes `with=` into the action's input |
 | Views | [view-template.ts](../../src/plugins/workspace/view-template.ts), [card-template.ts](../../src/plugins/workspace/card-template.ts), [view-tree.ts](../../src/plugins/workspace/view-tree.ts), [app-views.ts](../../src/plugins/workspace/app-views.ts), [row-views.ts](../../src/plugins/workspace/row-views.ts) | View/card template languages, visual builder tree, app and row views |
 | | [forms.ts](../../src/plugins/workspace/forms.ts), [form-spec.ts](../../src/plugins/workspace/form-spec.ts) | Form pages |
 | Todos | [todo-engine.ts](../../src/plugins/workspace/todo-engine.ts), [task-lists.ts](../../src/plugins/workspace/task-lists.ts), [task-source.ts](../../src/plugins/workspace/task-source.ts), [todo-marks.ts](../../src/plugins/workspace/todo-marks.ts) | Databases and page lists as todos, both ways |

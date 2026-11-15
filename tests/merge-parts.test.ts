@@ -14,7 +14,7 @@ test("one value, an object, a list by ids", async () => {
   const { merge3, mergeById } = await import("@/plugins/workspace/merge-parts");
   assert.deepEqual(merge3(1, 1, 2, "x"), { value: 2, conflicts: [], took: ["x"] });
   assert.deepEqual(merge3(1, 3, 1, "x"), { value: 3, conflicts: [], took: [] });
-  assert.deepEqual(merge3(1, 3, 2, "x"), { value: 3, conflicts: [{ where: "x" }], took: [] });
+  assert.deepEqual(merge3(1, 3, 2, "x"), { value: 3, conflicts: [{ where: "x", path: [], base: 1, mine: 3, theirs: 2 }], took: [] }, "a conflict carries its three sides");
   // Objects: inside, key by key.
   assert.deepEqual(merge3({ a: 1, b: 1 }, { a: 2, b: 1 }, { a: 1, b: 3 }, "o").value, { a: 2, b: 3 });
   const base = [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C" }];
@@ -25,6 +25,10 @@ test("one value, an object, a list by ids", async () => {
   assert.deepEqual(r.value.map((x) => x.name), ["B2", "Mine", "New", "C changed", "My own"]);
   assert.equal(r.conflicts.length, 1);
   assert.match(r.conflicts[0].where, /C/);
+  assert.deepEqual([r.conflicts[0].path, r.conflicts[0].removed, r.conflicts[0].theirs], [[{ id: "c" }], true, undefined], "where it is: the item by its id");
+  // Deep inside: the path names each key and each item by its id.
+  const deep = merge3({ views: [{ id: "v", template: "a" }] }, { views: [{ id: "v", template: "b" }] }, { views: [{ id: "v", template: "c" }] }, "schema");
+  assert.deepEqual(deep.conflicts[0].path, ["views", { id: "v" }, "template"]);
 });
 
 test("a page's text: block by block", async () => {
@@ -91,4 +95,83 @@ test("an app update: your changes stay, the update's come in, both on one thing:
   assert.deepEqual(steps.map((x) => [x.id, x.input?.template]), [["s1", "mine"], ["s2", "two"], ["s3", "three"]]);
   assert.equal(r.conflicts?.length, 1);
   assert.match(r.conflicts![0], /name/);
+});
+
+
+test("a text of lines both changed: merged line by line, as git does — only the same lines changed on both sides conflict", async () => {
+  const { merge3, mergeLines } = await import("@/plugins/workspace/merge-parts");
+  const L = (...xs: string[]) => xs.join("\n");
+  const base = L("<header/>", "<list source=rows>", "{{ title }}", "</list>", "<footer/>");
+  const mine = L("<header title=Mine/>", "<list source=rows>", "{{ title }}", "</list>", "<footer/>");
+  const theirs = L("<header/>", "<list source=rows>", "{{ title }}", "</list>", "<footer/>", "<qr value=x/>");
+  const r = merge3({ template: base }, { template: mine }, { template: theirs }, "view");
+  assert.deepEqual(r.conflicts, []);
+  assert.equal(r.value.template, L("<header title=Mine/>", "<list source=rows>", "{{ title }}", "</list>", "<footer/>", "<qr value=x/>"));
+  const both = mergeLines(base, mine, L("<header title=Theirs/>", "<list source=rows>", "{{ title }}", "</list>", "<footer/>"));
+  assert.equal(both.conflicts, 1);
+  assert.deepEqual(both.hunks[0], { base: ["<header/>"], mine: ["<header title=Mine/>"], theirs: ["<header title=Theirs/>"] });
+  assert.ok(both.marked.startsWith(L("<<<<<<< mine", "<header title=Mine/>", "||||||| base", "<header/>", "=======", "<header title=Theirs/>", ">>>>>>> theirs", "<list source=rows>")));
+  // The same change on both sides: once.
+  assert.deepEqual(mergeLines(L("a", "b"), L("a", "B"), L("a", "B")), { text: L("a", "B"), conflicts: 0, hunks: [], marked: L("a", "B") });
+});
+
+test("the update waits for you where both changed: each spot settled (yours, theirs, your own), then finished — or aborted", async () => {
+  const w = await import("@/plugins/workspace/store");
+  const life = await import("@/plugins/workspace/package-life");
+  const pm = await import("@/plugins/workspace/package-merge");
+  const L = (...xs: string[]) => xs.join("\n");
+  const inst = life.getInstalled("mergeapp")!;
+  const db = inst.map.i2;
+  // The update before left one spot open: the field both renamed.
+  let m = pm.pendingAppMerge("mergeapp")!;
+  assert.equal(m.spots.length, 1);
+  const spot = m.spots[0];
+  assert.deepEqual([spot.part, spot.path, spot.base, spot.mine, spot.theirs], ["schema", ["properties", { id: "a" }, "name"], "Colour", "Farbe", "Hue"]);
+  assert.equal(pm.pendingMergeOfPage(db)?.id, "mergeapp", "found from any page of the app");
+  // While it is open, no next update.
+  const view = { id: "all", name: "All", type: "table", filter: { and: [] }, sorts: [], hidden: [] };
+  const next = (version: string, name: string, template: string) => ({ format: 1 as const, id: "mergeapp", name: "Merge app", version, items: [{ id: "i2", parent: "i1", kind: "database", title: "Items", schema: { titleName: "Name", properties: [{ id: "a", name, type: "text" }, { id: "b", name: "Size", type: "number" }, { id: "c", name: "Price", type: "number" }], views: [{ ...view, app: "template", template }] } }] });
+  await assert.rejects(() => life.updateTracked("mergeapp", next("3.0.0", "Hue", "x") as never), /still waits for you/);
+  await assert.rejects(() => pm.finishAppMerge("mergeapp"), /Still open: 1/);
+  assert.throws(() => pm.settleSpot("mergeapp", 1, "both"), /page's text/);
+  pm.settleSpot("mergeapp", 1, "theirs");
+  const done = await pm.finishAppMerge("mergeapp");
+  assert.equal(done.applied.length, 1);
+  assert.equal(w.getDatabase(db)!.schema.properties.find((x) => x.id === "a")!.name, "Hue", "the update's, as you chose");
+  assert.equal(pm.pendingAppMerge("mergeapp"), null);
+  assert.match(life.getInstalled("mergeapp")!.history.at(-1)!.changes[0], /merge finished/);
+
+  // 3.0.0 brings a view with a template; you change its first line, 4.0.0 changes the same line and adds one.
+  await life.updateTracked("mergeapp", next("3.0.0", "Hue", L("<header/>", "<list source=rows>{{ title }}</list>")) as never);
+  const s0 = w.getDatabase(db)!.schema;
+  w.updateSchema(db, { ...s0, views: s0.views.map((v) => (v.id === "all" ? { ...v, template: L("<header title=Mine/>", "<list source=rows>{{ title }}</list>") } : v)) as never });
+  const r = await life.updateTracked("mergeapp", next("4.0.0", "Hue", L("<header title=Theirs/>", "<list source=rows>{{ title }}</list>", "<qr value=x/>")) as never);
+  assert.equal(r.merge?.open, 1);
+  m = pm.pendingAppMerge("mergeapp")!;
+  assert.match(m.spots[0].marked!, /<<<<<<< mine/);
+  assert.throws(() => pm.settleSpot("mergeapp", 1, "edited", L("<<<<<<< mine", "x")), /markers/);
+  pm.settleSpot("mergeapp", 1, "edited", L("<header title=Both/>", "<list source=rows>{{ title }}</list>", "<qr value=x/>"));
+  await pm.finishAppMerge("mergeapp");
+  assert.equal((w.getDatabase(db)!.schema.views.find((v) => v.id === "all") as { template?: string }).template, L("<header title=Both/>", "<list source=rows>{{ title }}</list>", "<qr value=x/>"));
+
+  // 5.0.0 conflicts again — aborted: the whole app back to before the update, its version too.
+  const s1 = w.getDatabase(db)!.schema;
+  w.updateSchema(db, { ...s1, properties: s1.properties.map((x) => (x.id === "a" ? { ...x, name: "Tint" } : x)) });
+  await life.updateTracked("mergeapp", next("5.0.0", "Shade", L("<header title=Both/>", "<list source=rows>{{ title }}</list>", "<qr value=x/>")) as never);
+  assert.equal(pm.pendingAppMerge("mergeapp")!.spots.length, 1);
+  assert.equal(w.getDatabase(db)!.schema.properties.find((x) => x.id === "a")!.name, "Tint", "yours stands while it is open");
+  const ab = await pm.abortAppMerge("mergeapp");
+  assert.equal(ab.to, "4.0.0");
+  assert.equal(life.getInstalled("mergeapp")!.version, "4.0.0");
+  assert.equal(w.getDatabase(db)!.schema.properties.find((x) => x.id === "a")!.name, "Tint", "as it was before the update");
+  assert.equal(pm.pendingAppMerge("mergeapp"), null);
+});
+
+test("a spot's place is found again by its path; one that isn't there any more is said, not guessed", async () => {
+  const { setAt } = await import("@/plugins/workspace/package-merge");
+  const root = { properties: [{ id: "a", name: "A" }, { id: "b", name: "B" }], titleName: "N" };
+  assert.deepEqual(setAt(root, ["properties", { id: "b" }, "name"], "B2"), { properties: [{ id: "a", name: "A" }, { id: "b", name: "B2" }], titleName: "N" });
+  assert.deepEqual(setAt(root, ["properties", { id: "a" }], undefined), { properties: [{ id: "b", name: "B" }], titleName: "N" });
+  assert.equal(setAt(root, ["properties", { id: "zz" }, "name"], "x"), null);
+  assert.equal(root.properties[1].name, "B", "the part itself is not changed");
 });

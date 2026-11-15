@@ -5,16 +5,19 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toaster";
 import { useT } from "@/components/I18nProvider";
 import { bringPackageUpdateAction, packageUpdateOfAction } from "../actions";
+import { AppMergeNote } from "./app-merge";
 
 /**
  * A newer version of the app this page belongs to (its top page, a database of it) (an installed package — Learn's comes with Zeff): said in the view, with the button
- * that brings it in. Nothing is updated by itself; "Later" hides it until a still newer version comes (the browser keeps that).
+ * that brings it in. Nothing is updated by itself; "Later" hides it until a still newer version comes (the browser keeps that). An update
+ * that left spots both you and it changed waits for you like a git merge: its note (app-merge.tsx) stands here until it is settled.
  */
 export function PackageUpdateNote({ dbId, reload }: { /** A page of the app (its top page, a database of it). */ dbId: number; reload?: () => void }) {
   const t = useT();
   const router = useRouter();
   const [u, setU] = useState<{ id: string; name: string; from: string; to: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [brought, setBrought] = useState(0);
   useEffect(() => {
     let live = true;
     void packageUpdateOfAction(dbId).then((x) => {
@@ -31,14 +34,17 @@ export function PackageUpdateNote({ dbId, reload }: { /** A page of the app (its
       live = false;
     };
   }, [dbId]);
-  if (!u) return null;
+  if (!u) return <AppMergeNote pageId={dbId} reload={reload} refresh={brought} />;
   const bring = async () => {
     setBusy(true);
     const r = await bringPackageUpdateAction(u.id);
     setBusy(false);
     if (!r.ok) return void toast(r.error, { tone: "error" });
-    toast(t("{name} is up to date (version {to}).", { name: u.name, to: u.to }), { tone: "ok" });
+    const open = "open" in r && typeof r.open === "number" ? r.open : 0;
+    if (open) toast(open === 1 ? t("{name} {to} is in — one spot changed by you and by the update waits for you.", { name: u.name, to: u.to }) : t("{name} {to} is in — {n} spots changed by you and by the update wait for you.", { name: u.name, to: u.to, n: open }), { tone: "ok", ms: 8000 });
+    else toast(t("{name} is up to date (version {to}).", { name: u.name, to: u.to }), { tone: "ok" });
     setU(null);
+    setBrought((n) => n + 1);
     reload?.();
     router.refresh();
   };

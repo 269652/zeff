@@ -423,6 +423,38 @@ function dayOf(v: unknown): Date | null {
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
 
+/** A moment from a value: a date with a time (2026-11-14T09:30, "2026-11-14 09:30"), a day (its midnight, here), milliseconds. */
+function momentOf(v: unknown): Date | null {
+  const x = isField(v) ? (v.value && typeof v.value === "object" && "start" in (v.value as object) ? (v.value as { start: unknown }).start : v.value) : v;
+  if (typeof x === "number" && Number.isFinite(x)) return new Date(x);
+  if (x instanceof Date) return x;
+  const s = textOf(x).trim();
+  // (milliseconds since 1970 as a text — now.ms kept in the view's state)
+  if (/^\d{11,}$/.test(s)) return new Date(Number(s));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return dayOf(s);
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(s);
+  if (m && !/(Z|[+-]\d{2}:?\d{2})$/.test(s)) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0));
+  const t = Date.parse(s);
+  return Number.isNaN(t) ? null : new Date(t);
+}
+/** Seconds as a clock shows them: 1:02:03, or 2:03 under an hour (a minus before it when negative). */
+function clockOf(sec: number): string {
+  const neg = sec < 0;
+  const n = Math.floor(Math.abs(sec));
+  const h = Math.floor(n / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const ss = String(n % 60).padStart(2, "0");
+  return `${neg ? "-" : ""}${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${ss}`;
+}
+/** Seconds as a duration in words: 2 h 5 min, 5 min, 40 s. */
+function durationOf(sec: number): string {
+  const n = Math.round(Math.abs(sec));
+  const h = Math.floor(n / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const out = h ? `${h} h${m ? ` ${m} min` : ""}` : m ? `${m} min` : `${n} s`;
+  return sec < 0 ? `-${out}` : out;
+}
+
 export const FILTERS: Record<string, (v: unknown, a: (string | number)[], ctx: Ctx) => unknown> = {
   chip: (v) => {
     const f = isField(v) ? v : null;
@@ -445,6 +477,29 @@ export const FILTERS: Record<string, (v: unknown, a: (string | number)[], ctx: C
     return n === 0 ? "today" : n > 0 ? `in ${n} day${n === 1 ? "" : "s"}` : `${-n} day${n === -1 ? "" : "s"} ago`;
   },
   hours: (v) => (numOf(v) === null ? "" : `${rounded(numOf(v)!)} h`),
+  // Time: since / until a moment in seconds (from now: a <tick> keeps it going), shown as a clock or a duration; the month or week of a day.
+  since: (v, _a, ctx) => {
+    const d = momentOf(v);
+    return d ? Math.floor((ctx.scope.now.getTime() - d.getTime()) / 1000) : null;
+  },
+  until: (v, _a, ctx) => {
+    const d = momentOf(v);
+    return d ? Math.ceil((d.getTime() - ctx.scope.now.getTime()) / 1000) : null;
+  },
+  clock: (v) => (numOf(v) === null ? "" : clockOf(numOf(v)!)),
+  duration: (v, a) => (numOf(v) === null ? "" : durationOf(numOf(v)! * (a[0] === "min" ? 60 : a[0] === "h" ? 3600 : 1))),
+  month: (v) => {
+    const d = momentOf(v);
+    return d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` : "";
+  },
+  week: (v) => {
+    const d = momentOf(v);
+    if (!d) return "";
+    const th = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const first = new Date(th.getFullYear(), 0, 4);
+    const w = 1 + Math.round(((th.getTime() - first.getTime()) / 864e5 - 3 + ((first.getDay() + 6) % 7)) / 7);
+    return `${th.getFullYear()}-W${String(w).padStart(2, "0")}`;
+  },
   number: (v, a) => (numOf(v) === null ? "" : rounded(numOf(v)!, typeof a[0] === "number" ? a[0] : 2)),
   percent: (v) => (numOf(v) === null ? "" : `${Math.round(numOf(v)! * 100)}%`),
   euro: (v) => (numOf(v) === null ? "" : `${rounded(numOf(v)!)} €`),

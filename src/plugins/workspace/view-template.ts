@@ -20,7 +20,7 @@ import { layoutGraph, type GraphNodeIn } from "./view-graph";
 import { checkWidgetHtml, WIDGET_LIBS } from "@/lib/widgets/sandbox";
 import { checkSpec, specHtml, type ExerciseSet } from "@/lib/widgets/spec";
 import { MAX_SETTINGS, settingsWithDefaults, type SettingDecl } from "./view-settings";
-import { ANY_TAG_ATTRS, cardScope, CARD_TAGS, checkAttr, FILTERS as CARD_FILTERS, isField, isNode, KEYWORDS, numOf, parseFilter, parseTemplate, splitPipes, textOf, type AttrKind, type CardScope, type Ctx as CardCtx, type Field, type TagDef, type TNode, type TplError, type VNode } from "./card-template";
+import { ANY_TAG_ATTRS, cardScope, CARD_TAGS, checkAttr, FILTERS as CARD_FILTERS, isField, isNode, KEYWORDS, numOf, parseFilter, parseTemplate, splitPipes, textOf, vnodeToString, type AttrKind, type CardScope, type Ctx as CardCtx, type Field, type TagDef, type TNode, type TplError, type VNode } from "./card-template";
 import { noLabels, TITLE, type Labels, type Property, type Row } from "./model";
 import { localDay } from "@/lib/dates";
 import { blockFlowName, blockSignature, paramValue, type BlockDef } from "./blocks";
@@ -107,9 +107,14 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   dot: T({ color: "paint" }, true),
   printonly: T({}),
   noprint: T({}),
-  datatable: T({ source: "list", empty: "text" }),
-  column: T({ label: "text", align: { oneOf: ["left", "right", "center"] }, foot: "text", nowrap: { oneOf: ["true", "false"] }, width: "int" }),
-  state: T({ name: "text", value: "text" }, true),
+  // sort=true: a click on a column's head sorts by it (again: the other way); sorted="2:desc" how it starts.
+  datatable: T({ source: "list", empty: "text", sort: { oneOf: ["true", "false"] }, sorted: "text" }),
+  // sort="{{ Amount }}": what the column sorts by (else what its cell says) — and it can be sorted by.
+  column: T({ label: "text", align: { oneOf: ["left", "right", "center"] }, foot: "text", nowrap: { oneOf: ["true", "false"] }, width: "int", sort: "list" }),
+  // A text as a QR code (a link, a ticket, a Wi-Fi login — at most 331 bytes), black on white; its caption under it.
+  qr: T({ value: "text", size: "int", label: "text" }, true),
+  // keep=true: what it is set to is kept in this browser for the view (a filter, a tab) — opened again, it is as you left it.
+  state: T({ name: "text", value: "text", keep: { oneOf: ["true", "false"] } }, true),
   tabs: T({ bind: "text", options: "text" }, true),
   split: T({ ratio: { oneOf: ["1:1", "1:2", "2:1", "2:3", "3:2", "1:3", "3:1"] }, side: { oneOf: ["left", "right"] }, width: "int" }),
   // grid: the rows share one grid of these columns ("max-content minmax(0,80ch) 1fr max-content") — each as wide as its widest cell.
@@ -150,7 +155,14 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   quickadd: T({ placeholder: "text", label: "text", values: "text" }, true),
   form: T({ fields: "text", title: "text", label: "text", done: "text" }, true),
   table: T({ source: "list", columns: "text", sum: "text", empty: "text" }, true),
-  chart: T({ source: "list", kind: { oneOf: ["bar", "column", "line", "pie"] }, group: "text", value: "text", calc: { oneOf: ["count", "sum", "avg"] } }, true),
+  // by: a date field's values gathered by day / week / month / year (in time's order); series: a second field — a part per value (stacked
+  // columns and bars, a line each), its legend under it.
+  chart: T({ source: "list", kind: { oneOf: ["bar", "column", "line", "pie"] }, group: "text", value: "text", calc: { oneOf: ["count", "sum", "avg"] }, by: { oneOf: ["day", "week", "month", "year"] }, series: "text" }, true),
+  // A tick box of a list's item for doing something with many at once: the ids ticked are a list in state.<bind> (JSON); all="rows | …"
+  // ticks or unticks all of them at once (a box in the list's head).
+  check: T({ bind: "text", value: "text", all: "list", label: "text" }, true),
+  // The view drawn again every so many seconds (1 – 3600): now and what is worked out of it go on (a stopwatch, a countdown).
+  tick: T({ every: "num" }, true),
   selected: T({ empty: "text" }),
   button: T({ action: "text", label: "text", icon: "text", request: "text", row: "text", prop: "text", value: "text", values: "text", state: "text", href: "url", confirm: "text", variant: { oneOf: ["primary", "plain", "quiet", "danger", "link"] }, print: { oneOf: ["true", "false"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, wide: { oneOf: ["true", "false"] }, keys: "text", emit: "text", run: "text", do: "text", fill: "text", undo: "text", with: "text", into: "text", done: "text", then: "text", transition: "text", note: { oneOf: ["true", "false"] }, score: "text", correct: "text", total: "text", feedback: "text", finished: { oneOf: ["true", "false"] }, chat: "text", key: "text", text: "text", title: "text" }, true),
   // A flow's output loaded into data.<name> — again whenever what it is called with changes (flows/).
@@ -222,7 +234,8 @@ export const VIEW_TAGS: Record<string, TagDef> = {
 
 // An event handler: <on event="saved" action="state" state="msg" value="Saved"/> does what a button does when a button says emit="saved" (or a
 // key is pressed: <on keys="mod+s" run="my.save"/>). Same attributes as a button.
-VIEW_TAGS.on = T({ ...VIEW_TAGS.button.attrs, event: "text" }, true);
+// when="{{ … }}": done each time what it says turns true (a countdown at 0, a sum over a limit) — not when the view opens with it true.
+VIEW_TAGS.on = T({ ...VIEW_TAGS.button.attrs, event: "text", when: "text" }, true);
 // A box (a card) can be what you click: it does what a button does (<box action="state" state="course" value="…">).
 VIEW_TAGS.box = T({ ...VIEW_TAGS.box.attrs, tone: { oneOf: ["plain", "muted", "good", "warn", "bad", "accent"] }, ...Object.fromEntries(["action", "state", "value", "emit", "run", "with", "into", "done", "then", "confirm", "href", "tip"].map((k) => [k, VIEW_TAGS.button.attrs[k]])) });
 
@@ -242,6 +255,7 @@ const STATE_KEYS: Record<string, string[]> = {
   upload: ["bind"],
   drop: ["bind"],
   slider: ["bind"],
+  check: ["bind"],
   calendar: ["bind"],
   data: ["name"],
   entry: ["state"],
@@ -375,7 +389,13 @@ function resolve(ctx: Ctx, path: string): { found: boolean; value: unknown } {
   }
   if (h === "data") return { found: true, value: (rest.length ? walk(ctx.data.data ?? {}, [ctx.prefix + rest[0], ...rest.slice(1)]) : ctx.data.data) ?? null };
   if (h === "db") return { found: true, value: walk(ctx.data.db, rest) ?? null };
-  if (h === "now") return { found: true, value: localDay(ctx.data.now ?? new Date()) };
+  if (h === "now") {
+    // now: today (YYYY-MM-DD); now.time: the time (HH:MM:SS), now.datetime: both (YYYY-MM-DDTHH:MM:SS), now.ms: milliseconds since 1970.
+    const at = ctx.data.now ?? new Date();
+    const sub = norm(rest[0] ?? "");
+    const hms = [at.getHours(), at.getMinutes(), at.getSeconds()].map((x) => String(x).padStart(2, "0")).join(":");
+    return { found: true, value: sub === "time" ? hms : sub === "datetime" ? `${localDay(at)}T${hms}` : sub === "ms" ? at.getTime() : localDay(at) };
+  }
   if (h === "this") return { found: true, value: ctx.item ? walk(ctx.item, rest) : ctx.row ? (rest.length ? fieldOf(ctx, ctx.row, rest.join(".")) : ctx.row.title) : null };
   if (ctx.item && head in ctx.item) return { found: true, value: walk(ctx.item, [head, ...rest]) ?? null };
   if (ctx.row && !rest.length) {
@@ -964,6 +984,41 @@ function monthOf(asked: string | undefined, now: Date): string {
   return /^\d{4}-\d{2}$/.test(asked ?? "") ? asked! : localDay(now).slice(0, 7);
 }
 
+/** The ids ticked (<check>): state.<bind> as a JSON list of ids (or a text of them, "3, 4"). */
+export function pickedIds(v: string | undefined): string[] {
+  const s = (v ?? "").trim();
+  if (!s) return [];
+  if (s.startsWith("[")) {
+    try {
+      const j = JSON.parse(s) as unknown;
+      return Array.isArray(j) ? [...new Set(j.map((x) => String(x)).filter(Boolean))] : [];
+    } catch {
+      return [];
+    }
+  }
+  return [...new Set(s.split(",").map((x) => x.trim()).filter(Boolean))];
+}
+
+/** The day, ISO week, month or year a date falls in (a chart's by=): a key that sorts in time's order, and its label. Null: no date. */
+export function dateBucket(v: unknown, by: string, locale = "de-DE"): { key: string; label: string } | null {
+  const raw = v && typeof v === "object" && !Array.isArray(v) && "start" in (v as object) ? (v as { start: unknown }).start : v;
+  const m = /(\d{4})-(\d{2})-(\d{2})/.exec(typeof raw === "string" ? raw : raw instanceof Date ? localDay(raw) : "");
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(y, mo - 1, d);
+  if (by === "year") return { key: m[1], label: m[1] };
+  if (by === "month") return { key: `${m[1]}-${m[2]}`, label: date.toLocaleDateString(locale, { month: "short", year: "2-digit" }) };
+  if (by === "week") {
+    // (ISO: the week with the year's first Thursday is week 1; a week belongs to the year its Thursday is in)
+    const th = new Date(y, mo - 1, d + 3 - ((date.getDay() + 6) % 7));
+    const first = new Date(th.getFullYear(), 0, 4);
+    const w = 1 + Math.round(((th.getTime() - first.getTime()) / 864e5 - 3 + ((first.getDay() + 6) % 7)) / 7);
+    const ww = String(w).padStart(2, "0");
+    return { key: `${th.getFullYear()}-W${ww}`, label: `W${ww} ${th.getFullYear()}` };
+  }
+  return { key: `${m[1]}-${m[2]}-${m[3]}`, label: date.toLocaleDateString(locale, { day: "numeric", month: "short" }) };
+}
+
 function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
   // (A block's parameters are its own: a collection isn't interpolated as a text first.)
   if (n.name === "use") return drawUse(n, ctx);
@@ -975,7 +1030,7 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "state": {
       if (!a.name) return (err("<state> needs a name."), []);
       if (ctx.state[a.name] === undefined) ctx.state[a.name] = a.value ?? "";
-      return [];
+      return a.keep === "true" ? [{ t: "keep", a: { name: a.name }, c: [] }] : [];
     }
     case "tabs":
     case "select": {
@@ -1229,38 +1284,113 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
       const src = source();
       const group = a.group ? (propByName(ctx, a.group) ?? null) : null;
       const valueProp = a.value ? (propByName(ctx, a.value) ?? null) : null;
+      const seriesProp = a.series ? (propByName(ctx, a.series) ?? null) : null;
       const calc = a.calc ?? (valueProp || (!isRows(src) && a.value) ? "sum" : "count");
-      const buckets = new Map<string, { label: string; values: number[]; n: number; color?: string }>();
+      const locale = ctx.data.locale ?? "de-DE";
+      type Bucket = { key: string; label: string; values: number[]; n: number; color?: string; parts: Map<string, { values: number[]; n: number }> };
+      const buckets = new Map<string, Bucket>();
+      const seriesColors = new Map<string, string | undefined>();
+      /** A row's or an item's value of a field: its text, and the value as kept (a date: by=). */
+      const valueOf = (it: unknown, row: Row | null, prop: Property | null, name: string | undefined): { text: string; raw: unknown } => {
+        if (row) {
+          const f = prop ? fieldOf(ctx, row, prop.id) : undefined;
+          return { text: f?.text ?? "", raw: f?.value ?? null };
+        }
+        const v = (it as Record<string, unknown>)?.[name ?? ""];
+        return { text: textOf(v), raw: v };
+      };
       for (const it of itemsOf(src)) {
         const row = isRows(src) ? (it as Row) : null;
-        const gv = row ? (group ? (fieldOf(ctx, row, group.id)?.text ?? "") : "") : textOf((it as Record<string, unknown>)?.[a.group ?? ""]);
+        const g = valueOf(it, row, group, a.group);
         // (An item of an app's list may bring its own colour.)
         const own = !row && typeof (it as Record<string, unknown>)?.color === "string" ? String((it as Record<string, unknown>).color) : undefined;
-        for (const label of gv ? (row ? gv.split(", ") : [gv]) : ["—"]) {
-          const b = buckets.get(label) ?? { label, values: [], n: 0, color: own ?? group?.options?.find((o) => o.name === label)?.color };
+        const keys: { key: string; label: string }[] = a.by
+          ? [dateBucket(g.raw ?? g.text, a.by, locale)].filter((x): x is { key: string; label: string } => !!x)
+          : (g.text ? (row ? g.text.split(", ") : [g.text]) : ["—"]).map((l) => ({ key: l, label: l }));
+        const x = row ? (valueProp ? numOf(fieldOf(ctx, row, valueProp.id)?.value) : null) : numOf((it as Record<string, unknown>)?.[a.value ?? ""]);
+        const sv = a.series ? valueOf(it, row, seriesProp, a.series).text || "—" : "";
+        for (const { key, label } of keys) {
+          const b: Bucket = buckets.get(key) ?? { key, label, values: [], n: 0, color: own ?? group?.options?.find((o) => o.name === label)?.color, parts: new Map() };
           b.n++;
-          const x = row ? (valueProp ? numOf(fieldOf(ctx, row, valueProp.id)?.value) : null) : numOf((it as Record<string, unknown>)?.[a.value ?? ""]);
           if (x !== null) b.values.push(x);
-          buckets.set(label, b);
+          if (a.series) {
+            for (const name of row ? sv.split(", ") : [sv]) {
+              const part = b.parts.get(name) ?? { values: [], n: 0 };
+              part.n++;
+              if (x !== null) part.values.push(x);
+              b.parts.set(name, part);
+              if (!seriesColors.has(name)) seriesColors.set(name, seriesProp?.options?.find((o) => o.name === name)?.color);
+            }
+          }
+          buckets.set(key, b);
         }
       }
-      const data = [...buckets.values()].map((b) => ({ label: b.label, value: calc === "count" ? b.n : calc === "avg" ? (b.values.length ? b.values.reduce((x, y) => x + y, 0) / b.values.length : 0) : b.values.reduce((x, y) => x + y, 0), ...(b.color ? { color: b.color } : {}) }));
-      return [{ t: "chart", a: { kind: a.kind ?? "bar", data: JSON.stringify(data) }, c: [] }];
+      const measure = (n: number, values: number[]) => (calc === "count" ? n : calc === "avg" ? (values.length ? values.reduce((p, q) => p + q, 0) / values.length : 0) : values.reduce((p, q) => p + q, 0));
+      const ordered = a.by ? [...buckets.values()].sort((p, q) => p.key.localeCompare(q.key)) : [...buckets.values()];
+      const series = [...seriesColors.keys()];
+      const data = ordered.map((b) => ({
+        label: b.label,
+        value: measure(b.n, b.values),
+        ...(b.color ? { color: b.color } : {}),
+        ...(a.series ? { parts: series.map((name) => { const part = b.parts.get(name); return part ? measure(part.n, part.values) : 0; }) } : {}),
+      }));
+      const legend = series.map((name) => ({ name, ...(seriesColors.get(name) ? { color: seriesColors.get(name) } : {}) }));
+      return [{ t: "chart", a: { kind: a.kind ?? "bar", data: JSON.stringify(data), ...(a.series ? { series: JSON.stringify(legend) } : {}) }, c: [] }];
     }
+    case "check": {
+      if (!a.bind) return (err('<check> needs bind="…" (the state the ids ticked go into).'), []);
+      const ticked = pickedIds(ctx.state[a.bind]);
+      const idOf = (it: unknown): string | null => {
+        const c = withItem(ctx, it);
+        return c.row ? String(c.row.id) : c.item && (typeof c.item.id === "number" || typeof c.item.id === "string") ? String(c.item.id) : null;
+      };
+      if (a.all !== undefined) {
+        const ids = itemsOf(pipe(a.all, ctx, n.line)).map(idOf).filter((x): x is string => !!x);
+        const on = ids.length > 0 && ids.every((x) => ticked.includes(x));
+        return [{ t: "check", a: { bind: a.bind, label: a.label ?? "", ids: JSON.stringify(ids), checked: on ? "true" : "", some: !on && ids.some((x) => ticked.includes(x)) ? "true" : "", current: JSON.stringify(ticked) }, c: [] }];
+      }
+      const value = a.value ?? (ctx.row ? String(ctx.row.id) : ctx.item ? idOf(ctx.item) : null);
+      if (!value) return (err('<check> stands in a list item (or says value="{{ id }}").'), []);
+      return [{ t: "check", a: { bind: a.bind, label: a.label ?? "", value, checked: ticked.includes(value) ? "true" : "", current: JSON.stringify(ticked) }, c: [] }];
+    }
+    case "qr":
+      if (!a.value?.trim()) return [];
+      return [{ t: "qr", a: { value: a.value, size: String(Math.min(480, Math.max(64, Number(a.size) || 160))), ...(a.label ? { label: a.label } : {}) }, c: [] }];
+    case "tick":
+      return [{ t: "tick", a: { every: String(Math.min(3600, Math.max(1, Math.round(Number(a.every) || 1)))) }, c: [] }];
     case "datatable": {
       // A table of any list: its columns' templates drawn for each item, a foot under a column (drawn once).
       const cols = n.kids.filter((k): k is Extract<TNode, { k: "tag" }> => k.k === "tag" && k.name === "column");
       if (!cols.length) return (err("<datatable> needs <column label=…>…</column> inside."), []);
-      const meta = cols.map((c) => {
-        const ca = attrsOf(c, ctx);
-        return Object.fromEntries(Object.entries({ label: ca.label ?? "", align: ca.align, foot: ca.foot, nowrap: ca.nowrap, width: ca.width }).filter((e) => e[1] !== undefined));
-      });
-      const rows = itemsOf(source()).map((it) => {
+      const colAttrs = cols.map((c) => attrsOf(c, ctx));
+      // (sortable: a column that says what it sorts by, or every column of a table with sort=true)
+      const sortable = colAttrs.map((ca) => ca.sort !== undefined || a.sort === "true");
+      const meta = colAttrs.map((ca, i) => Object.fromEntries(Object.entries({ label: ca.label ?? "", align: ca.align, foot: ca.foot, nowrap: ca.nowrap, width: ca.width, sort: sortable[i] ? "true" : undefined }).filter((e) => e[1] !== undefined)));
+      let rows = itemsOf(source()).map((it) => {
         const c = withItem(ctx, it);
         const id = c.row ? String(c.row.id) : c.item && (typeof c.item.id === "number" || typeof c.item.id === "string") ? String(c.item.id) : undefined;
-        return { t: "tr", a: id ? { row: id } : {}, c: cols.map((col) => ({ t: "td", a: {}, c: drawList(col.kids, c) }) as VNode) } as VNode;
+        const cells = cols.map((col) => drawList(col.kids, c));
+        const keys = colAttrs.map((ca, i) => (ca.sort !== undefined ? interpolate(ca.sort, c, n.line) : sortable[i] ? vnodeToString(cells[i]).trim() : ""));
+        return { node: { t: "tr", a: id ? { row: id } : {}, c: cells.map((cc) => ({ t: "td", a: {}, c: cc }) as VNode) } as VNode, keys };
       });
-      return [{ t: "datatable", a: { cols: JSON.stringify(meta), ...(a.empty ? { empty: a.empty } : {}) }, c: rows }];
+      // Sorted by a column (the view's state, set by a click on its head): numbers as numbers, dates and texts as they read.
+      const sortState = `${ctx.prefix}sort:${n.line}`;
+      const [byCol, dir] = (ctx.state[sortState] ?? a.sorted ?? "").split(":");
+      const ci = Number(byCol) - 1;
+      if (Number.isInteger(ci) && sortable[ci]) {
+        const asNum = (k: string) => (/^-?\d+([.,]\d+)?$/.test(k.trim()) ? Number(k.replace(",", ".")) : null);
+        rows = [...rows].sort((x, y) => {
+          const p = x.keys[ci] ?? "";
+          const q = y.keys[ci] ?? "";
+          if (!p !== !q) return p ? -1 : 1; // (the empty ones last, either way)
+          const np = asNum(p);
+          const nq = asNum(q);
+          const c = np !== null && nq !== null ? np - nq : p.localeCompare(q, ctx.data.locale ?? undefined, { numeric: true, sensitivity: "base" });
+          return dir === "desc" ? -c : c;
+        });
+      }
+      const sortAttrs: Record<string, string> = sortable.some(Boolean) ? { sortstate: sortState, sorted: Number.isInteger(ci) && sortable[ci] ? `${ci + 1}:${dir === "desc" ? "desc" : "asc"}` : "" } : {};
+      return [{ t: "datatable", a: { cols: JSON.stringify(meta), ...(a.empty ? { empty: a.empty } : {}), ...sortAttrs }, c: rows.map((x) => x.node) }];
     }
     case "nav":
       return [{ t: "nav", a: { title: a.title ?? "" }, c: kids().filter((k) => typeof k !== "string" || k.trim()) }];
@@ -1279,9 +1409,10 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
       return [{ t: "selected", a: { row: String(row.id) }, c: drawList(n.kids, withRow(ctx, row)) }];
     }
     case "on": {
-      if (!a.event && !a.keys) return (err('<on> needs event="…" (the event a button sends with emit="…") or keys="…" (a key combination).'), []);
-      const asButton: Extract<TNode, { k: "tag" }> = { ...n, name: "button", attrs: n.attrs.filter(([k]) => k !== "event") };
-      return drawTag(asButton, ctx).map((b) => (typeof b === "string" ? b : { ...b, t: "on", a: { ...b.a, ...(a.event ? { event: a.event } : {}) } }));
+      if (!a.event && !a.keys && a.when === undefined) return (err('<on> needs event="…" (the event a button sends with emit="…"), keys="…" (a key combination) or when="{{ … }}" (a condition).'), []);
+      const asButton: Extract<TNode, { k: "tag" }> = { ...n, name: "button", attrs: n.attrs.filter(([k]) => k !== "event" && k !== "when") };
+      const when: Record<string, string> = a.when === undefined ? {} : { when: truthy(a.when.trim() === "false" || a.when.trim() === "0" ? "" : a.when.trim()) ? "true" : "" };
+      return drawTag(asButton, ctx).map((b) => (typeof b === "string" ? b : { ...b, t: "on", a: { ...b.a, ...(a.event ? { event: a.event } : {}), ...when } }));
     }
     case "button": {
       // Only an event sent to the <on> handlers.
@@ -1677,7 +1808,7 @@ export function viewReference(parts: PartMeta[] = [], actions: ActionMeta[] = []
     "LAYOUT: <row gap=2 align=center justify=between wrap=true fill=true>, <col gap=2 fill=true width=120> (fill: takes the room left in a row; width: a fixed width in pixels — a column that lines the rows up), <grid cols=3 gap=3 min=220>, <section title=\"…\" aside=\"… (right of the title)\" collapsible=true open=false scroll=20> (open=wide: open on a wide screen, folded on a phone; scroll: at most 20rem high), <box title=\"…\" tone=muted|good|warn|bad>, <heading level=1|2|3>, <text tone=muted pre=true> (pre: keeps the line breaks), <split ratio=1:2> or <split side=right width=352> (two children side by side — a side column of a fixed width; stacked on a phone), <hr/>, <grow/>. Any element: phone=\"hide\" (not on a phone — a second button for what the toolbar does) or phone=\"only\" (only there).",
     "TEXT: <b> <i> <small> <muted> <code> <mono> <truncate> (one line, cut) <strike> — tip=\"…\" on text, tiles, buttons, rows: a tooltip; <clamp lines=3> <chip color=…> <badge color=…> <bar value= max= fill=\"#hex\"/> <dot color=\"#hex or name\"/> <img src= h=/> <a href=…>, <printonly>…</printonly> (only on paper), <noprint>…</noprint>.",
     "FIGURES: <tile label=\"…\" value=\"{{ … }}\" sub=\"…\" tone=good|warn|bad/> — or <tile …>content under the value (text, a part)</tile>.",
-    "DATA: <list source=\"rows | …\" select=true open=true spacing=roomy empty=\"…\">item template</list>, <cards source=\"…\" cols=3>item template</cards>, <table source=\"rows | …\" columns=\"title, Status, [Due]\" sum=\"Amount\" empty=\"…\"/>, <chart kind=bar|column|line|pie source=\"rows\" group=\"Status\" value=\"Amount\" calc=count|sum|avg/>, <selected empty=\"…\">template of the row picked (a list with select=true picks)</selected>, <field name=\"Status\"/> (a row's property, editable), <datatable source=\"app.list | …\" empty=\"…\"><column label=\"…\" align=right nowrap=true foot=\"{{ … }}\">cell template (the item's fields by name)</column>…</datatable> (a table of any list).",
+    "DATA: <list source=\"rows | …\" select=true open=true spacing=roomy empty=\"…\">item template</list>, <cards source=\"…\" cols=3>item template</cards>, <table source=\"rows | …\" columns=\"title, Status, [Due]\" sum=\"Amount\" empty=\"…\"/>, <chart kind=bar|column|line|pie source=\"rows\" group=\"Status\" value=\"Amount\" calc=count|sum|avg/> (group a date field by=day|week|month|year: in time's order; series=\"Category\": a part per value of a second field — stacked columns and bars, a line each, a legend), <selected empty=\"…\">template of the row picked (a list with select=true picks)</selected>, <field name=\"Status\"/> (a row's property, editable), <datatable source=\"app.list | …\" empty=\"…\"><column label=\"…\" align=right nowrap=true foot=\"{{ … }}\">cell template (the item's fields by name)</column>…</datatable> (a table of any list; sort=true: a click on a column's head sorts by it, again the other way — <column sort=\"{{ Amount }}\"> sorts by that instead of what the cell says, and only such columns sort when the table hasn't sort=true; sorted=\"2:desc\" how it starts).",
     "FUNCTIONS: <def name=\"fact\" args=\"n\" value=\"if(n <= 1, 1, n * fact(n - 1))\"/> makes a function of your own (from there on, also inside what follows): its value is a formula, or a pipe when it has a | ({{ x | trim | upper }}). Call it in a formula — {{ fact(5) }} — or as a filter: {{ 5 | fact }} (the piped value is its first argument). It may call itself, within a budget of calls (a function that calls itself needs a case where it stops). With lists: {{ 10 | range | map('double') | keep('even') }}, {{ rows | reduce('add', 0) }}. A list or an object in the state is kept as JSON text: {{ state.todo | fromjson | push(state.new) | tojson }} (also drop(i), put(key, value), get(key), at(i), first, last, keys, len).",
     "RICH TEXT: <markdown value=\"{{ state.note }}\"/> — Markdown (# headings, **bold**, *italic*, `code`, [text](https://…), - lists, > quotes, ``` code blocks, ---) as the view's own nodes; no HTML.",
     "DRAG AND DROP: <drag value=\"{{ id }}\">what can be picked up</drag> and <drop bind=\"moved\" emit=\"moved\" label=\"Drop here\">the target</drop> — dropping puts the dragged value in state.moved and sends the event, which an <on event=\"moved\" action=\"set\" prop=\"Status\" row=\"{{ state.moved }}\" value=\"Done\"/> handles. Files can be dropped on an <upload>.",
@@ -1688,8 +1819,8 @@ export function viewReference(parts: PartMeta[] = [], actions: ActionMeta[] = []
     "CHAT: <chat chat=\"my-plugin.lesson\" key=\"{{ state.step }}\" title=\"Lesson: …\" first=\"Let's begin.\" begin=\"Start\" placeholder=\"Your message …\" bump=\"n\"/> — the live chat of a plugin's kind (its manifest chats): the plugin's agent with its own rules and tools, one conversation per key. Starts on the first message, shows the session while it speaks, takes the next message; the conversation itself is shown by the view from the database the chat keeps it in (the state named by bump is counted up when it grew, so the data reloads).",
     "CODE WIDGET: <codewidget html=\"{{ Code }}\" (or spec=\"{{ Spec }}\": an exercise set as JSON, made into a widget by the exercise kit) libs=\"chart,katex\" title=\"…\" height=300 report=\"my.flow\" with=\"exercise={{ id }}\" fail=\"my.error-flow\"/> — a widget (HTML/JS, e.g. an exercise the AI wrote) from the data, in the sandboxed frame: no network, no access to Zeff, libraries by name (see the widget libraries). What it reports with zeff.report({ score, correct, total, note, done, answers }) runs the flow `report` with the with= values and score/correct/total/note/done/answers added; something breaking in it runs `fail` with message. With tell=\"my-plugin.lesson\" tellkey=\"{{ state.step }}\" (kind=\"Exercise\" is how the agent is told what it was) the agent of that chat hears the result (at once when it is done, else after a quiet moment) and the error. The flow's answer can carry notice=\"+3 XP\" (shown).",
     "UPLOAD: <upload bind=\"csv\" label=\"Choose a file\" accept=\".csv,.txt,.json\" max=200/> — the file the user picks is read as text (at most max KB) into state.csv, its name in state.csv_name; work on it with filters ({{ state.csv | fromjson | … }}) or hand it to a flow (with=\"text={{ state.csv }}\").",
-    "EVENTS: <button label=\"Save\" run=\"my.save\" emit=\"saved\"/> sends an event after its own action (or alone: <button emit=\"saved\" label=\"…\"/>); <on event=\"saved\" action=\"state\" state=\"msg\" value=\"Saved\"/> handles it — the attributes of a button; <on keys=\"mod+s\" run=\"my.save\"/> handles a key (mod = Ctrl / ⌘; also on a button: keys=\"mod+k\"). Handlers may send events themselves (at most 8 deep).",
-    "STATE: <state name=\"dir\" value=\"owe\"/> (a default), <tabs bind=\"dir\" options=\"owe:Label, owed:Label:3\"/> (:3 — a count beside the label), <select bind=… options=… label=…/>, <search bind=\"q\" placeholder=…/> (use it: rows | search(state.q)), <toggle bind=\"done\" label=…/> (state.done is \"true\"/\"\").",
+    "EVENTS: <button label=\"Save\" run=\"my.save\" emit=\"saved\"/> sends an event after its own action (or alone: <button emit=\"saved\" label=\"…\"/>); <on event=\"saved\" action=\"state\" state=\"msg\" value=\"Saved\"/> handles it — the attributes of a button; <on keys=\"mod+s\" run=\"my.save\"/> handles a key (mod = Ctrl / ⌘; also on a button: keys=\"mod+k\"); <let name=\"left\" value=\"state.end | until\"/><on when=\"{{ left <= 0 }}\" action=\"state\" state=\"ring\" value=\"true\"/> is done each time its condition turns true (with <tick>: when a countdown runs out), not when the view opens with it true. Handlers may send events themselves (at most 8 deep).",
+    "STATE: <state name=\"dir\" value=\"owe\"/> (a default; keep=true: what it is set to is kept in this browser — the view opens as you left it), <tabs bind=\"dir\" options=\"owe:Label, owed:Label:3\"/> (:3 — a count beside the label), <select bind=… options=… label=…/>, <search bind=\"q\" placeholder=…/> (use it: rows | search(state.q)), <toggle bind=\"done\" label=…/> (state.done is \"true\"/\"\").",
     "PANES: <panes><pane title=\"…\" aside=\"3\" width=300>…</pane><pane title=\"…\" flush=true><ask/></pane><pane title=\"…\" width=360>…</pane></panes> — an app's screen: columns as high as the window, each scrolling by itself, one under the other on a phone. width: pixels, without it a column takes the room left. flush: no padding, for what fills its pane (<ask>).",
     "PAGE: <header title=\"…\" subtitle=\"…\" icon=\"📓\">buttons on its right</header> (a view's top, instead of <heading>), <toolbar>search, filters, buttons</toolbar> (a line with a rule under it), <menu label=\"⋯\" tip=\"…\">toggles, buttons</menu> (what is used now and then, behind one button: a dropdown),<cover src= h=200 title= subtitle=/> (a wide picture), <callout tone=info|good|warn|bad title=\"…\" icon=\"…\">text</callout>, <empty icon=\"📭\" title=\"…\" text=\"…\">a button</empty> (nothing here yet: what to do), <kv min=200><pair label=\"…\">value</pair>…</kv> (facts, label over value), <steps><step title=\"…\" state=done|active|todo>text</step>…</steps>, <quote cite=\"…\">text</quote>, <divider label=\"…\"/>, <avatar src= name=\"…\" size=32/> (initials without a picture), <logo name=\"{{ Channel }}\" size=sm|lg/> (a channel's mark: Gmail, Outlook, Teams, WhatsApp, Signal, E-Mail; in <tabs> a label \"logo-gmail Gmail\" shows the mark alone), <todomark/> (in a row: a dot when it flowed into a todo, a badge ☑ n for several), <progress value= max= label=\"…\" tone= show=true/> (show: the percent), <sparkline values=\"1,4,2\" wide=true/>. <tile> also takes icon=\"📈\" trend=\"+12 %\" spark=\"1,4,2\"; <button> also icon=\"➕\".",
     "COLLECTIONS: <gallery source=\"rows\" image=\"{{ Poster }}\" alt=\"{{ title }}\" ratio=2:3|1:1|16:9|3:2 min=150 empty=\"…\">caption</gallery> (a click opens the row), <timeline source=\"rows | sort('Date', 'desc')\" date=\"{{ Date | date }}\" empty=\"…\">item</timeline>, <board source=\"rows\" group=\"Status\" none=\"…\">card</board> (columns by a select or status; a dragged card takes the column's value), <groups source=\"rows\" by=\"Status\"><section title=\"{{ group }}\" aside=\"{{ rows | count }}\"><list source=\"rows\">…</list></section></groups> (what is inside repeats per value: rows is that group's, group its name). page=20 more=\"Show more\" on list, cards, gallery, timeline: that many, and a button for the next.",
@@ -1699,13 +1830,13 @@ export function viewReference(parts: PartMeta[] = [], actions: ActionMeta[] = []
     `BUTTONS: <button action=… label=\"…\" row=\"{{ id }}\" (the row it acts on, outside a row) variant=primary|plain|quiet|danger|link confirm=\"…\" print=true (also on paper) disabled=\"{{ … }}\" wide=true keys=\"N\" (its key, shown in the tooltip)/> — actions: ${Object.entries(ACTIONS)
       .map(([k, v]) => `${k} (${v.what}${v.row ? "; in a row" : ""})`)
       .join(", ")}${actions.length ? `, ${actions.map((x) => `${x.name} (${x.description})`).join(", ")}` : ""}.`,
-    'FLOWS (what the app does on the server — a web request, a lookup, the AI, rows written; built in the Studio or with workspace_save_flow): <button run="flow.name" with="q={{ state.q }}, n=5" into="result" done="Saved." then="state=value" label="…"/> runs a flow (in a row: the row is its `row`), its output in data.result; <data name="films" flow="movie.search" with="query={{ state.q }}" when="{{ state.q }}" debounce=400/> loads a flow\'s output into data.films, again whenever with= changes (when=: only while it is filled) — data.films_status is loading|stale|ok|error (stale: the last answer, kept in the browser, shown while it loads again), data.films_error the error. Show it: {{#each data.films.hits}}…{{/each}}, <datatable source="data.films.hits">. LAMBDAS: <data name="agenda" lambda="agenda.data" with="db={{ db.id }}"/> loads the answer of a lambda the same way (a function lambda of a plugin or of the Studio; it only reads), into data.agenda. LIFECYCLE (a database whose status follows transitions): <button transition="Approve" label="…" note=true/> in a row moves it on (its guard and required fields checked on the server), <transitions history=true/> in <selected>: the row\'s transitions as buttons and its way so far.',
+    'FLOWS (what the app does on the server — a web request, a lookup, the AI, rows written; built in the Studio or with workspace_save_flow): <button run="flow.name" with="q={{ state.q }}, n=5" into="result" done="Saved." then="state=value" label="…"/> runs a flow (in a row: the row is its `row`), its output in data.result; <data name="films" flow="movie.search" with="query={{ state.q }}" when="{{ state.q }}" debounce=400/> loads a flow\'s output into data.films, again whenever with= changes (when=: only while it is filled) — data.films_status is loading|stale|ok|error (stale: the last answer, kept in the browser, shown while it loads again), data.films_error the error. Show it: {{#each data.films.hits}}…{{/each}}, <datatable source="data.films.hits">. LAMBDAS: <data name="agenda" lambda="agenda.data" with="db={{ db.id }}"/> loads the answer of a lambda the same way (a function lambda of a plugin or of the Studio; it only reads), into data.agenda. OTHER DATABASES (an app of several — contacts and their deals, recipes and their ingredients): <data name="deals" do="db.query" with="database=Deals, where.Stage=Open, sort=-Amount, limit=50"/> reads another database\'s rows into data.deals.rows (each { id, title, <field>: value }; data.deals.count), do="db.get" with="row={{ id }}" one row, do="db.schema" its fields; buttons write there as you: <button do="db.insert" with="database=Deals, title={{ state.name }}, values.Stage=Open, values.Amount={{ state.amount }}" done="Added." then="name="/>, do="db.update" with="row={{ id }}, values.Stage=Won", do="db.archive" with="row={{ id }}" — what <data> reads is read again after it. A dotted name is a key of an object (values.Stage=Open, where.Owner=me); a value of JSON is taken as it is (rows=[3,4]). MANY AT ONCE: <check bind="picked"/> in a list\'s item ticks it (its id into state.picked, a JSON list), <check bind="picked" all="rows | …" label="All"/> all of them; then <button do="rows.update" with="rows={{ state.picked }}, values.Status=Done" then="picked=" label="Done ({{ state.picked | fromjson | len }})" disabled="{{ not state.picked }}"/> or do="rows.archive" with="rows={{ state.picked }}" confirm="…". TIME: <tick every=1/> draws the view again every second (1–3600): now.time (HH:MM:SS), now.datetime, now.ms go on — {{ Started | since | clock }} (a stopwatch: 1:02:03), {{ Due | until | duration }} (2 h 5 min), duration(\'min\') for minutes. LIFECYCLE (a database whose status follows transitions): <button transition="Approve" label="…" note=true/> in a row moves it on (its guard and required fields checked on the server), <transitions history=true/> in <selected>: the row\'s transitions as buttons and its way so far.',
     "FILTERS for collections: where(\"Field\", \"value\") or where(\"Field\", \">\", 5) (=, !=, >, <, >=, <=, contains, empty, filled), only(\"Field\", state.s) (where, or all while nothing is picked), sort(\"Field\", \"desc\"), limit(5), search(state.q), count, sum(\"Field\"), avg(\"Field\"), min(\"Field\"), max(\"Field\"), pluck(\"Field\").",
-    "FILTERS for values: host (an address's site), euro (euro(0): whole euros), number(2), percent, hours, date, relative, chip, upper, lower, truncate(40), clamp(3), default(\"—\"), join(\", \"), first, last, count, check, bold, muted, small, code, link, img(80), bar(max), initials.",
+    "FILTERS for values: host (an address's site), euro (euro(0): whole euros), number(2), percent, hours, date, relative, chip, upper, lower, truncate(40), clamp(3), default(\"—\"), join(\", \"), first, last, count, check, bold, muted, small, code, link, img(80), bar(max), initials; time: since and until (seconds from a date or a date with a time to now), clock (seconds as 1:02:03), duration (seconds as 2 h 5 min; duration('min') of minutes), month (2026-11), week (2026-W46).",
     "NAV: <nav title=\"…\"><entry label=\"…\" icon=\"📥\" state=\"scope\" value=\"inbox\" n=\"{{ … }}\" group=\"…\"/>…</nav> — the view's sidebar (beside the view, or — its setting — in the Workspace tree under the database); an entry sets the view's state, opens a row (row=\"{{ id }}\" — in {{#each}} the row by itself) or goes to an address (href). E.g. the newest five: {{#each rows | sort('Date', 'desc') | limit(5)}}<entry label=\"{{ title }}\" group=\"Newest\"/>{{/each}}.",
     "WIDGETS: <widget id=\"plugin.widget\" setting=value/> — a plugin's widget (as on pages).",
     "NAMES OF YOUR OWN: <let name=\"open\" value=\"rows | where('Status', '!=', 'Done')\"/> — a value named for what follows it (siblings after it and what is inside them): {{ open | count }}, <list source=\"open | limit(5)\">. <switch on=\"{{ Status }}\"><case value=\"Done|Closed\">…</case><otherwise>…</otherwise></switch>.",
-    "MORE BLOCKS: <tabset bind=\"t\"><tab id=\"open\" label=\"Open\" n=\"{{ open | count }}\">content</tab><tab id=\"all\" label=\"All\">…</tab></tabset> (tabs with their content; only the one shown is drawn). <dialog bind=\"edit\" title=\"…\" side=center|right wide=true>…</dialog> (open while state.edit is filled: <button action=\"state\" state=\"edit\" value=\"true\" label=\"…\"/>; its ✕ empties it; side=right: a drawer). <input bind=\"n\" type=text|number|date|time|month|color|textarea|email|url label=\"…\" placeholder=\"…\" value=\"start\"/> and <slider bind=\"x\" min=0 max=100 step=5 label=\"…\" unit=\"%\" value=\"50\"/> (state you type or drag: {{ state.n }}, rows | where('Amount', '>', state.x)). <calendar source=\"rows\" date=\"Due\" empty=\"…\">item</calendar> (a month: the items on their days, ‹ › to page months — bind=\"m\" holds the month as 2026-11). <heatmap source=\"rows\" date=\"Date\" value=\"Hours\" calc=count|sum weeks=26 label=\"…\" unit=\"h\"/> (a day by day grid, darker where more happened). <pivot source=\"rows\" rows=\"Owner\" cols=\"Status\" value=\"Amount\" calc=count|sum|avg format=\"euro(0)\" total=true/> (a cross table with totals; format: a value filter). <gauge value=\"{{ … }}\" max=100 label=\"…\" sub=\"…\" tone=good|warn|bad size=96/> (a ring). <rating value=\"{{ … }}\" max=5/> (stars) — in a row <rating prop=\"Stars\"/> sets a number property by a click. <copy text=\"{{ URL }}\" label=\"Copy\"/> (to the clipboard).",
+    "MORE BLOCKS: <tabset bind=\"t\"><tab id=\"open\" label=\"Open\" n=\"{{ open | count }}\">content</tab><tab id=\"all\" label=\"All\">…</tab></tabset> (tabs with their content; only the one shown is drawn). <dialog bind=\"edit\" title=\"…\" side=center|right wide=true>…</dialog> (open while state.edit is filled: <button action=\"state\" state=\"edit\" value=\"true\" label=\"…\"/>; its ✕ empties it; side=right: a drawer). <input bind=\"n\" type=text|number|date|time|month|color|textarea|email|url label=\"…\" placeholder=\"…\" value=\"start\"/> and <slider bind=\"x\" min=0 max=100 step=5 label=\"…\" unit=\"%\" value=\"50\"/> (state you type or drag: {{ state.n }}, rows | where('Amount', '>', state.x)). <calendar source=\"rows\" date=\"Due\" empty=\"…\">item</calendar> (a month: the items on their days, ‹ › to page months — bind=\"m\" holds the month as 2026-11). <heatmap source=\"rows\" date=\"Date\" value=\"Hours\" calc=count|sum weeks=26 label=\"…\" unit=\"h\"/> (a day by day grid, darker where more happened). <pivot source=\"rows\" rows=\"Owner\" cols=\"Status\" value=\"Amount\" calc=count|sum|avg format=\"euro(0)\" total=true/> (a cross table with totals; format: a value filter). <gauge value=\"{{ … }}\" max=100 label=\"…\" sub=\"…\" tone=good|warn|bad size=96/> (a ring). <rating value=\"{{ … }}\" max=5/> (stars) — in a row <rating prop=\"Stars\"/> sets a number property by a click. <copy text=\"{{ URL }}\" label=\"Copy\"/> (to the clipboard). <qr value=\"{{ URL }}\" size=160 label=\"…\"/> (a text as a QR code: a link, a ticket, a Wi-Fi login; at most 331 bytes).",
     "MORE FILTERS: groupby('Status') → items {group, count, items} ({{#each rows | groupby('Owner')}}<section title=\"{{ group }}\" aside=\"{{ count }}\"><list source=\"this.items\">…</list></section>{{/each}}; groupby('Owner', '—', 'count') biggest first), distinct('Tag') (each value once), offset(10), reverse, between('Due', now, '2026-12-31'), where('Status', 'in', 'Open|Waiting'), json (to look at a value).",
     blocks.length
       ? `BLOCKS of your own (use them; workspace_save_block makes more): ${blocks.map((b) => `${blockSignature(b)} — ${b.description || b.title || b.name}${b.params.some((p) => p.help) ? ` (${b.params.filter((p) => p.help).map((p) => `${p.name}: ${p.help}`).join("; ")})` : ""}`).join("; ")}. What stands inside <use>…</use> goes where its <slot/> is.`

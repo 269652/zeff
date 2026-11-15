@@ -87,13 +87,13 @@ export const KERNEL_CONTRACT = {
 
   /** The elements of the view language (workspace/view-template.ts). */
   viewElements: [
-    "a", "ask", "avatar", "b", "badge", "bar", "board", "box", "button", "calendar", "callout", "cards", "case", "chart", "chat", "chip", "clamp",
+    "a", "ask", "avatar", "b", "badge", "bar", "board", "box", "button", "calendar", "callout", "cards", "case", "chart", "chat", "check", "chip", "clamp",
     "code", "codewidget", "col", "column", "copy", "cover", "data", "datatable", "def", "dialog", "divider", "dossier", "dot", "drag", "drop",
     "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
     "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
-    "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "quickadd", "quote", "rating", "row", "schedule", "search", "section",
+    "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "qr", "quickadd", "quote", "rating", "row", "schedule", "search", "section",
     "select", "selected", "setting", "settings", "slider", "slot", "small", "sparkline", "split", "state", "step", "steps", "strike", "subview", "suggested",
-    "switch", "tab", "table", "tabs", "tabset", "text", "theme", "tile", "timeline", "todomark", "toggle", "toolbar", "transitions", "truncate",
+    "switch", "tab", "table", "tabs", "tabset", "text", "theme", "tick", "tile", "timeline", "todomark", "toggle", "toolbar", "transitions", "truncate",
     "upload", "use", "widget",
   ],
 

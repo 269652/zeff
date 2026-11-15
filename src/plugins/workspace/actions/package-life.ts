@@ -82,6 +82,40 @@ export async function bringPackageUpdateAction(id: string) {
     const pkg = await life.offeredPackage(String(id));
     if (!pkg) throw new Error("No newer package is on offer for this one.");
     const r = await life.updateTracked(String(id), pkg);
-    return { done: [`${r.from} → ${r.to}`] };
+    return { done: [`${r.from} → ${r.to}`], open: r.merge?.open ?? 0 };
   });
+}
+
+// ---------------------------------------------------------------------------
+// An update merged like git (package-merge.ts): the spots both you and the update changed, settled one by one
+// ---------------------------------------------------------------------------
+
+/** The open merge of the app a page belongs to (null: none). */
+export async function appMergeOfPageAction(pageId: number) {
+  return run(async () => ({ merge: (await import("../package-merge")).pendingMergeOfPage(Number(pageId)) }));
+}
+
+/** Every app whose update waits for you. */
+export async function appMergesAction() {
+  return run(async () => ({ merges: (await import("../package-merge")).pendingAppMerges() }));
+}
+
+/** A spot settled: keep yours, take the update's, both (a page's text) or a value of your own (`edited`); null: open again. */
+export async function settleAppSpotAction(id: string, n: number, choice: "mine" | "theirs" | "both" | "edited" | null, value?: unknown, note?: string) {
+  return run(async () => ({ merge: (await import("../package-merge")).settleSpot(String(id), Number(n), choice, value, note === undefined ? undefined : String(note)) }));
+}
+
+/** The AI's proposal for a spot — shown to you, not applied. */
+export async function proposeAppSpotAction(id: string, n: number) {
+  return run(async () => (await import("../package-merge")).proposeSpot(String(id), Number(n)));
+}
+
+/** The merge finished (every spot settled — or `rest` for those still open). */
+export async function finishAppMergeAction(id: string, rest?: "mine" | "theirs") {
+  return run(async () => (await import("../package-merge")).finishAppMerge(String(id), rest ? { rest } : {}));
+}
+
+/** The merge aborted: the app as it was before the update. */
+export async function abortAppMergeAction(id: string) {
+  return run(async () => (await import("../package-merge")).abortAppMerge(String(id)));
 }

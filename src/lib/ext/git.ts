@@ -101,11 +101,12 @@ export async function commitsBetween(dir: string, from: string | null, to: strin
  * Git's own three-way merge of one text (git merge-file): what changed between `base` and each side, put together. `conflicts`: how many
  * places both changed differently — there the text holds both, between <<<<<<< mine / ======= / >>>>>>> theirs (with ||||||| base).
  */
-export async function mergeText(base: string, mine: string, theirs: string, opts: { /** Where both changed: mine is kept (no markers; `conflicts` still counts them). */ favorMine?: boolean } = {}): Promise<{ text: string; conflicts: number }> {
-  if (opts.favorMine) {
+export async function mergeText(base: string, mine: string, theirs: string, opts: { /** Where both changed: mine is kept (no markers; `conflicts` still counts them). */ favorMine?: boolean; /** Where both changed: mine, theirs, or both one after the other (union) — no markers. */ favor?: "mine" | "theirs" | "union" } = {}): Promise<{ text: string; conflicts: number }> {
+  const favor = opts.favor ?? (opts.favorMine ? "mine" : null);
+  if (favor) {
     const counted = await mergeText(base, mine, theirs);
     if (!counted.conflicts) return counted;
-    return { text: (await mergeFile(base, mine, theirs, ["--ours"])).text, conflicts: counted.conflicts };
+    return { text: (await mergeFile(base, mine, theirs, [favor === "mine" ? "--ours" : favor === "theirs" ? "--theirs" : "--union"])).text, conflicts: counted.conflicts };
   }
   return mergeFile(base, mine, theirs, []);
 }

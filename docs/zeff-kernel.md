@@ -171,9 +171,11 @@ Each stage ends with tests and docs, like the stages of Zeff in Zeff.
   - a form's settings key by key;
   - a page's text block by block, through git's three-way merge.
 
-  Where both changed the same thing, yours stays and the update's report names it (`conflicts`). A part you left as an older version
-  had it still takes the update. Tested in `tests/merge-parts.test.ts`. **Still open:** a conflict view where you choose per spot
-  (today yours is kept and the spot is named).
+  Where both changed the same thing, the update waits for you like a git merge (`plugins/workspace/package-merge.ts`): everything else is in,
+  yours stands at the spot, and each spot keeps its three sides and its path inside the part. You keep yours, take the update's, both (a
+  page's text), write it yourself (from git's markers) or take the AI's proposal; then finish, or abort back to the save point kept before
+  the update. A text of lines is merged line by line in-process (`mergeLines`, diff3), so only the same lines changed on both sides
+  conflict. A part you left as an older version had it still takes the update. Tested in `tests/merge-parts.test.ts`. *Done (2026-11-15).*
 - **Kernel-version checks.** *Done.* A package says which kernel contract it was made for (`kernel`); one made for a newer contract is
   refused. Before a kernel update, `appsBlockingKernel(version)` names the apps it couldn't run (`tests/package-kernel.test.ts`).
 - **Still open:** the built-ins as packages `zeff.<plugin>`, which is the porting of stages 3–5. Learn already comes from the

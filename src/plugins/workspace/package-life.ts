@@ -13,6 +13,7 @@ import { compareVersions, satisfies } from "./semver";
 import { getInstalled, hashOf, keepSnapshot, listInstalled, MAX_HISTORY, packageIdOf, read, readSnaps, versionsKept, write, type HistoryEntry, type TestResult } from "./package-registry";
 import { migrate } from "./package-migrations";
 import { mergeDoc, mergeRecord, type Merged } from "./merge-parts";
+import { dropAppMerge, openAppMerge, pendingAppMerge, type Part, type SpotDraft } from "./package-merge";
 import { CONTRACT_VERSION, OLDEST_CONTRACT } from "@/lib/kernel/contract";
 import { runPackageTests } from "./package-tests";
 
@@ -160,7 +161,7 @@ function allowRequested(rootId: number, id: string): string[] {
 // Update in place
 // ---------------------------------------------------------------------------
 
-export type UpdateReport = { id: string; from: string; to: string; changes: string[]; kept: string[]; /** Spots both you and the update changed: yours kept (also in `kept`). */ conflicts?: string[]; tests: TestResult[]; /** The flows given what they ask for (allow). */ allowed?: string[] };
+export type UpdateReport = { id: string; from: string; to: string; changes: string[]; kept: string[]; /** Spots both you and the update changed: yours stands there until you settle them (also in `kept`). */ conflicts?: string[]; tests: TestResult[]; /** The flows given what they ask for (allow). */ allowed?: string[]; /** The spots left open: the merge waits for you (package-merge.ts). */ merge?: { open: number } };
 
 /**
  * Properties and views the package adds to a database you changed; yours stay as they are. A view of the package's own takes what the new
@@ -215,15 +216,22 @@ type ItemEnv = {
   base?: PackageItem;
   /** Spots both you and the new version changed: yours kept, named here. */
   conflicts: string[];
+  /** The item's key in the package. */
+  key: string;
+  /** The same spots with their three sides, for the merge that waits (package-merge.ts). */
+  spots: SpotDraft[];
 };
 type PageOf = NonNullable<ReturnType<typeof getPage>>;
 /** One kind of item brought to the new version; true: it was one of this kind. Add a kind of item = add one function here. */
 type Applier = (i: PackageItem, page: PageOf, env: ItemEnv) => boolean | Promise<boolean>;
 
-/** A merge's outcome said in the report: what came from the update, where both changed (yours kept). */
-function report(page: PageOf, r: Merged<unknown>, env: ItemEnv): void {
+/** A merge's outcome said in the report: what came from the update, where both changed (yours stands there until you settle it). */
+function report(page: PageOf, r: Merged<unknown>, env: ItemEnv, part: Part): void {
   if (r.took.length) env.changes.push(`“${page.title}”: ${r.took.length} change${r.took.length === 1 ? "" : "s"} of the update merged with yours`);
-  for (const c of r.conflicts) env.conflicts.push(`“${page.title}” ${c.where}: changed by you and by the update — yours stays`);
+  for (const c of r.conflicts) {
+    env.conflicts.push(`“${page.title}” ${c.where}: changed by you and by the update — yours stands until you settle it`);
+    env.spots.push({ item: env.key, pageId: page.id, title: page.title, part, conflict: c });
+  }
 }
 
 const applyDatabase: Applier = (i, page, env) => {
@@ -240,7 +248,7 @@ const applyDatabase: Applier = (i, page, env) => {
     const older = before.flatMap((b) => (b.kind === "database" && b.schema ? [mapSchema(b.schema, f) as never] : []));
     const r = mergeRecord(mapSchema(base.schema, f) as never, page.schema as never, mapped as never, "", older);
     if (JSON.stringify(r.value) !== JSON.stringify(page.schema)) updateSchema(page.id, r.value as unknown as DbSchema);
-    report(page, r, env);
+    report(page, r, env, "schema");
   } else {
     const merged = mergeSchema(page.schema!, mapped, before.flatMap((b) => (b.kind === "database" && b.schema ? [mapSchema(b.schema, f)] : [])));
     if (merged.added.length) {
@@ -265,7 +273,7 @@ const applyForm: Applier = (i, page, env) => {
   else if (base?.kind === "form" && base.form && mine && typeof mine === "object") {
     const r = mergeRecord(normalizeForm({ ...base.form, dbId: f(base.form.dbId) ?? null }) as never, mine as never, theirs as never, "");
     setPageProps(page.id, { form: normalizeForm(r.value as never) });
-    report(page, r, env);
+    report(page, r, env, "form");
   } else kept.push(`“${page.title}” (form): your version stays`);
   return true;
 };
@@ -286,7 +294,7 @@ const applyFlow: Applier = (i, page, env) => {
     };
     const r = mergeRecord(strip(base.flow), strip(cur), strip(i.flow), "");
     if (r.took.length) saveFlow(page.id, { ...(r.value as typeof cur), permissions: cur.permissions });
-    report(page, r, env);
+    report(page, r, env, "flow");
   } else if (cur) kept.push(`flow “${page.title}”: your version stays`);
   else if (isNew) {
     try {
@@ -309,7 +317,7 @@ const applyContent: Applier = async (i, page, env) => {
       const r = await mergeDoc(sanitizeDoc(was) as never, page.content as never, sanitizeDoc(theirs) as never, "text");
       const doc = sanitizeDoc(r.value as never);
       if (JSON.stringify(doc) !== JSON.stringify(page.content)) updatePage(page.id, { content: doc });
-      report(page, r, env);
+      report(page, r, env, "doc");
     } else kept.push(`“${page.title}”: your version stays`);
   } else if (!untouched) kept.push(`“${page.title}”: your version stays`);
   else {
@@ -369,10 +377,16 @@ export async function updateTracked(id: string, rawPkg: WorkspacePackage, opts: 
   if (!opts.rollback && compareVersions(pkg.version, inst.version) <= 0) throw new Error(`Version ${pkg.version} is not newer than the installed ${inst.version}.`);
   const problems = checkRequirements(pkg);
   if (problems.length) throw new Error(problems.join(" "));
+  // (as git: while a merge is open, the next one waits — settle it or abort it first)
+  // (a roll-back, a save point brought back, an update that replaces your changes: they set every spot themselves — the open merge goes)
+  if (opts.rollback || opts.force) dropAppMerge(id);
+  const open = pendingAppMerge(id);
+  if (open) throw new Error(`The update of “${open.name}” to ${open.to} still waits for you: ${open.spots.filter((x) => !x.choice).length} of ${open.spots.length} spots to settle — finish or abort that merge first.`);
   // The whole app as it is now: a save point, so this update or roll-back can be undone.
+  let before: number | null = null;
   if (!opts.fromSavePoint) {
     try {
-      keepAppState(id, opts.rollback ? `Before going back to ${pkg.version}` : `Before the update to ${pkg.version}`, true);
+      before = keepAppState(id, opts.rollback ? `Before going back to ${pkg.version}` : `Before the update to ${pkg.version}`, true)?.n ?? null;
     } catch {
       /* (a save point that can't be made doesn't stop the update) */
     }
@@ -390,6 +404,7 @@ export async function updateTracked(id: string, rawPkg: WorkspacePackage, opts: 
   // The base of the three-way merge: each item as the version installed until now had it.
   const baseItems = new Map((readSnaps()[id]?.[inst.version]?.items ?? []).map((x) => [String(x.id), x] as const));
   const conflicts: string[] = [];
+  const spots: SpotDraft[] = [];
 
   if (!opts.rollback) {
     // (A page that was yours-untouched stays so after the migration changed it: the new structure still replaces it.)
@@ -425,9 +440,9 @@ export async function updateTracked(id: string, rawPkg: WorkspacePackage, opts: 
       kept.push(`“${page.title}” is a ${page.kind} now, the package says ${i.kind} — left as it is`);
       continue;
     }
-    const before = oldItems.get(key) ?? [];
+    const olderOf = oldItems.get(key) ?? [];
     const base = baseItems.get(key);
-    for (const apply of APPLIERS) if (await apply(i, page, { isNew, untouched, f, changes, kept, before, base, conflicts })) break;
+    for (const apply of APPLIERS) if (await apply(i, page, { isNew, untouched, f, changes, kept, before: olderOf, base, conflicts, key, spots })) break;
     if (isNew && i.widgetState && typeof i.widgetState === "object") for (const [k, v] of Object.entries(i.widgetState).slice(0, 100)) {
       try {
         setPageState(pid, k, v);
@@ -449,6 +464,8 @@ export async function updateTracked(id: string, rawPkg: WorkspacePackage, opts: 
   write(all);
   if (!opts.fromSavePoint) keepSnapshot(id, pkg);
   const allowed = opts.allow ? allowRequested(all[id].rootId, id) : [];
+  // The spots both changed: the merge waits for you there (yours stands meanwhile).
+  const merge = opts.rollback ? null : openAppMerge({ id, name: pkg.name, from: oldVersion, to: pkg.version, savePoint: before }, spots);
   const tests = await runPackageTests(id, pkg);
   if (tests.length) {
     const m = read();
@@ -456,7 +473,7 @@ export async function updateTracked(id: string, rawPkg: WorkspacePackage, opts: 
     h[h.length - 1].tests = tests;
     write(m);
   }
-  return { id, from: oldVersion, to: pkg.version, changes: entry.changes, kept: [...kept, ...conflicts], conflicts, tests, allowed };
+  return { id, from: oldVersion, to: pkg.version, changes: entry.changes, kept: [...kept, ...conflicts], conflicts, tests, allowed, ...(merge ? { merge: { open: merge.spots.length } } : {}) };
 }
 
 /** Back to a version kept: the structure of that version is brought back over yours (migrated data is not undone). */
