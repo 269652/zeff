@@ -18,3 +18,5 @@ apiPoint.contribute("calendar", CALENDAR_API);
 correlationSeries.contribute("calendar", [SLEEP_SERIES]);
 // The proposed appointments of any calendar (the day plan's blocks among them) as proposals: the review queue lists them, decide() does them.
 proposalSources.contribute("calendar", CALENDAR_PROPOSALS);
+// The kernel's reads and writes of the appointment model for plugins' lambdas and flows (appointments.window, appointments.save, todos.add-by-ref …).
+import "./flow-actions";

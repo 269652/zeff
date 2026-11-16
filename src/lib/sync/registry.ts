@@ -358,7 +358,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       let made = 0;
       try {
         (await import("@/lib/calendar/ir")).syncOutlook();
-        made = await (await import("@/lib/calendar/todos")).calendarTodos();
+        made = await (await import("@/lib/calendar/todos")).calendarTodosVia();
       } catch (e) {
         console.warn("[calendar] todos from appointments:", e instanceof Error ? e.message : e);
       }
@@ -529,7 +529,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     run: async () => {
       try {
         (await import("@/lib/calendar/ir")).syncOutlook();
-        const n = await (await import("@/lib/calendar/todos")).calendarTodos();
+        const n = await (await import("@/lib/calendar/todos")).calendarTodosVia();
         return { ok: true, message: t("{n} new todos", { n }) };
       } catch (e) {
         return { ok: false, message: errorMessage(e) };
@@ -543,6 +543,11 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     href: "/calendar",
     get what() { return t("Which appointments each open todo is about — the AI reads them by content (after each briefing)"); },
     run: async () => {
+      // (The Calendar's port is on: the plugin's flow does it — its lambda matches, the flow writes.)
+      if ((await import("@/plugins/state")).onlyThroughPort("calendar")) {
+        const out = (await (await import("@/lib/cases/there")).casesPortFlows(["calendar.relate"]))["calendar.relate"] as { todos?: number; changed?: number } | undefined;
+        return out ? { ok: true, message: t("{todos} todos, {changed} changed", { todos: Number(out.todos) || 0, changed: Number(out.changed) || 0 }) } : { ok: false, message: t("Failed.") };
+      }
       const r = await (await import("@/lib/calendar/relations")).relateAppointments();
       return r.ok
         ? { ok: true, message: `${t("{todos} todos, {changed} changed", { todos: r.todos, changed: r.changed })}${r.error ? ` (${r.error})` : ""}` }
@@ -592,7 +597,8 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       // The circles by rule, the summaries out of date compiled (in the background) — a failure there doesn't fail the step.
       await (await import("@/plugins/people/pulse")).afterBriefing().catch((e) => console.error("[people] after the briefing:", e));
       // The AI's few points before the meetings of the next hours ("What you should know" — it checks its plugin and switch; again only when something changed).
-      await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
+      if ((await import("@/plugins/state")).onlyThroughPort("know")) await (await import("@/lib/cases/there")).casesPortFlows(["know.prepare"]);
+      else await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
       return r.ok ? { ok: true, message: t("{a} aliases, {c} new, {m} merged, {r} relations", { a: r.aliases, c: r.created, m: r.merged, r: r.relations }) } : { ok: false, message: r.error ?? t("Failed.") };
     },
     busy: () => flag("__zeffPeopleNormalize"),

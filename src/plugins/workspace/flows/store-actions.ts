@@ -56,6 +56,33 @@ export const STORE_ACTIONS: FlowAction[] = [
       return (await import("@/lib/ext/stores")).storeDelete(store, obj(i.where));
     },
   },
+  {
+    name: "sql.query",
+    group: "data",
+    label: "SQL over a plugin's stores (read)",
+    summary: "A SELECT over the tables of the plugin's stores (its own, or the built-in's it adopted; a flow: those granted with the permission store) — one statement, values bound by ? (params), at most limit rows (500; 2000 at most): { rows, truncated }. For what a key-by-key store can't do: joins, counts, sums over many rows.",
+    input: [f("sql", "text", { required: true }), f("params", "list"), f("limit", "number", { default: 500 })],
+    output: "{ rows, truncated }",
+    run: async (i, ctx) => {
+      const { sqlQuery } = await import("@/lib/ext/sql");
+      return sqlQuery(ctx.perms.store ?? [], String(i.sql ?? ""), Array.isArray(i.params) ? i.params : [], Number(i.limit) || 500);
+    },
+  },
+  {
+    name: "sql.exec",
+    group: "data",
+    label: "SQL over a plugin's stores (write)",
+    summary: "INSERT, UPDATE, DELETE or REPLACE statements over the tables of the stores the flow may use (permission store), in one transaction — statements: [{ sql, params }], values bound by ?: { changes: [rows each changed], lastId }.",
+    input: [f("statements", "json", { required: true })],
+    output: "{ changes, lastId }",
+    writes: true,
+    run: async (i, ctx) => {
+      const list = (Array.isArray(i.statements) ? i.statements : []) as { sql?: unknown; params?: unknown }[];
+      if (ctx.dryRun) return { changes: [], lastId: [], dryRun: list.length };
+      const { sqlExec } = await import("@/lib/ext/sql");
+      return sqlExec(ctx.perms.store ?? [], list.map((s) => ({ sql: String(s.sql ?? ""), params: Array.isArray(s.params) ? s.params : [] })));
+    },
+  },
 ];
 
 // The kernel's own: always there (read with the other flow actions — flows/actions.ts flowActions()).

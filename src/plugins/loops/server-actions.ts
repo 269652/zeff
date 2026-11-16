@@ -11,6 +11,18 @@ import type { LoopOp } from "./store";
 export type ShownLoop = Loop & { personHref: string };
 export type LoopsAnswer = { ok: true; loops: ShownLoop[]; counts: { mine: number; theirs: number; overdue: number } } | { ok: false; error: string; off?: boolean };
 
+/** The plugin stands in for the built-in (state.ts PROVIDED_BY): its flow does it, and the loops are worked out again. False: the built-in's own code does it. */
+async function decideViaPort(ref: string, op: string): Promise<boolean> {
+  if (!(await import("@/plugins/state")).onlyThroughPort("loops")) return false;
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const r = await runFlow("loops.decide", { ref, op });
+  if (r.status !== "done") throw new Error(r.error ?? "That didn't work.");
+  const out = r.output as { ok?: boolean; error?: string } | undefined;
+  if (out && out.ok === false) throw new Error(out.error ?? "That didn't work.");
+  await (await import("@/lib/ext/snapshots")).refreshLambdaSnapshot("loops-ext", "loops.all");
+  return true;
+}
+
 const off = () => (isInstalled("loops") ? null : t("The Open loops plugin is not installed (Menu → Plugins)."));
 
 async function hrefs(): Promise<(id: number | null) => string> {
@@ -56,6 +68,7 @@ export async function decideLoopAction(ref: string, op: LoopOp): Promise<{ ok: t
   try {
     const no = off();
     if (no) return { ok: false, error: no };
+    if (await decideViaPort(String(ref).slice(0, 400), op)) return { ok: true };
     const { decideLoop } = await import("./store");
     const r = decideLoop(String(ref).slice(0, 400), op);
     return r.ok ? { ok: true } : { ok: false, error: r.error };
@@ -69,7 +82,10 @@ export async function loopFormAction(fd: FormData): Promise<void> {
   const { revalidatePath } = await import("next/cache");
   const { redirect } = await import("next/navigation");
   const op = String(fd.get("op") ?? "");
-  if (!off() && (op === "later" || op === "close")) (await import("./store")).decideLoop(String(fd.get("ref") ?? "").slice(0, 400), op);
+  if (!off() && (op === "later" || op === "close")) {
+    const ref = String(fd.get("ref") ?? "").slice(0, 400);
+    if (!(await decideViaPort(ref, op))) (await import("./store")).decideLoop(ref, op);
+  }
   revalidatePath("/heute");
   redirect(String(fd.get("to") ?? "") || "/heute");
 }

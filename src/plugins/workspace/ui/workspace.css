@@ -1087,6 +1087,14 @@
   flex: 1 1 14rem;
   min-width: 0;
 }
+/* A row that wraps (a dashboard's tiles) is a grid of equal tiles: as many to a row as fit, none stretched over the rest of a short last row (it was 3 + 1 wide). */
+.ws-flex[data-dir="row"][data-wrap="true"] > .ws-flex-body > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+}
+.ws-flex[data-dir="row"][data-wrap="true"] > .ws-flex-body > div > * {
+  flex: none;
+}
 .ws-flex[data-dir="col"] > .ws-flex-body > div > * {
   min-width: 0;
 }

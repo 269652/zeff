@@ -5,9 +5,9 @@ import { retagAll } from "./retag";
 import { addItems, addSources, getPrefs, listSources, setSimilar, unreadForMatching } from "./store";
 import { getTaste, matchTaste, seedFromHistory, tasteReady, updateTaste, type Taste, type TasteDeps } from "./taste";
 import { syncNews, type NewsSyncDeps } from "./sync";
+import { PLAN_INSTRUCTIONS, PLAN_SCHEMA } from "./discover-prompt";
+export { PLAN_INSTRUCTIONS };
 
-/** Its instructions — a page of System → Prompts. */
-export const PLAN_INSTRUCTIONS = "Du planst die Suche nach neuen Nachrichten für eine Person. Unten steht eine Beschreibung ihres Nachrichten-Geschmacks.\nGib 10–12 konkrete Suchanfragen (2–5 Wörter, gern englisch, wenn sie englische Quellen mag) für eine Nachrichtensuche — nach Forschung und Berichten, nie nach Produkten, Shopping oder Werbung: die Hauptthemen aus verschiedenen Blickwinkeln und 2–3 Nachbarthemen, die sie überraschen und trotzdem interessieren könnten. Keine Anfragen, die schon zu den letzten gehörten.";
 
 /**
  * Discover: from the written description of your taste —
@@ -27,8 +27,6 @@ export const getDiscoverStatus = (): DiscoverStatus => g.__zeffNewsDiscover ?? i
 const set = (p: Partial<DiscoverStatus>) => (g.__zeffNewsDiscover = { ...getDiscoverStatus(), ...p });
 
 type Plan = { queries?: string[] };
-const SCHEMA = { type: "object", properties: { queries: { type: "array", items: { type: "string" }, description: "10–12 Suchanfragen (2–5 Wörter, deutsch und englisch gemischt) für eine Nachrichtensuche: die Hauptthemen und 2–3 Nachbarthemen, die überraschen dürfen." } }, required: ["queries"] };
-
 export function planPrompt(taste: Pick<Taste, "text" | "likes" | "avoids">, interests: string[], recent: string[]): string {
   return [
     promptText("news-plan", PLAN_INSTRUCTIONS),
@@ -75,7 +73,7 @@ async function run(deps: DiscoverDeps): Promise<DiscoverStatus> {
         const { isInstalled } = await import("@/plugins/state");
         if (!isInstalled("llm")) return null;
         const { runAi } = await import("@/lib/ai");
-        return async (prompt: string) => (await runAi<Plan>(prompt, SCHEMA, { task: "news-discover", timeoutMs: 3 * 60000, maxBudgetUsd: 0.2 })).output;
+        return async (prompt: string) => (await runAi<Plan>(prompt, PLAN_SCHEMA, { task: "news-discover", timeoutMs: 3 * 60000, maxBudgetUsd: 0.2 })).output;
       })());
     if (ask) queries = ((await ask(planPrompt(taste, interests, recent))).queries ?? []).map((q) => String(q).trim()).filter((q) => q.length >= 3 && q.length <= 80);
   } catch {

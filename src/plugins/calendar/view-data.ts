@@ -14,6 +14,11 @@ export async function calendarViewData(viewIn: string | undefined, dayIn: string
   const view: ViewKind = isView(viewIn) ? viewIn : "week";
   const day = dayIn && /^\d{4}-\d{2}-\d{2}$/.test(dayIn) ? dayIn : dayOf(new Date());
   const { from, to } = viewRange(view, day);
+  return { view, day, ...(await calendarWindow(from, to)) };
+}
+
+/** The calendars, their appointments between two days ([from, to)) and those todos propose in that time — what any screen of the calendar reads (the flow action appointments.window). */
+export async function calendarWindow(from: string, to: string): Promise<Omit<CalendarData, "view" | "day">> {
   // The entries with a start time as a calendar of their own ("Done"): read again from them for what is shown.
   if (isInstalled("zeiterfassung")) (await import("@/lib/calendar/done")).syncDoneCalendar(from, to);
   // Google's calendars you may write to (and Google holds the right): changed here, through Google's API.
@@ -38,5 +43,5 @@ export async function calendarViewData(viewIn: string | undefined, dayIn: string
       }),
     )
     .filter((p) => p.start < to && p.end > from);
-  return { view, day, calendars, events, proposed, now: stampOf(new Date()), canSync: isInstalled("google-calendar") };
+  return { calendars, events, proposed, now: stampOf(new Date()), canSync: isInstalled("google-calendar") };
 }

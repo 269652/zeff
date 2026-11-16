@@ -11,6 +11,7 @@ import { closeTodosOfDoneTickets, reconcileTodos } from "../todos/store";
 import { finishRun, getBoardSettings, lastGoodRun, startRun } from "./store";
 import { accountFlag, setAccountFlag } from "@/lib/sync/account-flags";
 import { localDay } from "@/lib/dates";
+import { financesThere } from "@/lib/finances/there";
 
 /** What a run is doing right now — one at a time per account (each runs its own; kept across the server's module copies: lib/sync/account-flags.ts). */
 type BoardRunNow = { id: number; phase: "sync" | "jira" | "ai" | "saving" | "mailtodos" | "mails" | "notetodos" | "notes" | "calendarmatch" | "calendartodos" | "documents" | "docrelations" | "knowledge" | "people" | "briefingdb" | "autoactions"; since: number; provider: string };
@@ -234,6 +235,7 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
             await (await import("@/lib/cases/there")).casesAfterBookings(localDay());
             // Your income as the knowledge read it off your statements (it compiles them as a source of its own).
             if ((await import("@/plugins/state")).isInstalled("finances")) await (await import("@/plugins/finances/income")).refreshIncome();
+            else if (financesThere()) await (await import("@/lib/cases/there")).casesPortFlows(["finances.refresh-income"]);
           } catch (e) {
             console.error("[cases] after the briefing:", errorMessage(e));
           }
@@ -258,7 +260,8 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
         await syncAndWait("tododupes");
         // Last: the todos without a button get ready actions (with the mails related to them in their context).
         setAccountFlag("__zeffBoardRun", { id, phase: "autoactions", since: t0, provider });
-        await syncAndWait("autoactions");
+        if ((await import("@/plugins/state")).stepAvailable("autoactions")) await syncAndWait("autoactions");
+        else await (await import("@/lib/cases/there")).casesPortFlows(["autoactions.review"]);
       } catch (e) {
         if (!kept) finishRun(id, { status: "error", error: stop.signal.aborted ? ABORTED : errorMessage(e), durationMs: Date.now() - t0 });
         else if (!stop.signal.aborted) console.error("[boards] a step after the Lage failed:", errorMessage(e));

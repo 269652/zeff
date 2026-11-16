@@ -260,14 +260,26 @@ A lifecycle lives in the database's schema (`DbSchema.lifecycle`: `field`, `tran
 `call`, `return`, `fail`. **Actions (24):** `http.request`, `web.read`, `web.html`, `web.search`, `extract.css`,
 `extract.regex`, `ai.extract`, `ai.ask`, `ai.classify`, `lookup.search`, `lookup.details`, `lambda.invoke`,
 `db.ensure`, `db.query`, `db.get`, `db.insert`, `db.update`, `db.archive`, `row.transition`, `todo.add`,
-`signal.send`, `api.call`, `notify`, `time.now`. **Triggers:** `manual`; `schedule` (`everyMinutes` with optional
-`from`/`to`, or `at` + `days`); `event` (`row.added`, `row.changed`, `row.removed`, `signal`, `form.submitted`,
-`transition`, filtered by `db`, `field`, `equals`, `name`).
+`signal.send`, `api.call`, `notify`, `time.now` — and among the others `meta.read` / `meta.run` (Zeff's structure; `page.read`
+gives a page's title, icon, cover, parent and its text as the editor keeps it — `doc` —, for a row its fields; `page.create` /
+`page.update` take `doc` as well as Markdown, a `cover`, a `parent` to move to and a `rev` to write only if the page is unchanged
+since; `schema` gives each option with its id as `choices`; a database a flow makes there is one it may write and change),
+`files.save` (a picture from the web kept among the page pictures), `files.keep-page` (a page's web pictures and cover kept, the
+page pointing at the copies — another service's links that expire; needs `pages`), `files.read` (a kept picture as bytes, for a
+lambda handing it on). **Triggers:** `manual`; `schedule` (`everyMinutes` with optional `from`/`to`, or `at` + `days`); `event`
+(`row.added`, `row.changed`, `row.removed`, `signal`, `form.submitted`, `transition`, `ledger.changed`, and `page.added`,
+`page.changed`, `page.removed` for any page — its title, text, icon, cover or place; filtered by `db`, `field`, `equals`, `name`
+and `under` — a page's id or a package's `@pkg.iN`: only what is at or below it —; `settle: n` runs once n seconds after the last
+such event of a page or row); `watch` (`lambda`, `everySeconds` ≥ 10: the lambda is asked `{ since }` — its last `token` — and the
+flow runs only when it answers `{ changed: true }`, with its `input`; a sync kept close to live without a run every few seconds).
+A flow never starts itself through an event its own run caused. A lambda's `fetch` sends bytes, Blobs and forms (multipart) as
+they are.
 
 ### Sync, jobs & AI tasks
 
 - No sync step of its own. The sync scheduler calls `runDueFlows()` (scheduled flows and runs whose wait is over)
-  on every tick while Workspace is installed (`src/lib/sync-scheduler.ts`).
+  on every tick while Workspace is installed (`src/lib/sync-scheduler.ts`), and `runDueWatches()` every five seconds (the
+  watch triggers that are due; not in safe mode).
 - No `llm-tasks.ts`. AI is used by flows' `ai.*` nodes (only with the `ai` permission), by the copilot and by
   "Describe it" (both go through the Workspace assistant, `askWorkspace`).
 

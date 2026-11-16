@@ -60,7 +60,7 @@ for (const c of CONNECTORS) {
     requested: { sync: [c.builtin] },
     triggers: [{ kind: "schedule", everyMinutes: 15, from: "08:00", to: "19:00" }],
     // (a mail plugin's flow stands beside the shared mail step, replacing none of it)
-    sync: { label: c.name, what: c.what, ...("shared" in c ? {} : { replaces: c.builtin }) },
+    sync: { label: c.name, what: c.what, ...("shared" in c ? {} : { replaces: (c as { builtin: string }).builtin }) },
   };
   const pkg = {
     format: 1,

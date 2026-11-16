@@ -8,8 +8,24 @@ import type { FieldSpec } from "./types";
  * Reading only. Server only.
  */
 
+const text = (v: unknown): string => (v == null ? "" : String(v));
 const f = (name: string, type: FieldSpec["type"], extra: Partial<FieldSpec> = {}): FieldSpec => ({ name, type, ...extra });
 const strings = (v: unknown, max: number): string[] => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => String(x).trim()).filter(Boolean).slice(0, max);
+
+/** Cells as a form gives them: a number field's text made a number (a comma for the point; empty: none), an empty date or text: none. */
+async function formCells(dbId: number, cells: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { getDatabase } = await import("@/plugins/workspace/store");
+  const props = getDatabase(dbId)?.schema.properties ?? [];
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(cells)) {
+    const p = props.find((x) => x.id === k);
+    if (p?.type === "number") {
+      const n = v === "" || v == null ? null : Number(String(v).replace(",", "."));
+      out[k] = n !== null && Number.isFinite(n) ? n : null;
+    } else out[k] = v === "" ? null : v;
+  }
+  return out;
+}
 
 export const DATA_ACTIONS: FlowAction[] = [
   {
@@ -269,6 +285,22 @@ export const DATA_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "metrics.stats",
+    group: "data",
+    label: "Kennzahlen as a figure widget's tiles",
+    summary: 'The tiles of a figure widget: the Kennzahlen named in names (comma-separated; empty: picks), each { name, detail? } of picks the Kennzahl and the one shown under it — with the goal, the tone and the link the figure widgets give. Gives widget data { kind: "stats", tiles } or { kind: "error", message: empty }.',
+    input: [f("names", "text"), f("picks", "json", { required: true }), f("empty", "text")],
+    output: "widget data",
+    run: async (i) => {
+      const { metricStats } = await import("@/plugins/workspace/widgets-metrics");
+      const picks = (Array.isArray(i.picks) ? i.picks : []).flatMap((x) => {
+        const o = x && typeof x === "object" ? (x as Record<string, unknown>) : {};
+        return typeof o.name === "string" && o.name ? [{ name: o.name, ...(typeof o.detail === "string" && o.detail ? { detail: o.detail } : {}) }] : [];
+      });
+      return metricStats(i.names, picks, text(i.empty) || "No metrics yet.");
+    },
+  },
+  {
     name: "workspace.value-sources",
     group: "data",
     label: "The databases that publish a value type",
@@ -292,13 +324,87 @@ export const DATA_ACTIONS: FlowAction[] = [
             dbId: ref.dbId,
             propId: ref.propId,
             title: getPage(ref.dbId)?.title || "",
-            properties: d.schema.properties.map((p) => ({ id: p.id, name: p.name, type: p.type })),
+            properties: d.schema.properties.map((p) => ({ id: p.id, name: p.name, type: p.type, ...(p.options ? { options: p.options.map((o) => o.name) } : {}) })),
+            /** The extension sources its pipeline follows (a source id each). */
+            follows: (d.schema.pipeline?.steps ?? []).flatMap((st) => (st.kind === "source" && typeof (st as { ext?: unknown }).ext === "string" ? [String((st as { ext?: unknown }).ext)] : [])),
             running: Object.fromEntries(refRows(ref).map((r) => [String(r.rowId), r.value])),
             rows: rawRows(ref.dbId).map((r) => ({ id: r.id, title: r.title, cells: r.cells })),
           },
         ];
       });
       return { sources };
+    },
+  },
+  {
+    name: "db.set-cells",
+    group: "data",
+    label: "Set a row's cells by field id",
+    summary: "A row's fields set by their ids — cells { <field id>: value } as kept (a number, a date as text, a person field's ids, a select's option id; null clears), title. For code that knows the fields (the names change with the language).",
+    input: [f("row", "row", { required: true }), f("cells", "json", { required: true }), f("title", "text")],
+    output: "{ id }",
+    writes: true,
+    needs: ["write"],
+    run: async (i, ctx) => {
+      const { getPage, setCell, updatePage } = await import("@/plugins/workspace/store");
+      const id = Number(i.row);
+      const page = getPage(id);
+      if (!page?.dbId) throw new Error(`There is no row ${text(i.row)}.`);
+      ctx.canWrite(page.dbId);
+      const cells = await formCells(page.dbId, i.cells && typeof i.cells === "object" && !Array.isArray(i.cells) ? (i.cells as Record<string, unknown>) : {});
+      for (const [k, v] of Object.entries(cells)) setCell(id, k, v ?? null);
+      if (text(i.title).trim()) updatePage(id, { title: text(i.title).trim().slice(0, 500) });
+      return { id };
+    },
+  },
+  {
+    name: "db.add-cells",
+    group: "data",
+    label: "Add a row with its cells by field id",
+    summary: "A new row in a database (by its id): title, cells { <field id>: value } as kept. For code that knows the fields (the names change with the language).",
+    input: [f("database", "db", { required: true }), f("title", "text", { required: true }), f("cells", "json")],
+    output: "{ id }",
+    writes: true,
+    needs: ["write"],
+    run: async (i, ctx) => {
+      const { addRow } = await import("@/plugins/workspace/store");
+      const db = Number(i.database);
+      ctx.canWrite(db);
+      const title = text(i.title).trim().slice(0, 300);
+      if (!title) throw new Error("db.add-cells: a row needs a title.");
+      return { id: addRow(db, { title, cells: await formCells(db, i.cells && typeof i.cells === "object" && !Array.isArray(i.cells) ? (i.cells as Record<string, unknown>) : {}) }) };
+    },
+  },
+  {
+    name: "pref.set",
+    group: "data",
+    label: "Set a preference a port may keep",
+    summary: "A preference of Zeff that a port's built-in kept as its own (lib/ext/stores.ts ADOPTABLE_PREFS), set for the plugin named: plugin, key, value (null: cleared). Any other key is refused.",
+    input: [f("plugin", "text", { required: true }), f("key", "text", { required: true }), f("value", "json")],
+    output: "{ ok }",
+    writes: true,
+    run: async (i) => {
+      const plugin = String(i.plugin ?? "").trim();
+      const key = String(i.key ?? "").trim();
+      const { ADOPTABLE_PREFS } = await import("@/lib/ext/stores");
+      const { isEnabled } = await import("@/lib/ext/registry");
+      if (!isEnabled(plugin) || !(ADOPTABLE_PREFS[plugin] ?? []).includes(key)) throw new Error(`The preference “${key}” isn't one this plugin may keep.`);
+      const { setPref } = await import("@/lib/prefs");
+      setPref(key, i.value === undefined ? null : i.value);
+      return { ok: true };
+    },
+  },
+  {
+    name: "knowledge.profile",
+    group: "data",
+    label: "What the knowledge knows about you as figures",
+    summary: "The figures the knowledge server read off your sources (your net income a month …), one key or all, the newest month first: { facts: [{ key, period, amount, text, pageTitle }] }. Fails when no knowledge server answers.",
+    input: [f("key", "text")],
+    output: "{ facts }",
+    run: async (i) => {
+      const { isInstalled } = await import("@/plugins/state");
+      if (!isInstalled("knowledge")) throw new Error("There is no knowledge server.");
+      const { knowledgeProfile } = await import("@/plugins/knowledge/client");
+      return { facts: await knowledgeProfile(text(i.key) || undefined) };
     },
   },
   {

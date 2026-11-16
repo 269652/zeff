@@ -10,7 +10,7 @@ export const AUTO_ACTIONS = new Set(["db.query", "db.get", "db.schema", "mail.th
 /** What a button may do (<button do="…">): a reply drafted or sent (confirm= asks first), mails archived or marked read, a field set on
  * rows, a new inbox, the local AI tested and its settings saved, rows of any database added, changed and moved to the trash (db.add,
  * db.insert, db.update, db.archive; many at once: rows.update, rows.archive) — and all a view may do by itself. */
-export const USER_ACTIONS = new Set(["db.query", "db.get", "db.schema", "db.add", "db.insert", "db.update", "db.archive", "rows.update", "rows.archive", "mail.thread", "mail.unread", "row.reply.draft", "row.op", "mail.archive", "mail.archive-read", "mail.mark-read", "rows.set", "mail.gmail-change", "zeff.grants", "mail.inbox-templates", "mail.new-inbox", "localai.config", "localai.probe", "localai.test", "localai.save", "bank.status", "bank.save", "bank.auth", "bank.sync", "bank.import"]);
+export const USER_ACTIONS = new Set(["db.query", "db.get", "db.schema", "db.add", "db.insert", "db.update", "db.archive", "db.set-cells", "db.add-cells", "pref.set", "rows.update", "rows.archive", "mail.thread", "mail.unread", "row.reply.draft", "row.op", "mail.archive", "mail.archive-read", "mail.mark-read", "rows.set", "mail.gmail-change", "zeff.grants", "mail.inbox-templates", "mail.new-inbox", "localai.config", "localai.probe", "localai.test", "localai.save", "bank.status", "bank.save", "bank.auth", "bank.sync", "bank.import"]);
 
 /**
  * What a view's with= gives (texts by name) made into what the action takes: a dotted name is a key of an object (where.Status=Open,
