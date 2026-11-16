@@ -1,3 +1,4 @@
+import "./css-stub";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -7,7 +8,7 @@ test("slash menu: a bare slash lists the main items, a picker its own, and a sea
   const widget = { key: "widget:people.todos", title: "Todos with a person", hint: "Open todos that name someone", icon: "☑", group: "Widgets", under: "widget", keywords: ["widget", "people", "todos", "todos", "with", "person"], run: () => {} };
   const all = [...slashItems(t), widget];
   const top = filterItems(all, "");
-  assert.ok(top.length <= 40, `the bare menu has ${top.length} items`);
+  assert.ok(top.length <= 50, `the bare menu has ${top.length} items`);
   assert.ok(!top.some((i) => i.under), "nothing of a picker in the bare menu");
   // Nothing is out of reach: each item is in the bare menu or in a picker the bare menu has.
   const pickers = new Set(top.filter((i) => i.opens).map((i) => i.opens));

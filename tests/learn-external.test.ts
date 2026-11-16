@@ -242,20 +242,21 @@ test("a newer version of the plugin updates the app in place: yours stays, the d
   store.updateSchema(stepsId, { ...sch, properties: [...sch.properties, { id: "mine", name: "My note", type: "text" }] });
   const file = path.join(PLUGINS, "learn-ext", "learn.package.json");
   const next = JSON.parse(fs.readFileSync(file, "utf8"));
+  const was = next.version as string; // (the version the plugins repository has now)
   next.version = "1.4.0";
   next.items = next.items.map((i: { id: string; schema?: { properties: Record<string, unknown>[] } }) => {
     if (i.id === "i3" && i.schema) i.schema.properties.push({ id: "notes", name: "Notes", type: "text" });
     if (i.id === "i4" && i.schema) i.schema.properties = i.schema.properties.map((p) => (p.id === "last" ? { ...p, name: "LastReviewed" } : p));
     return i;
   });
-  next.migrations = [{ from: "1.3.0", to: "1.4.0", steps: [{ op: "rename_property", db: "i4", from: "Last", to: "LastReviewed" }] }];
+  next.migrations = [{ from: was, to: "1.4.0", steps: [{ op: "rename_property", db: "i4", from: "Last", to: "LastReviewed" }] }];
   fs.writeFileSync(file, JSON.stringify(next));
   const status = await life.packageStatus();
-  assert.deepEqual([status[0].version, status[0].offered, status[0].updateAvailable], ["1.3.0", "1.4.0", true]);
+  assert.deepEqual([status[0].version, status[0].offered, status[0].updateAvailable], [was, "1.4.0", true]);
   await life.updateTracked("learn-ext", (await life.offeredPackage("learn-ext"))!);
   const steps = store.getPage(stepsId)!.schema!.properties.map((p) => p.name);
   assert.ok(steps.includes("Notes") && steps.includes("My note"), steps.join(","));
   const cards = store.getPage(inst.map.i4)!.schema!.properties.map((p) => p.name);
   assert.ok(cards.includes("LastReviewed") && !cards.includes("Last"));
-  assert.deepEqual(life.getInstalled("learn-ext")!.history.map((e) => [e.action, e.to]), [["install", "1.3.0"], ["update", "1.4.0"]]);
+  assert.deepEqual(life.getInstalled("learn-ext")!.history.map((e) => [e.action, e.to]), [["install", was], ["update", "1.4.0"]]);
 });
