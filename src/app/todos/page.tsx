@@ -1,19 +1,24 @@
 import type { Metadata } from "next";
-import { t } from "@/lib/i18n/server";
 import { connection } from "next/server";
-import { LagePage, type LageSearch } from "@/components/boards/LagePage";
+import { t } from "@/lib/i18n/server";
+import { redirect } from "@/lib/redirect";
 import { PluginNotInstalled } from "@/components/PluginNotInstalled";
 import { isInstalled } from "@/plugins/state";
 
-export async function generateMetadata({ searchParams }: { searchParams: Promise<LageSearch> }): Promise<Metadata> {
-  return { title: (await searchParams).part === "tickets" ? t("Tickets") : t("Todos") };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: t("Todos") };
 }
 
-/** Todos (Todos plugin): your todos from the Ticket-Lage — done, activity —, the same per ticket (?part=tickets, Tickets plugin) and the recap of a day. */
-export default async function TodosPage({ searchParams }: { searchParams: Promise<LageSearch> }) {
+/**
+ * Todos live in the Workspace: its page "Todos" shown by the Todos plugin's view (zeff-plugins/plugins/todos-ext). This is the way in the links have always used
+ * (/todos?todos=done, /todos?part=tickets, /todos?view=recap&day=…): it opens that page with the tab set. Without the plugin: the Plugins page.
+ */
+export default async function TodosPage({ searchParams }: { searchParams: Promise<{ todos?: string; part?: string; view?: string; day?: string; ticket?: string }> }) {
   await connection();
   if (!isInstalled("todos")) return <PluginNotInstalled id="todos" />;
-  const sp = await searchParams;
-  const tickets = sp.part === "tickets" && isInstalled("tickets");
-  return LagePage({ searchParams: Promise.resolve(sp), part: tickets ? "tickets" : "todos" });
+  const { todosApp, todosState } = await import("@/plugins/workspace/todos-app");
+  const id = todosApp();
+  if (!id) return redirect("/plugins");
+  const q = todosState(await searchParams);
+  return redirect(`/workspace/${id}${q ? `?${q}` : ""}`);
 }

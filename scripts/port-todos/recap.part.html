@@ -36,6 +36,7 @@
 {{#if nFacts}}
 <section title="Evidence" aside="{{ nFacts }}" collapsible=true>
 <col gap=1>
+{{#if nBadges}}<row gap=1 wrap=true>{{#each badges}}<hover width=520><chip>{{ label }}{{#if headline}}: {{ headline }}{{/if}}</chip><hovercard><small><muted>{{ who }} {{ when }}</muted></small><b>{{ headline }}</b><text pre=true>{{ text }}</text></hovercard></hover>{{/each}}</row>{{/if}}
 {{#each facts}}<row gap=2 wrap=false align=baseline><small><muted>{{ time }}</muted></small><chip>{{ kind }}{{#if hours}} {{ hours }}{{/if}}</chip><small>{{ text }}</small></row>{{/each}}
 </col>
 </section>

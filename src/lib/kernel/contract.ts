@@ -90,7 +90,7 @@ export const KERNEL_CONTRACT = {
   viewElements: [
     "a", "ask", "avatar", "b", "badge", "bar", "board", "box", "button", "calendar", "callout", "cards", "case", "chart", "chat", "check", "chip", "clamp",
     "code", "codewidget", "col", "column", "copy", "cover", "data", "datatable", "def", "dialog", "divider", "dossier", "dot", "drag", "drop",
-    "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "girocode", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
+    "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "girocode", "graph", "grid", "groups", "grow", "header", "heading", "hover", "hovercard", "heatmap",
     "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "media", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
     "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "qr", "quickadd", "quote", "rating", "row", "rowtimeline", "schedule", "search", "section",
     "select", "selected", "setting", "settings", "slider", "slot", "small", "sources", "sparkline", "speak", "split", "state", "step", "steps", "stories", "strike", "subview", "suggested",

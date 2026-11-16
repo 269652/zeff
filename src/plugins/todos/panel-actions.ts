@@ -291,6 +291,149 @@ export const PANEL_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "todos.done-browser-op",
+    group: "todos",
+    label: "An action done in your browser",
+    summary: "An action you did yourself in the browser (the appointment saved in Outlook, the mail sent) taken off the todo and noted on it; a mail that answers or a payment is the todo done: { ok, message, error }. Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("index", "number", { required: true })],
+    output: OUT,
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "todos");
+      if (ctx.dryRun) return done();
+      const r = await (await import("./engine")).doneBrowserOpAsYou(Number(i.id), Number(i.index));
+      return r.ok ? done(r.message) : fail(r.error ?? "");
+    },
+  },
+  {
+    name: "todos.ask-ticket",
+    group: "todos",
+    label: "Ask about a ticket",
+    summary: "A question about a ticket answered from what Zeff knows (its Lage, todos, comments, mails, the knowledge base): { ok, answer, sources, id, error }. Needs the flow's permissions todos, ai and api.",
+    input: [f("ticket", "text", { required: true }), f("question", "text", { required: true })],
+    output: "{ ok, answer, sources, id, error }",
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "todos", "api");
+      if (!ctx.perms.ai) throw new Error("This flow may not use the AI — grant it the permission “ai”.");
+      if (ctx.dryRun) return { ok: true, answer: "", sources: [], id: 0, error: "" };
+      try {
+        const item = await (await import("@/lib/runs/ticket-chat")).askTicket(String(i.ticket ?? ""), String(i.question ?? ""));
+        return { ok: true, answer: item.a, sources: item.sources, id: item.id, error: "" };
+      } catch (e) {
+        return { ok: false, answer: "", sources: [], id: 0, error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+  {
+    name: "todos.dismiss-chat",
+    group: "todos",
+    label: "Take an answer out of a ticket's chat",
+    summary: "An answer of a ticket's chat taken out of its context (its id). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "todos");
+      if (!ctx.dryRun) (await import("@/lib/runs/ticket-chat")).dismissChatItem(Number(i.id));
+      return {};
+    },
+  },
+  {
+    name: "todos.resolve-comment",
+    group: "todos",
+    label: "A comment done — or not",
+    summary: "A Jira comment (kind jira, key: its id, ticket) or a GitLab comment (kind gitlab, key: \"note:<id>\") marked done here — done ones don't feed new todos — or taken back (resolved): { ok, error }. Needs the flow's permissions todos and api.",
+    input: [f("kind", "text", { required: true, options: ["jira", "gitlab"] }), f("key", "text", { required: true }), f("ticket", "text"), f("resolved", "boolean", { required: true })],
+    output: "{ ok, error }",
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "todos", "api");
+      if (ctx.dryRun) return { ok: true, error: "" };
+      const resolved = i.resolved === true || i.resolved === "true";
+      if (i.kind === "jira") {
+        if (!/^\d+$/.test(String(i.key)) || !/^[A-Z][A-Z0-9]+-\d+$/i.test(String(i.ticket))) return { ok: false, error: t("Unknown comment.") };
+        (await import("@/lib/resolved")).setJiraCommentResolved(String(i.key), String(i.ticket), resolved);
+        return { ok: true, error: "" };
+      }
+      if (!/^note:\d+$/.test(String(i.key))) return { ok: false, error: t("Only GitLab comments can be marked done.") };
+      const { gitlabItemsByKeys, setGitlabState } = await import("@/lib/gitlab/store");
+      const item = gitlabItemsByKeys([String(i.key)]).get(String(i.key));
+      if (item && (item.state === "resolved" || item.state === "unresolved")) {
+        const r = await (await import("@/lib/gitlab/reply")).resolveGitlabThread(item.url, resolved);
+        if (r.resolvable) setGitlabState(String(i.key), resolved ? "resolved" : "unresolved");
+      }
+      (await import("@/lib/resolved")).setGitlabResolved(String(i.key), resolved);
+      return { ok: true, error: "" };
+    },
+  },
+  {
+    name: "todos.board-settings",
+    group: "todos",
+    label: "Which tickets the briefing reads",
+    summary: "The JQL filter of the briefing (which tickets on your boards), at least five characters: { ok, message, error }. Needs the flow's todos permission.",
+    input: [f("jql", "text", { required: true })],
+    output: OUT,
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "todos");
+      const jql = String(i.jql ?? "").trim();
+      if (jql.length < 5) return fail(t("A JQL filter, e.g.: {example}", { example: "assignee = currentUser() AND resolution = Unresolved" }));
+      if (ctx.dryRun) return done();
+      (await import("@/lib/runs/store")).updateBoardSettings({ jql: jql.slice(0, 1000) });
+      return done(t("Saved."));
+    },
+  },
+  {
+    name: "sync.steps",
+    group: "sync",
+    label: "Zeff's sync steps",
+    summary: "The sync steps of Zeff (or just these keys): where each is, whether it runs now, how it last went (when, whether well, what it said), how often it runs by itself and when next — and the steps that are not well with why: { all: { running, step }, steps: [{ key, label, href, what, running, lastAt, lastOk, lastMessage, everyMinutes, nextAt }], health }.",
+    input: [f("keys", "list")],
+    output: "{ all, steps, health }",
+    run: async (i) => {
+      const { syncOverview } = await import("@/lib/sync/registry");
+      const o = syncOverview();
+      const keys = (Array.isArray(i.keys) ? i.keys : typeof i.keys === "string" ? i.keys.split(",") : []).map((k) => String(k).trim()).filter(Boolean);
+      let health: { key: string; state: string; reason: string }[] = [];
+      try {
+        const { sourceHealth } = await import("@/lib/sync/source-health");
+        const { healthReason } = await import("@/lib/sync/source-health-shared");
+        health = (await sourceHealth()).flatMap((h) => (h.state === "ok" ? [] : [{ key: h.key, state: h.state, reason: healthReason(t, h) }]));
+      } catch {
+        health = [];
+      }
+      return { all: o.all, steps: keys.length ? keys.flatMap((k) => o.steps.filter((x) => x.key === k)) : o.steps, health };
+    },
+  },
+  {
+    name: "sync.run",
+    group: "sync",
+    label: "Run a sync step — or stop it",
+    summary: "One sync step started in the background (key) or, with stop, the one that runs stopped (what it started ends with it): { ok, message, error }. Needs the flow's permission api.",
+    input: [f("key", "text", { required: true }), f("stop", "boolean")],
+    output: OUT,
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "api");
+      if (ctx.dryRun) return done();
+      const reg = await import("@/lib/sync/registry");
+      if (!reg.isSyncKey(String(i.key))) return fail(t("Unknown sync."));
+      if (i.stop === true || i.stop === "true") return (await reg.stopSync(String(i.key))) ? done(t("Stopping.")) : fail(t("Not running."));
+      const r = await reg.startSync(String(i.key));
+      return r.ok ? done(r.message) : fail(r.message);
+    },
+  },
+  {
+    name: "people.search",
+    group: "people",
+    label: "Find a person by what is typed",
+    summary: "The people (at most 8) whose name, alias or account starts with what is typed — the ones starting with it first, then the starred: [{ id, name, jira }] — { people }. Empty without the People plugin.",
+    input: [f("q", "text")],
+    output: "{ people: [{ id, name, jira }] }",
+    run: async (i) => ({ people: await (await import("@/plugins/people/server-actions")).searchPeopleAction(String(i.q ?? "")) }),
+  },
+  {
     name: "todos.rows-seen",
     group: "todos",
     label: "The todos you have looked at",

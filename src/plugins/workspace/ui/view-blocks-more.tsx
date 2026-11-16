@@ -147,14 +147,17 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only what was typed
   }, [v]);
   // enter="event": Enter (not Shift+Enter) sets what is typed at once and sends the event — a chat line sent with Enter.
-  const onKeyDown = a.enter
-    ? (e: React.KeyboardEvent) => {
-        if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
-        e.preventDefault();
-        env.setState(a.bind, v);
-        env.emitLater?.(a.enter);
-      }
-    : undefined;
+  const onKeyDown =
+    a.enter || a.back
+      ? (e: React.KeyboardEvent) => {
+          // back="event": Backspace in the empty field sends the event (the last chip taken off).
+          if (a.back && e.key === "Backspace" && !v) return void env.emitLater?.(a.back);
+          if (!a.enter || e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+          e.preventDefault();
+          env.setState(a.bind, v);
+          env.emitLater?.(a.enter);
+        }
+      : undefined;
   // leave="event": leaving the field after a change sets it at once and sends the event — a note saved when you leave it.
   const onBlur = a.leave
     ? () => {

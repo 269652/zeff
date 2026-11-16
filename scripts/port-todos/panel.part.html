@@ -114,7 +114,7 @@
 </col>
 </section>
 {{/if}}{{/if}}
-{{#if href}}<small><a href="{{ href }}">Open ↗</a></small>{{/if}}
+{{#if href}}<row gap=2 wrap=true><small><a href="{{ href }}">Open ↗</a></small>{{#if not data.p.closed}}<button run="todos-ext.browser-done" with="id={{ data.p.id }}, index={{ index }}" into="opsave" emit="todos-changed" label="Done in the browser" variant=quiet tip="You did it yourself: taken off the todo and noted"/>{{/if}}</row>{{/if}}
 </col>
 {{#if not data.p.closed}}
 {{#if runnable}}<button run="todos-ext.run" with="id={{ data.p.id }}, only={{ only }}" into="ran" confirm="Zeff does it itself, no AI" emit="todos-changed" label="Run" variant=primary/>{{/if}}
@@ -141,7 +141,7 @@
 <input bind="notetext" rows=4 value="{{ text }}"/>
 <row gap=2><button run="todos-ext.note-edit" with="id={{ data.p.id }}, at={{ at }}, text={{ state.notetext }}" then="noteedit=" emit="todos-changed" label="Save" variant=primary disabled="{{ not state.notetext }}"/><button action="state" state="noteedit" value="" label="Cancel"/></row>
 {{#else}}
-<text pre=true>{{ text }}</text>
+{{#each parts}}{{#if image}}<a href="{{ url }}"><img src="{{ url }}" alt="{{ title }}"/></a>{{#else}}<text pre=true>{{ text }}</text>{{/if}}{{/each}}
 {{/if}}
 {{#if url}}<small><a href="{{ url }}">{{ urlLabel }} ↗</a></small>{{/if}}
 {{#if sync}}<small><muted>{{ sync }}</muted></small>{{/if}}
@@ -152,7 +152,9 @@
 </row>
 </box>
 {{/each}}
-<input bind="newnote" rows=3 placeholder="Add a note — context for the briefing, workers and agents"/>
+<input bind="newnote" rows=3 placeholder="Note on {{ data.p.ref }} — what you know, what applies, what's already settled… (@ tags people)"/>
+{{#if data.men.hits}}<row gap=1 wrap=true>{{#each data.men.hits}}<button action="state" state="newnote" value="{{ next }}" label="@{{ name }}" variant=quiet tip="{{ jira }}"/>{{/each}}</row>{{/if}}
+{{#if data.p.nImages}}<row gap=1 wrap=true><small><muted>Add a picture</muted></small>{{#each data.p.attachments}}{{#if image}}<button action="state" state="newnote" value="{{ state.newnote }}{{ insert }}" label="🖼 {{ name }}" variant=quiet/>{{/if}}{{/each}}</row>{{/if}}
 <row gap=2>
 <button run="todos-ext.note" with="id={{ data.p.id }}, text={{ state.newnote }}" into="noted" then="newnote=" emit="todos-changed" label="Save note" variant=primary disabled="{{ not state.newnote }}"/>
 </row>
@@ -218,7 +220,8 @@
 <col gap=2>
 {{#each data.p.sources}}
 <box>
-<small><muted>{{ label }}{{#if author}} · {{ author }}{{/if}}{{#if when}} · {{ when }}{{/if}}</muted></small>
+<hover width=520><chip>{{ label }}</chip><hovercard><small><muted>{{ author }} {{ when }}</muted></small>{{#if headline}}<b>{{ headline }}</b>{{/if}}{{#if text}}<text pre=true>{{ text }}</text>{{/if}}</hovercard></hover>
+<small><muted>{{#if author}}{{ author }} · {{/if}}{{ when }}</muted></small>
 {{#if headline}}<b>{{ headline }}</b>{{/if}}
 {{#if text}}<text pre=true>{{ text }}</text>{{/if}}
 {{#if not data.p.closed}}<button run="todos-ext.context-dismiss" with="id={{ data.p.id }}, ref={{ ref }}" emit="todos-changed" label="✕" variant=quiet tip="Not about this todo"/>{{/if}}

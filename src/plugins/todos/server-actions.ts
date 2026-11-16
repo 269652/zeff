@@ -7,15 +7,6 @@ import { revalidateAll, str, type ActionState } from "@/app/action-helpers";
 
 /** Boards (your tickets gone through the Claude CLI: what happened, what's to do) — its server actions (each answers an ActionState unless it says otherwise). */
 
-/** "Run now": the run starts in the background — the Todos page follows it. */
-export async function runBoardAction(): Promise<ActionState> {
-  const { startBoardRunAnywhere } = await import("@/lib/host/commands");
-  // By hand: Jira synced first, then the analysis.
-  const r = await startBoardRunAnywhere({ syncJira: true });
-  revalidatePath("/todos");
-  return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.message };
-}
-
 /** Which tickets on the chosen boards (a JQL filter) — how often a run goes by itself: the Sync settings page. */
 export async function saveBoardSettingsAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const jql = (str(fd, "jql") ?? "").trim();
@@ -24,13 +15,6 @@ export async function saveBoardSettingsAction(_prev: ActionState, fd: FormData):
   updateBoardSettings({ jql: jql.slice(0, 1000) });
   revalidatePath("/todos");
   return { ok: true, message: t("Saved.") };
-}
-
-/** Stop the Ticket-Lage's run ("Analyse now"). */
-export async function stopBoardRunAction(): Promise<ActionState> {
-  const { stopBoardRunAnywhere } = await import("@/lib/host/commands");
-  revalidatePath("/todos");
-  return (await stopBoardRunAnywhere()) ? { ok: true, message: t("The analysis is being stopped.") } : { ok: false, error: t("No analysis is running.") };
 }
 
 /** A todo done, dismissed, or open again. */
@@ -95,62 +79,6 @@ export async function runTodoOpsAction(todoId: number, only?: number[]): Promise
   }
 }
 
-/** Your instruction on a todo, done by the Copilot CLI — a run on the Code tab. */
-export async function instructTodoAction(todoId: number, instruction: string): Promise<ActionState> {
-  try {
-    const text = String(instruction ?? "").trim();
-    if (!text) return { ok: false, error: t("What should Copilot do?") };
-    const { dispatchTodo } = await import("@/lib/work/runner");
-    const run = dispatchTodo(Number(todoId), { provider: "copilot", instruction: text.slice(0, 8000) });
-    revalidateAll();
-    return { ok: true, message: run.status === "running" ? t("{run} (Copilot) is running.", { run: run.ref }) : t("{run} (Copilot) is waiting for a free worker.", { run: run.ref }) };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A todo flagged important (to the top of its list, urgent for the Ticket-Lage) — or the flag taken off. */
-export async function flagTodoAction(todoId: number, flagged: boolean): Promise<ActionState> {
-  try {
-    const { setTodoFlagged } = await import("@/lib/todos/store");
-    setTodoFlagged(Number(todoId), !!flagged);
-    revalidateAll();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A reply to the message a todo is about, drafted by the AI from the conversation — never sent. */
-export async function draftReplyAction(todoId: number): Promise<import("@/lib/todos/reply-draft").ReplyDraft> {
-  try {
-    return await (await import("@/lib/todos/reply-draft")).draftReply(Number(todoId));
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A todo that is a payment, as a GiroCode: the account (its text, your notes, a person it names, its knowledge), amount and purpose — or null. */
-export async function paymentForTodoAction(todoId: number): Promise<import("@/lib/girocode-todo").TodoPayment | null> {
-  const todo = (await import("@/lib/todos/store")).getTodo(Number(todoId));
-  if (!todo) return null;
-  const people = (await import("@/plugins/state")).isInstalled("people") ? (await import("@/plugins/people/details")).payees() : [];
-  return (await import("@/lib/girocode-todo")).paymentForTodo(todo, people);
-}
-
-/** A reply's "Öffnen": WhatsApp Web, Gmail, Outlook or Teams at the front of the automation Chrome (signed in there). */
-export async function openReplyTargetAction(url: string): Promise<ActionState> {
-  try {
-    const { REPLY_HOSTS } = await import("@/lib/todos/reply-draft");
-    if (!REPLY_HOSTS.test(String(url))) return { ok: false, error: t("Zeff doesn't open this address.") };
-    const { openInAutomationChrome } = await import("@/lib/attention");
-    const r = await openInAutomationChrome(String(url), new URL(String(url)).host);
-    return r.ok ? { ok: true, message: t("In front in the automation Chrome — paste the draft and send it.") } : { ok: false, error: r.message };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 /** The Auswerten page: one step's context settings (sources, numbers, its own instructions). */
 export async function saveContextPrefsAction(step: string, patch: { sources?: Record<string, boolean>; numbers?: Record<string, number>; extra?: string }): Promise<ActionState> {
   try {
@@ -176,63 +104,6 @@ export async function setTodoDueAction(todoId: number, due: string | null): Prom
   }
 }
 
-/** A todo that comes back: its rule (monthly on its due day, weekly, yearly, every day) — or none. The calendar shows the series. */
-export async function setTodoRecurrenceAction(todoId: number, freq: "daily" | "weekly" | "monthly" | "yearly" | null): Promise<ActionState> {
-  try {
-    const { setRecurrence } = await import("@/lib/todos/recurring");
-    setRecurrence(Number(todoId), freq ? { freq, interval: 1 } : null);
-    // The words of its repeats, by the AI — in the background (the next sync does it otherwise).
-    if (freq) void import("@/lib/todos/repeat-text-ai").then((m) => m.writeRepeatTexts([Number(todoId)])).catch(() => undefined);
-    (await import("@/lib/events")).emitChange("todos");
-    revalidateAll();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A recurring todo's calendar appointments and its actions made again (the actions the AI proposed; ones you made stay). */
-export async function regenerateRecurringAction(todoId: number): Promise<ActionState> {
-  try {
-    (await import("@/lib/todos/recurring")).regenerateSeries(Number(todoId));
-    const { isInstalled } = await import("@/plugins/state");
-    let actions = "";
-    if (isInstalled("auto-actions")) {
-      const { reviewTodosForActions } = await import("@/plugins/auto-actions/review");
-      const r = await reviewTodosForActions({ ids: [Number(todoId)] });
-      actions = r.ok ? ` ${r.withActions ? t("Actions suggested — on the todo.") : t("No fitting action found.")}` : ` ${r.error ?? ""}`;
-    }
-    (await import("@/lib/events")).emitChange("todos");
-    revalidateAll();
-    return { ok: true, message: `${t("Calendar appointments made again.")}${actions}`.trim() };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A todo put to the bottom for now — it comes back up when something new happens on it — or taken back up. */
-export async function deferTodoAction(todoId: number, deferred: boolean): Promise<ActionState> {
-  try {
-    const { setTodoDeferred } = await import("@/lib/todos/store");
-    setTodoDeferred(Number(todoId), !!deferred);
-    revalidateAll();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** Your note on a todo (context for whoever works on it) — added, or taken away by its time. */
-export async function addTodoNoteAction(todoId: number, text: string): Promise<ActionState> {
-  try {
-    const r = await (await import("./engine")).addNoteAsYou(todoId, text);
-    revalidateAll();
-    return r;
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 /** Time you spent on a todo, by hand: minutes and one line (a record like the agents'). The record saved — shown at once, before the page's refresh comes. */
 export async function addTodoTimeAction(todoId: number, minutes: number, note: string): Promise<ActionState & { record?: import("@/lib/work/shared").TimeRecord }> {
   try {
@@ -240,19 +111,6 @@ export async function addTodoTimeAction(todoId: number, minutes: number, note: s
     const record = addTodoTime({ todoId: Number(todoId), minutes: Number(minutes), note: String(note ?? ""), by: "Du", source: "hand" });
     revalidateAll();
     return { ok: true, record };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** "Worked on it": a booking suggestion for the todo (its ticket, its recorded time) — the todo stays open. */
-export async function workedOnTodoAction(todoId: number): Promise<ActionState> {
-  try {
-    const { suggestWorkedOn, suggestionRef } = await import("@/lib/work/suggestions");
-    const made = suggestWorkedOn([Number(todoId)], { reportedBy: "Du" });
-    revalidateAll();
-    if (!made.length) return { ok: true, message: t("There is a booking suggestion for it today already — or it has no ticket.") };
-    return { ok: true, message: t("{ref} suggested — in the Weekly report you can take it over.", { ref: suggestionRef(made[0].id) }) };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -333,95 +191,12 @@ export async function dismissChatItemAction(id: number): Promise<ActionState> {
   }
 }
 
-/** A time record taken away — while no booking or suggestion covers it. */
-export async function deleteTodoTimeAction(id: number): Promise<ActionState> {
-  try {
-    const { deleteTodoTime } = await import("@/lib/work/todo-time");
-    deleteTodoTime(Number(id));
-    revalidateAll();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 export async function removeTodoNoteAction(todoId: number, at: string): Promise<ActionState> {
   try {
     const { removeTodoUserNote } = await import("@/lib/todos/store");
     removeTodoUserNote(Number(todoId), String(at));
     revalidateAll();
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** One of a Boards run's suggested ticket changes (transition, assignee, comment), done in Jira — on your click. */
-export async function runTicketActionAction(runId: number, ticket: string, idx: number): Promise<ActionState> {
-  try {
-    const { runTicketAction } = await import("@/lib/runs/actions");
-    const r = await runTicketAction(Number(runId), String(ticket), Number(idx));
-    revalidateAll();
-    return { ok: true, message: `${ticket}: ${r.detail}.` };
-  } catch (err) {
-    revalidateAll();
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A todo done another way (one of its alternatives — "Sarah zuweisen", "Merge into main"): its operations replaced, then run. */
-export async function runTodoAlternativeAction(todoId: number, label: string): Promise<ActionState> {
-  try {
-    const { getTodo, setTodoOps } = await import("@/lib/todos/store");
-    const { todoAlternatives } = await import("@/lib/todos/alternatives");
-    const todo = getTodo(Number(todoId));
-    if (!todo || todo.status !== "open") return { ok: false, error: t("That todo isn't open.") };
-    const alt = (todoAlternatives([todo])[todo.id] ?? []).find((a) => a.label === String(label));
-    if (!alt) return { ok: false, error: t("That option isn't there any more.") };
-    const { dispatchTodo } = await import("@/lib/work/runner");
-    if (alt.also) {
-      // On its own: a todo of its own (traceable, under this one), run at once — this one stays as it is.
-      const { addFollowUp } = await import("@/lib/todos/store");
-      const { attributed } = await import("@/lib/todos/activity");
-      const child = attributed("you", () => addFollowUp({ ticket: todo.ticket, text: alt.title, kind: "update", parentId: todo.id, workRunId: null, source: `Option for ${todo.ref}`, ops: alt.ops }));
-      const run = dispatchTodo(child.id);
-      revalidateAll();
-      return { ok: true, message: `${run.ref}: ${alt.title}.` };
-    }
-    setTodoOps(todo.id, alt.ops, alt.text);
-    const run = dispatchTodo(todo.id);
-    revalidateAll();
-    return { ok: true, message: `${run.ref}: ${alt.label}.` };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** The Recap: a day's recap made (in the background) — the page follows it. */
-export async function startRecapAction(day: string): Promise<ActionState> {
-  try {
-    const { startRecapAnywhere } = await import("@/lib/host/commands");
-    const r = await startRecapAnywhere(String(day));
-    revalidateAll();
-    return r.ok ? { ok: true, message: r.message } : { ok: false, error: r.message };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** An operation's text (a comment, a reply, a Teams message) changed before it's sent. */
-export async function saveTodoOpTextAction(todoId: number, index: number, text: string): Promise<ActionState> {
-  try {
-    const { getTodo, setTodoOps } = await import("@/lib/todos/store");
-    const todo = getTodo(Number(todoId));
-    if (!todo || todo.status !== "open") return { ok: false, error: t("That todo isn't open.") };
-    const op = todo.ops[Number(index)];
-    const body = String(text ?? "").trim();
-    if (!op || !("body" in op)) return { ok: false, error: t("That operation has no text.") };
-    if (!body) return { ok: false, error: t("Empty text.") };
-    setTodoOps(todo.id, todo.ops.map((o, i) => (i === Number(index) ? { ...o, body: body.slice(0, 8000) } : o)) as typeof todo.ops);
-    revalidateAll();
-    return { ok: true, message: t("Saved.") };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -448,21 +223,6 @@ export async function saveTransferAction(todoId: number, index: number, fields: 
   }
 }
 
-/** A ticket followed in the Ticket-Lage besides the boards' filter (1), not any more (-1), or as it comes (0). */
-export async function setTicketFollowAction(key: string, value: 1 | -1 | 0): Promise<ActionState> {
-  try {
-    const { setFollowed } = await import("@/lib/todos/followed");
-    setFollowed(String(key), value === 1 || value === -1 ? value : 0);
-    revalidateAll();
-    return {
-      ok: true,
-      message: value === 1 ? t("{key}: followed from now on (from the next run).", { key }) : value === -1 ? t("{key}: no longer followed.", { key }) : t("{key}: as it comes.", { key }),
-    };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 /**
  * An action you did in your browser (the appointment saved in Outlook, the mail draft sent):
  * taken off the todo and noted on it — so the Lage and everyone know. A mail that is the todo
@@ -470,67 +230,9 @@ export async function setTicketFollowAction(key: string, value: 1 | -1 | 0): Pro
  */
 export async function doneBrowserOpAction(todoId: number, index: number): Promise<ActionState> {
   try {
-    const { getTodo, addTodoUserNote, setTodoStatus } = await import("@/lib/todos/store");
-    const { actionHref } = await import("@/plugins/actions/catalog");
-    const { getDb, schema } = await import("@/db");
-    const { eq } = await import("drizzle-orm");
-    const todo = getTodo(Number(todoId));
-    const op = todo?.ops[Number(index)];
-    if (!todo || !op || !actionHref(op)) return { ok: false, error: t("That action isn't on the todo (any more).") };
-    const left = todo.ops.filter((_, i) => i !== Number(index));
-    if (todo.autoOpsWhy) {
-      const { recordFeedback } = await import("@/lib/learning/ledger");
-      const { autoActionsFeedback } = await import("@/lib/learning/sources");
-      recordFeedback(autoActionsFeedback(todo, "rejected", op));
-    }
-    getDb().update(schema.todos).set({ ops: JSON.stringify(left) }).where(eq(schema.todos.id, todo.id)).run();
-    const { formatDayTime: when } = await import("@/lib/format");
-    const what =
-      op.type === "calendar-event"
-        ? op.attendees
-          ? t("Meeting “{subject}” created in Outlook ({when}, {minutes} min, with {attendees}).", { subject: op.subject, when: when(op.start), minutes: op.minutes, attendees: op.attendees.replace(/;/g, ", ") })
-          : t("Meeting “{subject}” created in Outlook ({when}, {minutes} min).", { subject: op.subject, when: when(op.start), minutes: op.minutes })
-        : op.type === "gcal-event"
-          ? t("Meeting “{subject}” created in Google Calendar ({when}, {minutes} min).", { subject: op.title, when: when(op.start), minutes: op.minutes })
-          : op.type === "bank-transfer"
-            ? op.amount
-              ? t("Transfer of {amount} to {name} sent.", { amount: `${Number(op.amount).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`, name: op.name })
-              : t("Transfer to {name} sent.", { name: op.name })
-            : op.type === "revolut-pay"
-            ? op.amount
-              ? t("Paid {amount} to {name} with Revolut.", { amount: `${Number(op.amount).toLocaleString("de-DE", { minimumFractionDigits: 2 })} €`, name: op.name })
-              : t("Paid {name} with Revolut.", { name: op.name })
-            : op.type === "mail-compose"
-            ? op.to
-              ? t("Mail “{subject}” to {to} sent.", { subject: op.subject, to: op.to.replace(/;/g, ", ") })
-              : t("Mail “{subject}” sent.", { subject: op.subject })
-            : t("Done in the browser.");
-    addTodoUserNote(todo.id, `✓ ${what}`);
-    // A mail that answers or asks — the todo itself, done with it.
-    // A transfer: paying is the todo (only the todos that ask you to pay get one) — done with it, whatever else is on it.
-    const settles = (op.type === "mail-compose" && !left.length && todo.owner === "me" && ["reply", "comment", "clarify", "update"].includes(todo.kind)) || op.type === "bank-transfer" || op.type === "revolut-pay";
-    if (settles) {
-      const { attributed } = await import("@/lib/todos/activity");
-      attributed("you", () => setTodoStatus(todo.id, "done", `Done: ${what}`));
-    }
+    const r = await (await import("./engine")).doneBrowserOpAsYou(todoId, index);
     revalidateAll();
-    return { ok: true, message: settles ? t("{ref} done — {what}", { ref: todo.ref, what }) : t("Noted on {ref}: {what}", { ref: todo.ref, what }) };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** Ready actions for one todo, now (the auto-actions review, asked for on it). */
-export async function suggestTodoActionsAction(todoId: number): Promise<ActionState> {
-  try {
-    const { isInstalled } = await import("@/plugins/state");
-    if (!isInstalled("auto-actions")) return { ok: false, error: t("Auto actions are not installed (Menu → Plugins).") };
-    const { reviewTodosForActions } = await import("@/plugins/auto-actions/review");
-    const r = await reviewTodosForActions({ ids: [Number(todoId)] });
-    revalidateAll();
-    if (!r.ok) return { ok: false, error: r.error ?? t("The AI didn't answer.") };
-    if (!r.reviewed) return { ok: false, error: t("The todo already has actions (from the briefing) — they stay.") };
-    return { ok: true, message: r.withActions ? t("Actions suggested — on the todo.") : t("No fitting action found.") };
+    return r;
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -562,17 +264,6 @@ export async function saveTodoDisplayFormAction(fd: FormData): Promise<void> {
     setPickPrompt(fd.get("resetRepoPrompt") || text === DEFAULT_PICK_PROMPT ? "" : text);
   }
   revalidateAll();
-}
-
-/** A Lage run taken back: its todos you haven't touched dismissed (lib/runs/run-undo.ts). */
-export async function undoLageRunAction(runId: number): Promise<{ ok: true; dismissed: number; kept: number; claims: number } | { ok: false; error: string }> {
-  try {
-    const r = (await import("@/lib/runs/run-undo")).undoLageRun(Number(runId));
-    revalidateAll();
-    return { ok: true, ...r };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
 }
 
 /** Today → "Plan my day": the AI's proposal of time blocks for today's todos (lib/heute-plan.ts) — nothing is written yet. */

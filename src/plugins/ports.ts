@@ -47,6 +47,8 @@ export const PORTS: Port[] = [
     } },
   // (Code: the port's screens, settings and flows — the workers, runs, the work host, the logs and the live sessions stay the kernel's)
   { builtin: "work", plugin: "work-ext", switch: async () => (await import("./work/to-plugin")).switchWorkToPlugin() },
+  // (Todos: the engine — the todos, their actions, the settle hooks — stays Zeff's, so the built-in stays on; the port is its screens: the Todos page, its panel, the recap, the tickets)
+  { builtin: "todos", plugin: "todos-ext", switch: async () => (await import("./todos/to-plugin")).switchTodosToPlugin() },
   { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
 ];
 

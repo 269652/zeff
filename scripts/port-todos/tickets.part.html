@@ -1,5 +1,11 @@
 <col gap=3>
 {{#if data.lage.none}}<muted>{{ data.lage.none }}</muted>{{/if}}
+<section title="Which tickets" collapsible=true>
+<col gap=1>
+<input bind="jql" value="{{ data.lage.jql }}" placeholder="A JQL filter, e.g.: assignee = currentUser() AND resolution = Unresolved"/>
+<row gap=2><button run="todos-ext.board-settings" with="jql={{ state.jql }}" into="saved" emit="todos-changed" label="Save" variant=primary disabled="{{ not state.jql }}"/>{{#if data.saved.message}}<small><text tone=good>{{ data.saved.message }}</text></small>{{/if}}{{#if data.saved.error}}<small><text tone=bad>{{ data.saved.error }}</text></small>{{/if}}</row>
+</col>
+</section>
 {{#if data.lage.lede}}
 <box>
 <col gap=1>
@@ -27,7 +33,7 @@
 {{#if analyzed}}<chip>{{ attLabel }}</chip>{{/if}}
 </row>
 {{#if analyzed}}<text><b>{{ lead }}</b> {{ text }}</text>{{#else}}<muted>Not analyzed in this run.</muted>{{/if}}
-{{#each questions}}<section title="{{ q }}" collapsible=true><text>{{ a }}</text></section>{{/each}}
+{{#each questions}}<section title="{{ q }}" collapsible=true><text>{{ a }}</text>{{#each sourceList}}<small><muted>{{ text }}</muted></small>{{/each}}</section>{{/each}}
 {{#each flags}}<small><text tone=warn>{{ text }}</text></small>{{/each}}
 {{#if happened}}
 <section title="What happened" collapsible=true>
@@ -42,6 +48,27 @@
 {{#if failed}}<small><text tone=bad>{{ detail }}</text></small>{{/if}}
 </col>{{/if}}
 {{/each}}
+{{#if nComments}}
+<section title="Comments" aside="{{ commentsTitle }}" collapsible=true>
+<col gap=1>
+{{#each recent}}<row gap=2 wrap=false align=start><button run="todos-ext.resolve" with="kind=jira, key={{ id }}, ticket={{ ticket }}, resolved={{ done ? 'false' : 'true' }}" emit="todos-changed" label="{{ done ? '✓' : '○' }}" variant=quiet tip="Done ones don't feed new todos"/><small>{{ when }} <b>{{ author }}</b>: {{ text }}</small></row>{{/each}}
+{{#each gitlab}}<row gap=2 wrap=false align=start>{{#if resolvable}}<button run="todos-ext.resolve" with="kind=gitlab, key={{ key }}, resolved={{ done ? 'false' : 'true' }}" emit="todos-changed" label="{{ done ? '✓' : '○' }}" variant=quiet tip="Done ones don't feed new todos"/>{{/if}}<small>{{ when }} <a href="{{ url }}" tip="{{ tip }}">{{ ref }}</a> <b>{{ author }}</b>: {{ body }}</small></row>{{/each}}
+</col>
+</section>
+{{/if}}
+{{#if nMails}}
+<section title="Mails" aside="{{ mailsTitle }}" collapsible=true>
+<col gap=1>{{#each mails}}<small>{{#if unread}}<b>● </b>{{/if}}{{ when }} <b>{{ from }}</b> — {{ subject }} <muted>{{ preview }}</muted></small>{{/each}}</col>
+</section>
+{{/if}}
+<section title="Ask about this ticket" collapsible=true>
+<col gap=1>
+{{#each chat}}<box><col gap=1><small><b>{{ q }}</b></small><text>{{ a }}</text>{{#each sourceList}}<small><muted>{{ text }}</muted></small>{{/each}}<button run="todos-ext.chat-dismiss" with="id={{ id }}" emit="todos-changed" label="✕" variant=quiet tip="Take this answer out of the context"/></col></box>{{/each}}
+<row gap=2 wrap=false align=end><col fill=true><input bind="askq" placeholder="Ask about this ticket …"/></col><button run="todos-ext.ask" with="ticket={{ key }}, question={{ state.askq }}" into="asked" then="askq=" emit="todos-changed" label="Ask" disabled="{{ not state.askq }}"/></row>
+{{#if data.asked.error}}<small><text tone=bad>{{ data.asked.error }}</text></small>{{/if}}
+</col>
+</section>
+<row gap=3 wrap=true>{{#each factsLine}}<small><muted>{{ text }}</muted></small>{{/each}}{{#if url}}<a href="{{ url }}">Open in Jira ↗</a>{{/if}}</row>
 {{#if todos}}
 <col gap=1>
 {{#each todos}}

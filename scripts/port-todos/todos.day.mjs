@@ -32,7 +32,7 @@ export async function handler(event, context) {
     failed: r.failed ? t("The last run failed: {error}", { error: r.failed.error }) : "",
     summary: r.summary,
     booked: r.booked > 0 ? t("{hours} h booked", { hours: hours(r.booked) }) : "",
-    tickets: r.tickets.map((x) => ({ key: x.key, summary: x.summary, status: x.status, url: x.url, lead: x.lead, done: x.done.map((text) => ({ text })), hours: x.hours > 0 ? t("{hours} h booked", { hours: hours(x.hours) }) : "", facts: facts(x.facts), nFacts: x.facts.length })),
+    tickets: r.tickets.map((x) => ({ key: x.key, summary: x.summary, status: x.status, url: x.url, lead: x.lead, done: x.done.map((text) => ({ text })), hours: x.hours > 0 ? t("{hours} h booked", { hours: hours(x.hours) }) : "", facts: facts(x.facts), nFacts: x.facts.length, badges: x.badges.map((b) => ({ ...b, when: b.at ? time(b.at) : "" })), nBadges: x.badges.length })),
     hasOther: r.other.done.length > 0 || r.other.facts.length > 0,
     otherDone: r.other.done.map((text) => ({ text })),
     otherHours: r.other.hours > 0 ? t("{hours} h booked", { hours: hours(r.other.hours) }) : "",

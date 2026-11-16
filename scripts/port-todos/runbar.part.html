@@ -5,8 +5,19 @@
 {{#else}}
 <button run="todos-ext.board-run" with="stop=false" into="ran" emit="todos-changed" label="Run now" variant=primary tip="Reads your tickets, syncs first and has the AI write the briefing"/>
 {{/if}}
+{{#if data.lage.nSteps}}
+<menu label="Steps" tip="What Run now does, in order">
+{{#each data.lage.steps}}
+<row gap=2 wrap=false align=center>
+<col fill=true><a href="{{ href }}" tip="{{ what }}">{{ label }}</a><small><muted>{{#if failed}}✗ {{else}}{{#if ok}}✓ {{/if}}{{/if}}{{ text }}</muted></small>{{#if health}}<small><text tone=warn>{{ health }}</text></small>{{/if}}</col>
+{{#if running}}<button run="todos-ext.sync" with="key={{ key }}, stop=true" emit="todos-changed" label="■" variant=quiet tip="Cancel — what it started ends with it"/>{{#else}}<button run="todos-ext.sync" with="key={{ key }}, stop=false" into="synced" emit="todos-changed" label="⟳" variant=quiet tip="{{ label }} now — {{ what }}"/>{{/if}}
+</row>
+{{/each}}
+</menu>
+{{/if}}
 {{#if data.lage.asOf}}<small><muted>{{ data.lage.asOf }}</muted></small>{{/if}}
 {{#each data.lage.facts}}<chip>{{ text }}</chip>{{/each}}
 </row>
+{{#if data.synced.error}}<small><text tone=bad>{{ data.synced.error }}</text></small>{{/if}}
 {{#if data.ran.message}}<small><text tone="{{ data.ran.ok ? 'good' : 'bad' }}">{{ data.ran.message }}</text></small>{{/if}}
 {{#if data.lage.failed}}<callout tone=bad><text>{{ data.lage.failed }}</text></callout>{{/if}}

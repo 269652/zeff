@@ -76,7 +76,8 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     output: "{ rows: [{ id, ref, ticket, alsoTickets, text, kind, kindLabel, owner, status, source, note, due, dueDays, group, flagged, deferred, bubbledUp, repeats, workerDone, needsInput, lastError, opsCount, notesCount, byWorker, createdAt, doneAt }], counts: { open, waiting, done, worker }, tickets: { [key]: { summary, status, url } }, briefing: boolean }",
     run: async (i) => {
       const store = await import("@/lib/todos/store");
-      const { TODO_KIND_LABELS } = await import("@/lib/todos/shared");
+      const { TODO_KIND_LABELS, opTitle } = await import("@/lib/todos/shared");
+      const { translator } = await import("@/lib/i18n/shared");
       const { groupOf } = await import("@/lib/todos/groups");
       const { daysUntil } = await import("@/lib/todos/due-shared");
       const { deferral } = await import("@/lib/todos/deferral");
@@ -140,6 +141,8 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           byWorker: t.byWorker,
           createdAt: t.createdAt,
           doneAt: t.doneAt ?? "",
+          opsTitles: t.ops.map((o) => opTitle(o, translator("en"))),
+          opsWhy: t.autoOpsWhy ?? "",
           origin,
           away: (t.away ?? []).map((a) => ({ name: a.name, until: a.until })),
           workRun: busy[t.id] ?? 0,
@@ -268,7 +271,11 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const { todoSources } = await import("@/lib/todos/sources");
       const { lastGoodRun } = await import("@/lib/runs/store");
       const { entityHeadline, entitySourceLabel, entityText, entityWhoWhen } = await import("@/lib/entities-shared");
-      const cited = sourcesOf(t.refs, todoSources([t], lastGoodRun()?.tickets ?? []));
+      // Settings → Todos: what a todo shows under its text (context, the actions the AI proposed, knowledge — and which kinds of knowledge).
+      const { getTodoDisplayOff } = await import("@/lib/todo-display-store");
+      const { kindOfPage } = await import("@/lib/todo-display");
+      const off = getTodoDisplayOff();
+      const cited = off.includes("context") ? [] : sourcesOf(t.refs, todoSources([t], lastGoodRun()?.tickets ?? []));
       return {
         found: true,
         id: t.id,
@@ -283,12 +290,13 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
         source: t.source ?? "",
         note: t.note ?? "",
         notes: [...(t.relatedNotes ?? []), ...t.userNotes].map((n) => ({ at: n.at, by: n.by ?? "", text: n.text, url: n.url ?? "", urlLabel: n.urlLabel ?? "", instruction: n.kind === "instruction", own: !n.by && n.kind !== "instruction" && n.from === undefined, from: n.from ?? 0, jira: noteSyncState(n) })),
-        ops: t.ops.map((op, index) => {
+        ops: t.ops.filter(() => !(off.includes("actions") && t.autoOpsWhy)).map((op, index) => {
           const note = opNote(op, en);
           const href = actionHref(op);
           const o = op as unknown as Record<string, unknown>;
           return { index, type: op.type, title: opTitle(op, en), heading: note.heading, detail: note.detail ?? "", body: note.body ?? "", runnable: !href, href: href ?? "", hasText: "body" in op, transfer: op.type === "bank-transfer" ? { name: String(o.name ?? ""), iban: String(o.iban ?? ""), bic: String(o.bic ?? ""), amount: String(o.amount ?? ""), purpose: String(o.purpose ?? "") } : null };
         }),
+        attachments: (await import("@/plugins/documents/attachments")).todoAttachments(t.refs).map((d) => ({ id: d.id, ref: d.ref, name: d.name, image: d.kind === "image" })),
         opsWhy: t.autoOpsWhy ?? "",
         alternatives: t.alternatives ?? [],
         payment: await (async () => {
@@ -296,7 +304,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           const p = (await import("@/lib/girocode-todo")).paymentForTodo(t, people);
           return p ? { name: p.name, iban: p.iban, bic: p.bic ?? "", amount: p.amount ?? 0, purpose: p.purpose, via: p.via } : null;
         })(),
-        knowledge: t.knowledge ? { pages: t.knowledge.pages.map((x) => ({ title: x.title, url: x.url, snippet: (x.summary ?? x.snippet ?? "").slice(0, 300) })), entities: t.knowledge.entities.map((x) => ({ name: x.name, type: x.type, summary: x.summary.slice(0, 300) })), links: t.knowledge.links ?? [], repo: t.knowledge.repo ?? null } : null,
+        knowledge: t.knowledge && !off.includes("knowledge") ? { pages: t.knowledge.pages.filter((x) => !off.includes(kindOfPage(x))).map((x) => ({ title: x.title, url: x.url, snippet: (x.summary ?? x.snippet ?? "").slice(0, 300) })), entities: t.knowledge.entities.map((x) => ({ name: x.name, type: x.type, summary: x.summary.slice(0, 300) })), links: t.knowledge.links ?? [], repo: t.knowledge.repo ?? null } : null,
         draft: t.draft ?? "",
         recurrence: t.recurrence ? t.recurrence.freq : "",
         away: (t.away ?? []).map((a) => ({ name: a.name, until: a.until })),
@@ -411,12 +419,14 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     label: "Take back a briefing run's todos",
     summary: "The todos a briefing run made that you haven't touched are dismissed (those you worked on stay): { dismissed, kept, claims }. Needs the flow's todos permission.",
     input: [f("run", "number", { required: true })],
-    output: "{ dismissed, kept, claims }",
+    output: "{ dismissed, kept, claims, message }",
     writes: true,
     run: async (i, ctx) => {
       if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
       if (ctx.dryRun) return { dismissed: 0, kept: 0, claims: 0 };
-      return (await import("@/lib/runs/run-undo")).undoLageRun(Number(i.run));
+      const r = (await import("@/lib/runs/run-undo")).undoLageRun(Number(i.run));
+      const { t } = await import("@/lib/i18n/server");
+      return { ...r, message: `${t("{n} todos of the run dismissed, {kept} kept (you worked on them).", { n: r.dismissed, kept: r.kept })}${r.claims ? ` ${t("{n} promises and facts it read removed.", { n: r.claims })}` : ""}` };
     },
   },
   {
@@ -485,6 +495,28 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           questions: (a?.questions ?? []).map((x) => ({ q: x.q, a: x.a ?? "" })),
         };
       });
+      // What the ticket row shows beside the Lage: its comments (done ones marked), GitLab's, the mails naming it, its chat, its facts.
+      const keysShown = tickets.map((x) => x.key);
+      const { resolvedCommentIds } = await import("@/lib/resolved");
+      const { gitlabCommentsByTicket } = await import("@/lib/gitlab/store");
+      const { gitlabDone } = await import("@/lib/gitlab/shared");
+      const { mailsForTickets } = await import("@/lib/mail/store");
+      const { ticketChats } = await import("@/lib/runs/ticket-chat");
+      const doneIds = resolvedCommentIds((shown?.tickets ?? []).flatMap((x) => (x.recent ?? []).map((c) => c.id)));
+      const gl = gitlabCommentsByTicket(shown?.tickets.filter((x) => x.analyzed).map((x) => x.key) ?? []);
+      const mails = mailsForTickets(keysShown);
+      const chats = ticketChats(keysShown);
+      const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+      for (const x of tickets as Record<string, unknown>[]) {
+        const key = String(x.key);
+        const fct = facts.get(key)!;
+        x.facts = { issueType: fct.issueType ?? "", priority: fct.priority ?? "", comments: fct.comments, parent: fct.parent ?? "", updatedAt: fct.updatedAt ?? "" };
+        x.recent = (fct.recent ?? []).map((c) => ({ id: c.id, author: c.author, at: c.at, text: oneLine(c.text).slice(0, 400), done: doneIds.has(c.id) }));
+        x.gitlab = (gl[key] ?? []).map((c) => ({ key: c.key, ref: c.ref, title: c.title, url: c.url, author: c.author ?? "?", at: c.createdAt ?? "", body: oneLine(c.body).slice(0, 400), done: gitlabDone(c), resolvable: /^note:\d+$/.test(c.key) }));
+        x.mails = (mails[key] ?? []).map((m) => ({ key: m.key, from: m.fromName ?? m.fromEmail ?? "", subject: m.subject, preview: m.preview, at: m.receivedAt, unread: m.unread }));
+        x.chat = (chats.get(key) ?? []).map((c) => ({ id: c.id, q: c.q, a: c.a, sources: c.sources, at: c.at }));
+        x.questionSources = Object.fromEntries((analysis.get(key)?.questions ?? []).map((q) => [q.q, q.sources ?? []]));
+      }
       const leftNote = new Map((result?.left ?? []).map((l) => [l.key, l.note]));
       const pre = getContextPrefs().presync.sources;
       return {
@@ -494,6 +526,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
         provider: live?.provider ?? `${AI_PROVIDER_INFO[ai.provider].label}${ai.model ? ` · ${ai.model}` : ""}`,
         shown: shown ? { id: shown.id, at: shown.finishedAt ?? shown.startedAt, model: shown.model ?? "", durationMs: shown.durationMs ?? 0, costUsd: shown.costUsd ?? null, analyzed: shown.tickets.filter((x) => x.analyzed).length } : null,
         failed: failed ? { at: failed.startedAt, error: failed.error ?? "" } : null,
+        jql: (await import("@/lib/runs/store")).getBoardSettings().jql ?? "",
         lede: result?.lede ?? "",
         gaps: result?.gaps ?? [],
         counts: ATTENTIONS.map((attention) => ({ attention, n: tickets.filter((x) => x.attention === attention).length })).filter((x) => x.n > 0),
@@ -575,7 +608,10 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const ai = aiChoice();
       const hours = (facts: { hours?: number }[]) => facts.reduce((s, x) => s + (x.hours ?? 0), 0);
       const written = new Map((good?.result?.tickets ?? []).map((x) => [x.key, x]));
-      const tickets = (good?.facts.tickets ?? []).map((tk) => ({ key: tk.key, summary: tk.summary, status: tk.status ?? "", url: tk.url ?? "", lead: written.get(tk.key)?.lead ?? "", done: written.get(tk.key)?.done ?? [], hours: hours(tk.facts), facts: tk.facts.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) }));
+      const { entityHeadline, entitySourceLabel, entityText, entityWhoWhen } = await import("@/lib/entities-shared");
+      const ents = good ? (await import("@/lib/runs/recap")).recapEntities(good) : {};
+      const badges = (key: string) => (ents[key] ?? []).map((e) => ({ label: entitySourceLabel(e), headline: entityHeadline(e), text: entityText(e).slice(0, 1200), who: entityWhoWhen(e).author ?? "", at: entityWhoWhen(e).at ?? "" }));
+      const tickets = (good?.facts.tickets ?? []).map((tk) => ({ key: tk.key, badges: badges(tk.key), summary: tk.summary, status: tk.status ?? "", url: tk.url ?? "", lead: written.get(tk.key)?.lead ?? "", done: written.get(tk.key)?.done ?? [], hours: hours(tk.facts), facts: tk.facts.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) }));
       const other = good ? { done: good.result?.other ?? [], hours: hours(good.facts.other), facts: good.facts.other.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) } : { done: [], hours: 0, facts: [] };
       const later = shiftWorkday(day, 1);
       return {

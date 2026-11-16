@@ -413,7 +413,7 @@ test("Activity, the omnibar's chips, the briefing and its tickets, the recap, To
   for (const word of ["Pay the garage", "Reply from Anna", "Which train?", "All green"]) assert.ok(todayHtml.includes(word), word);
   // Every lambda only reads: the kernel reads they name.
   const lambdas = await import("@/plugins/workspace/lambdas/store");
-  assert.deepEqual(lambdas.getLambda("todos.lage")!.manifest.zeff, ["todos.board", "todos.rows"]);
+  assert.deepEqual(lambdas.getLambda("todos.lage")!.manifest.zeff, ["todos.board", "todos.rows", "sync.steps"]);
   assert.deepEqual(lambdas.getLambda("todos.hits")!.manifest.zeff, ["todos.omni"]);
 });
 
@@ -541,3 +541,71 @@ test("as the browser draws it: the state every <state> starts with, every todo's
   for (const part of ["todos", "tickets", "recap", "today"]) draw(`empty ${part}`, { part }, {});
   draw("empty activity", { scope: "activity" }, {});
 });
+
+test("the kit's new pieces: a hover card, Backspace on an empty input, taking the last value off a list in the state", { skip }, async () => {
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const src = `<state name="chips" value="[]"/><state name="q" value="" keep=true/>
+<input bind="q" back="chip-back" enter="chip-first"/><on event="chip-back" action="pop" state="chips"/><on event="chip-first" action="pick" state="chips" value="a"/>
+<hover width=300><a href="/x">key</a><hovercard><b>Title</b><small>Status</small></hovercard></hover>
+<button action="pop" state="chips" label="x"/>`;
+  const r = renderView(src, { rows: [], props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
+  assert.deepEqual(r.errors, []);
+  const html = JSON.stringify(r.nodes);
+  assert.ok(html.includes('"t":"hover"') && html.includes('"t":"hovercard"') && html.includes("Title"));
+  assert.ok(html.includes('"back":"chip-back"'));
+  const bad = renderView(`<hover><hovercard>x</hovercard></hover><button action="nope" label="y"/>`, { rows: [], props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
+  assert.ok(bad.errors.length > 0, "an unknown action is still an error");
+});
+
+test("the last pieces: tagging a person, a picture in a note, the steps of the run bar, the old addresses leading to the page, the switch", { skip }, async () => {
+  const { call, ids, store } = await world();
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("todos-ext"), "views", "todos.html"), "utf8");
+
+  // @ in a note: the word after it is looked up among the people (the People plugin: none installed here, so none found — and a text without an @ finds nothing).
+  assert.deepEqual((await call<{ hits: unknown[] }>("todos.mention", { text: "ask @Ann" })).hits, []);
+  assert.deepEqual((await call<{ hits: unknown[] }>("todos.mention", { text: "no tag here" })).hits, []);
+  assert.deepEqual((await call<{ hits: unknown[] }>("todos.mention", { text: "mail@example" })).hits, []);
+
+  // A picture in a note's text is drawn as the picture (its stored file), the text around it as text.
+  const id = ids.today;
+  const own = store.getTodo(id)!.userNotes.find((n) => !n.by);
+  const text = "Look: ![Screen](doc:12) and more";
+  if (own) store.updateTodoUserNote(id, own.at, text);
+  else store.addTodoUserNote(id, text);
+  type P = { notes: { mine: boolean; parts: { image: boolean; url: string; text: string; title: string }[] }[] };
+  const panel = await call<P>("todos.panel", { id });
+  const parts = panel.notes.find((n) => n.mine)!.parts;
+  assert.deepEqual(parts.map((p) => [p.image, p.url, p.title || p.text]), [[false, "", "Look: "], [true, "/api/documents/12/file", "Screen"], [false, "", " and more"]]);
+  const drawn = renderView(template, { rows: [], props: [], titleName: "Todos", state: { part: "todos", scope: "open", panel: String(id) }, app: {}, data: { x: await call("todos.screen", { scope: "open" }), p: panel, lage: await call("todos.lage", {}) }, db: { id: 1, title: "Todos" } } as never);
+  assert.deepEqual(drawn.errors, []);
+  assert.ok(JSON.stringify(drawn.nodes).includes("/api/documents/12/file"));
+
+  // The run bar's steps: Zeff's sync steps in order, each with where it stands; a step is started or stopped by a flow that needs "api".
+  type Lage = { steps: { key: string; label: string; running: boolean; text: string }[]; nSteps: number };
+  const lage = await call<Lage>("todos.lage", {});
+  assert.ok(lage.nSteps >= 1);
+  assert.ok(lage.steps.some((s) => s.key === "boards"), "the Lage's own step is there");
+  assert.equal((await engine.runFlow("todos-ext.sync", { key: "boards", stop: "false" }, { dry: true })).status, "done");
+  const bad = await engine.runFlow("todos-ext.sync", { key: "nope", stop: "false" });
+  assert.equal((bad.output as { ok: boolean } | null)?.ok ?? false, false);
+  assert.equal(drawnHas(renderView(template, { rows: [], props: [], titleName: "Todos", state: { part: "todos", scope: "open" }, app: {}, data: { x: await call("todos.screen", { scope: "open" }), lage }, db: { id: 1, title: "Todos" } } as never)), true);
+
+  // The old addresses: the tab, the part, the recap's day and a todo's number as the page's state.
+  const { todosState } = await import("@/plugins/workspace/todos-app");
+  assert.equal(todosState({}), "s.part=todos");
+  assert.equal(todosState({ todos: "done" }), "s.part=todos&s.scope=done");
+  assert.equal(todosState({ part: "tickets" }), "s.part=tickets");
+  assert.equal(todosState({ view: "recap", day: "2026-11-13" }), "s.part=recap&s.recapday=2026-11-13");
+  assert.equal(todosState({ todos: "done" }, 37), "s.part=todos&s.scope=done&s.panel=37");
+  const { todosApp } = await import("@/plugins/workspace/todos-app");
+  const page = todosApp();
+  assert.ok(page, "the plugin's page is there once its package is installed");
+  const { getDatabase } = await import("@/plugins/workspace/store");
+  assert.ok(getDatabase(page!)!.schema.views[0].template!.includes('lambda="todos.screen"'));
+  // The switch is offered on the Plugins page.
+  const { PORTS } = await import("@/plugins/ports");
+  assert.ok(PORTS.some((p) => p.builtin === "todos" && p.plugin === "todos-ext"));
+});
+const drawnHas = (r: { nodes: unknown; errors: unknown[] }) => r.errors.length === 0 && JSON.stringify(r.nodes).includes("Steps");

@@ -6,6 +6,19 @@ import { tFor } from "./lib.mjs";
  * steps planned after it; and the comments, messages and mails it comes from. The kernel's read `todos.detail` does the looking (the built-in panel's own data); this puts the
  * words of the page on it. event: { id }.
  */
+/** A note's text with its pictures inline: ![title](doc:12) is the stored picture. */
+const noteParts = (text) => {
+  const parts = [];
+  let last = 0;
+  for (const m of String(text).matchAll(/!\[([^\]]*)\]\(doc:(\d+)\)/g)) {
+    if (m.index > last) parts.push({ text: text.slice(last, m.index), image: false, url: "", title: "" });
+    parts.push({ text: "", image: true, url: `/api/documents/${m[2]}/file`, title: m[1] || "Bild" });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push({ text: text.slice(last), image: false, url: "", title: "" });
+  return parts;
+};
+
 export async function handler(event, context) {
   const t = tFor(context.language);
   const lang = context.language === "de" || context.language === "es" ? context.language : "en";
@@ -38,7 +51,9 @@ export async function handler(event, context) {
     due: d.due,
     source: d.source ? t("Source: {source}", { source: d.source }) : "",
     note: d.note,
-    notes: d.notes.map((n) => ({ ...n, when: stamp(n.at), by: n.by ? String(n.by) : "", mine: n.own, sync: n.own ? (n.jira === "synced" ? t("on Jira") : n.jira === "changed" ? t("changed since Jira") : "") : "" })),
+    attachments: d.attachments.map((a) => ({ ...a, insert: `![${a.name.replace(/\.[a-z0-9]+$/i, "").replace(/[[\]]/g, "")}](doc:${a.id})`, url: `/api/documents/${a.id}/file` })),
+    nImages: d.attachments.filter((a) => a.image).length,
+    notes: d.notes.map((n) => ({ ...n, parts: noteParts(n.text), when: stamp(n.at), by: n.by ? String(n.by) : "", mine: n.own, sync: n.own ? (n.jira === "synced" ? t("on Jira") : n.jira === "changed" ? t("changed since Jira") : "") : "" })),
     nNotes: d.notes.length,
     ops: d.ops.map((o) => ({ ...o, only: String(o.index), editBody: o.hasText && d.status === "open" })),
     nOps: d.ops.length,

@@ -171,7 +171,7 @@ export const DATA_ACTIONS: FlowAction[] = [
     label: "Add a todo",
     summary: "A todo of yours — through the gate every todo goes through (one that repeats an open one isn't made twice: that one is given back) — with a due day and actions (a transfer …). Needs the flow's todos permission.",
     input: [f("text", "text", { required: true }), f("due", "text"), f("ops", "json"), f("ticket", "text", { help: "A ticket key the todo is on (empty: none)." })],
-    output: "{ id, ref, merged }",
+    output: "{ id, ref, merged, message }",
     writes: true,
     run: async (i, ctx) => {
       if (!ctx.perms.todos) throw new Error("This flow may not add todos — grant it under the flow's permissions (todos).");
@@ -183,7 +183,9 @@ export const DATA_ACTIONS: FlowAction[] = [
       const ops = (Array.isArray(i.ops) ? i.ops : []) as { type?: string }[];
       const add = ops.filter((o) => o && typeof o.type === "string" && !todo.ops.some((x) => x.type === o.type));
       if (add.length) setTodoOps(todo.id, [...todo.ops, ...(add as never[])], undefined, true);
-      return { id: todo.id, ref: todo.ref, merged: todo.outcome === "merged" };
+      const { t } = await import("@/lib/i18n/server");
+      const merged = todo.outcome === "merged";
+      return { id: todo.id, ref: todo.ref, merged, message: merged ? t("{ref} says the same already - merged into it.", { ref: todo.ref }) : t("{ref} created.", { ref: todo.ref }) };
     },
   },
   {

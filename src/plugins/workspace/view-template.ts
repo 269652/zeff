@@ -72,6 +72,7 @@ const ACTIONS: Record<string, { row?: boolean; what: string }> = {
   hide: { row: true, what: "hide the row from the views" },
   state: { what: 'set the view\'s state: state="dir" value="owed"' },
   pick: { what: 'add a value to a list kept in the state — or take it out again when it is in: state="chips" value="…" (the state is a JSON list, as <check> keeps it)' },
+  pop: { what: 'take the last value off a list kept in the state: state="chips" (with <input back="event"> and <on event="event" action="pop" state="chips"/>: Backspace in the empty field takes the last chip off)' },
   select: { row: true, what: "pick the row (state.selected) — <selected> shows it" },
   url: { what: 'go to an address: href="/todos"' },
   print: { what: "print the view (a PDF)" },
@@ -220,6 +221,9 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // How the view looks: its accent colour (#rrggbb), the roundness of its corners and its font - on the view only.
   theme: T({ accent: "text", radius: { oneOf: ["none", "sm", "md", "lg"] }, font: { oneOf: ["sans", "serif", "mono"] } }, true),
   // Drag and drop: what is inside <drag value="…"> can be picked up; <drop bind="x" emit="moved"> takes it: state.x is the value, the event is sent.
+  // A floating card on hover (or keyboard focus): what is inside <hover> is shown, what is in its <hovercard> is the card — a ticket's summary, an action's text.
+  hover: T({ width: "int" }),
+  hovercard: T({}),
   drag: T({ value: "text", tip: "text" }),
   drop: T({ bind: "text", emit: "text", label: "text" }),
   // Settings of the app: declared with <setting>, edited in <settings/>, read as settings.<name>.
@@ -234,7 +238,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   tab: T({ id: "text", label: "text", n: "text" }),
   // A dialog (center) or a drawer (side=right), open while state.<bind> is filled.
   dialog: T({ bind: "text", title: "text", side: { oneOf: ["center", "right"] }, wide: { oneOf: ["true", "false"] } }),
-  input: T({ /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", /** true: a textarea grows with what is written in it (up to 320 px). */ grow: { oneOf: ["true", "false"] }, bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
+  input: T({ /** Backspace in the empty field sends this event — the last chip taken off. */ back: "text", /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", /** true: a textarea grows with what is written in it (up to 320 px). */ grow: { oneOf: ["true", "false"] }, bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
   slider: T({ bind: "text", min: "num", max: "num", step: "num", label: "text", value: "text", unit: "text" }, true),
   calendar: T({ source: "list", date: "list", bind: "text", empty: "text" }),
   heatmap: T({ source: "list", date: "list", value: "list", calc: { oneOf: ["count", "sum"] }, weeks: "int", label: "text", unit: "text" }, true),
