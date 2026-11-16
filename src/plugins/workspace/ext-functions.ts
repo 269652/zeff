@@ -116,7 +116,9 @@ export function externalSources(): WorkspaceSource[] {
             const typed = (Array.isArray(o.typed) ? o.typed : []).slice(0, 60).flatMap((x): NonNullable<SourceRecord["typed"]> => {
               const f = x && typeof x === "object" ? (x as Record<string, unknown>) : null;
               if (!f || !str(f.id) || !TYPED.has(str(f.type))) return [];
-              const value = f.value === null || typeof f.value === "string" || typeof f.value === "number" || typeof f.value === "boolean" ? f.value : null;
+              // (a person field's value: the ids of the contacts)
+              const ids = Array.isArray(f.value) && f.value.length <= 50 && f.value.every((x) => typeof x === "number") ? (f.value as number[]) : null;
+              const value = f.value === null || typeof f.value === "string" || typeof f.value === "number" || typeof f.value === "boolean" ? f.value : ids;
               return [{ id: str(f.id, 60), name: str(f.name, 80) || str(f.id, 60), type: str(f.type) as never, value, ...(f.format === "number" || f.format === "euro" ? { format: f.format } : {}) }];
             });
             return [

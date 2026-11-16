@@ -7,6 +7,7 @@ import { rawRowObject, rowObject } from "./rows";
 // The kernel's mail and message actions (mail.thread, row.op, mail.archive …), contributed as Zeff's own.
 import "./mail-actions";
 import "./connector-actions";
+import "./review-actions";
 import "./rows-actions";
 import "./ai-actions";
 import "./store-actions";

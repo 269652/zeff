@@ -1,0 +1,71 @@
+<state name="s_interests" value=""/><state name="s_mutes" value=""/><state name="s_url" value=""/><state name="s_name" value=""/><state name="s_taste" value=""/><state name="s_find" value=""/><state name="n_maxAge" value=""/><state name="n_perSource" value=""/><state name="n_perRun" value=""/><state name="n_keepDays" value=""/><state name="n_batch" value=""/><state name="n_keepLatest" value=""/>
+<data name="s" lambda="news.settings" with="mode=data"/>
+<on event="settings-changed" action="reload"/>
+<text tone=muted>Where your news comes from and what makes it yours. Everything is fetched from public feeds; nothing of yours is sent.</text>
+{{#if not data.s}}<muted>Loading …</muted>{{#else}}
+<box title="What suits you">
+<col gap=3>
+<row gap=2 wrap=false><col fill=true><input bind="s_interests" rows=3 label="Interests (one per line or comma; a number 1–3 after × says how much it counts)" value="{{ data.s.prefs.interestsText }}"/></col><button run="news.pref" with="key=interests, value={{ state.s_interests }}" done="Saved." emit="settings-changed" label="Save" variant=primary/></row>
+<row gap=2 wrap=false><col fill=true><input bind="s_mutes" rows=2 label="Muted words (items with one are left out)" value="{{ data.s.prefs.mutesText }}"/></col><button run="news.pref" with="key=mutes, value={{ state.s_mutes }}" done="Saved." emit="settings-changed" label="Save" variant=primary/></row>
+<row gap=2><small><muted>Language of the topic searches</muted></small>
+<button run="news.pref" with="key=language, value=de" emit="settings-changed" label="Deutsch" variant="{{ data.s.prefs.language == 'de' ? 'primary' : 'plain' }}"/>
+<button run="news.pref" with="key=language, value=en" emit="settings-changed" label="English" variant="{{ data.s.prefs.language == 'en' ? 'primary' : 'plain' }}"/>
+<button run="news.pref" with="key=language, value=any" emit="settings-changed" label="Both" variant="{{ data.s.prefs.language == 'any' ? 'primary' : 'plain' }}"/></row>
+<col gap=1>
+{{#each data.s.flags}}
+<row gap=2 align=center wrap=false><button run="news.pref" with="key={{ key }}, value={{ on ? 'false' : 'true' }}" emit="settings-changed" label="{{ word }} {{ label }}" variant="{{ on ? 'primary' : 'quiet' }}"/><small><muted>{{ what }}</muted></small></row>
+{{/each}}
+</col>
+<grid cols=3 gap=2 min=200>
+<row gap=1 wrap=false><input bind="n_maxAge" type=number label="Days of news" value="{{ data.s.prefs.maxAgeDays }}"/><button run="news.pref" with="key=maxAgeDays, value={{ state.n_maxAge }}" emit="settings-changed" label="Set"/></row>
+<row gap=1 wrap=false><input bind="n_perSource" type=number label="Most per source" value="{{ data.s.prefs.perSource }}"/><button run="news.pref" with="key=perSource, value={{ state.n_perSource }}" emit="settings-changed" label="Set"/></row>
+<row gap=1 wrap=false><input bind="n_perRun" type=number label="Feeds per round" value="{{ data.s.prefs.perRun }}"/><button run="news.pref" with="key=perRun, value={{ state.n_perRun }}" emit="settings-changed" label="Set"/></row>
+<row gap=1 wrap=false><input bind="n_keepDays" type=number label="Keep read items (days)" value="{{ data.s.prefs.keepDays }}"/><button run="news.pref" with="key=keepDays, value={{ state.n_keepDays }}" emit="settings-changed" label="Set"/></row>
+<row gap=1 wrap=false><input bind="n_batch" type=number label="Agent reads per round" value="{{ data.s.prefs.funnelBatch }}"/><button run="news.pref" with="key=funnelBatch, value={{ state.n_batch }}" emit="settings-changed" label="Set"/></row>
+<row gap=1 wrap=false><input bind="n_keepLatest" type=number label="Newest and best kept" value="{{ data.s.prefs.keepLatest }}"/><button run="news.pref" with="key=keepLatest, value={{ state.n_keepLatest }}" emit="settings-changed" label="Set"/></row>
+</grid>
+</col>
+</box>
+<box title="Sources ({{ data.s.sourceCount }})">
+<col gap=3>
+<row gap=2 wrap=true>
+<input bind="s_url" label="Feed address (https://…)"/><input bind="s_name" label="Name (optional)"/>
+<button run="news.act" with="op=source-add, url={{ state.s_url }}, name={{ state.s_name }}" done="Added." emit="settings-changed" label="Add" variant=primary disabled="{{ not state.s_url }}"/>
+</row>
+<row gap=2 wrap=true>
+<button run="news.act" with="op=starter" done="Starter pack added." emit="settings-changed" label="Starter pack ({{ data.s.starter }})"/>
+{{#each data.s.categories}}{{#if left}}<button run="news.act" with="op=category, name={{ category }}" done="Added." emit="settings-changed" label="+ {{ category }} ({{ left }})" variant=quiet/>{{/if}}{{/each}}
+</row>
+{{#each data.s.sources}}
+<row gap=2 align=center wrap=false>
+<col fill=true><b>{{ name }}</b><small><muted>{{ category }} · {{ items }} items{{#if lastAt}} · fetched {{ lastAt }}{{/if}}{{#if votes}} · votes {{ votes }}{{/if}}</muted></small>{{#if lastError}}<small><muted>{{ lastError }}</muted></small>{{/if}}</col>
+<button run="news.act" with="op=source-update, id={{ id }}, enabled={{ enabled ? 'false' : 'true' }}" emit="settings-changed" label="{{ enabled ? 'On' : 'Off' }}" variant="{{ enabled ? 'primary' : 'plain' }}"/>
+<button run="news.act" with="op=source-remove, id={{ id }}" confirm="Remove this source? Saved items stay." emit="settings-changed" label="✕" variant=quiet/>
+</row>
+{{/each}}
+</col>
+</box>
+<box title="Find feeds">
+<col gap=2>
+<row gap=2 wrap=false><col fill=true><input bind="s_find" label="A website or a profile on one"/></col><button run="news.find-feeds" with="address={{ state.s_find }}" into="found" label="Find" disabled="{{ not state.s_find }}"/></row>
+{{#each data.found.feeds}}
+<row gap=2 align=center wrap=false><col fill=true><b>{{ title }}</b><small><muted>{{ url }} · {{ items }} items</muted></small></col><button run="news.act" with="op=source-add, url={{ url }}, name={{ title }}, category=Found" done="Added." emit="settings-changed" label="Add" variant=primary/></row>
+{{/each}}
+{{#if data.s.discoveries}}<small><muted>Found by itself lately</muted></small>
+{{#each data.s.discoveries}}<small><muted>{{ at }} · {{ topic }} → {{ name }}</muted></small>{{/each}}{{/if}}
+</col>
+</box>
+<box title="✨ Your taste">
+<col gap=2>
+<text tone=muted>{{ data.s.taste.text }}</text>
+<small><muted>{{ data.s.taste.pending }} signals waiting to be taken in</muted></small>
+<input bind="s_taste" rows=4 label="Edit it (the AI continues from your version)" value="{{ data.s.taste.text }}"/>
+<row gap=2>
+<button run="news.act" with="op=taste-edit, text={{ state.s_taste }}" done="Saved." emit="settings-changed" label="Save" variant=primary/>
+<button run="news.taste" done="Updated." emit="settings-changed" label="Update now"/>
+<button run="news.act" with="op=taste-forget" confirm="Forget your written taste?" emit="settings-changed" label="Forget it" variant=quiet/>
+<button run="news.act" with="op=forget, rescore=true" confirm="Forget what your likes and dislikes taught?" done="Forgotten." emit="settings-changed" label="Forget what I liked" variant=quiet/>
+</row>
+</col>
+</box>
+{{/if}}

@@ -463,17 +463,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
         // The pipelines with their AI steps: the fields of the rows that changed, the summaries.
         await (await import("@/plugins/workspace/pipeline")).runPipelines({ ai: true }).catch((e) => console.error("[workspace] the pipelines failed", e));
       }
-      return r.ok
-        ? {
-            ok: true,
-            message: [
-              r.all ? t("{n} tickets (all)", { n: r.relevant }) : t("{n} tickets (with you)", { n: r.relevant }),
-              t("{n} reassessed", { n: r.analyzed }),
-              t("{n} unchanged", { n: r.unchanged }),
-              ...(r.failed ? [t("{n} failed", { n: r.failed })] : []),
-            ].join(" · "),
-          }
-        : { ok: false, message: r.error ?? t("Failed.") };
+      return (await import("@/plugins/jira-lage/core")).boardLageMessage(r, t);
     },
     busy: () => flag("__zeffBoardLage"),
     schedule: () => ({ everyMinutes: getBoardSettings().autoMinutes, lastAt: recorded("boardlage").lastAt, window: t("workdays, with the briefing"), workdays: true }),
@@ -592,7 +582,8 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       // The circles by rule, the summaries out of date compiled (in the background) — a failure there doesn't fail the step.
       await (await import("@/plugins/people/pulse")).afterBriefing().catch((e) => console.error("[people] after the briefing:", e));
       // The AI's few points before the meetings of the next hours ("What you should know" — it checks its plugin and switch; again only when something changed).
-      await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
+      if ((await import("@/plugins/state")).onlyThroughPort("know")) await (await import("@/lib/cases/there")).casesPortFlows(["know.prepare"]);
+      else await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
       return r.ok ? { ok: true, message: t("{a} aliases, {c} new, {m} merged, {r} relations", { a: r.aliases, c: r.created, m: r.merged, r: r.relations }) } : { ok: false, message: r.error ?? t("Failed.") };
     },
     busy: () => flag("__zeffPeopleNormalize"),
@@ -827,7 +818,10 @@ export function startSyncAllHere(): { ok: boolean; message: string } {
     void (async () => {
       try {
         // The Mail-Durchsicht and -Zuordnung come with the Ticket-Lage (its last steps) — not twice.
-        for (const key of allKeys().filter((k) => k !== "relations" && k !== "mailtodos" && k !== "autoactions" && k !== "boardlage" && k !== "knowledgerel" && k !== "peoplenorm" && k !== "tododupes" && k !== "notetodos" && k !== "noterelations" && k !== "calendarrelations" && k !== "calendartodos" && k !== "review" && k !== "matching" && k !== "doctodos" && k !== "docrelations" && stepAvailable(k))) {
+        // (a port's flow standing in for one of those steps — its `replaces` — is left out like it)
+        const chained = new Set<string>(["relations", "mailtodos", "autoactions", "boardlage", "knowledgerel", "peoplenorm", "tododupes", "notetodos", "noterelations", "calendarrelations", "calendartodos", "review", "matching", "doctodos", "docrelations"]);
+        const kindOf = (k: string): string => (k.startsWith("flow:") ? (flowByName(k.slice(5))?.sync?.replaces ?? k) : k);
+        for (const key of allKeys().filter((k) => !chained.has(kindOf(k)) && stepAvailable(k))) {
           if (l.allStopped) break;
           l.all = key;
           await runStep(key);

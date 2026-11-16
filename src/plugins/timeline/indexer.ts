@@ -15,6 +15,7 @@ import { isInstalled } from "@/plugins/state";
 import { ME_REF } from "./shared";
 import { makeResolver, refsOfRow, type Resolver } from "./refs";
 import { eventBySource, recordEvent, type EventInput } from "./store";
+import { financesThere } from "@/lib/finances/there";
 
 /** A time as ISO (UTC): ISO with or without zone, SQLite's "YYYY-MM-DD HH:MM:SS" (UTC), Jira's "… 15:01:52 Mitteleuropäische Sommerzeit" (local), a day (local noon). */
 export function toIso(s: string | null | undefined): string | null {
@@ -334,7 +335,7 @@ const ACTIONS: Source = {
  */
 const BANK: Source = {
   id: "bank",
-  available: () => isInstalled("finances") && hasTable("bank_transactions"),
+  available: () => financesThere() && hasTable("bank_transactions"),
   read: (r, mark, limit) => {
     type R = { k: string; at: string; date: string; amount: number; currency: string; text: string; counterparty: string; iban: string; case_id: number | null; person_id: number | null };
     const hasPerson = all<{ name: string }>("pragma table_info(bank_transactions)").some((c) => c.name === "person_id");

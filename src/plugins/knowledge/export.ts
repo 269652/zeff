@@ -1,5 +1,6 @@
 import { isoDay } from "@/lib/text";
 import { bankDocs } from "@/plugins/finances/knowledge-docs";
+import { pluginKnowledgeDocs } from "@/plugins/workspace/ext-points";
 import { getSqlite } from "@/db";
 import { currentAccount } from "@/db/accounts";
 import { weekFromDate } from "@/lib/week";
@@ -257,6 +258,10 @@ ${clean(r.body)}` }));
 
   // The bank statements (the Cases plugin's bank): a page per account and month — the knowledge keeps your income from them.
   if (isInstalled("finances")) docs.push(...bankDocs());
+  // Pages the plugins bring (their lambdas' last answers): a port of a built-in's pages, or pages of its own.
+  for (const d of pluginKnowledgeDocs() as Partial<KnowledgeDoc>[])
+    if (d && typeof d.id === "string" && typeof d.body === "string" && d.id.startsWith("zeff:"))
+      docs.push({ id: d.id, space: String(d.space ?? "Zeff"), title: String(d.title ?? d.id), url: "", version: Number(d.version) || 1, updatedAt: d.updatedAt ?? null, author: d.author ?? null, body: d.body });
 
   // A secret source's pages never leave Zeff (Settings → Data boundaries).
   const kept = docs.filter((d) => docLabel(d.id) !== "secret");

@@ -9,6 +9,12 @@ import { isInstalled } from "@/plugins/state";
 export async function startBoardLageAction(opts: { all?: boolean } = {}): Promise<{ ok: boolean; message?: string; error?: string }> {
   try {
     if (!isInstalled("jira-lage")) return { ok: false, error: t("Jira briefing is not installed (Menu → Plugins).") };
+    // Through its port (jira-lage-ext): its flow does it, in the background — told the scope as its input.
+    if ((await import("@/plugins/state")).onlyThroughPort("jira-lage")) {
+      const { runFlow } = await import("@/plugins/workspace/flows/engine");
+      void runFlow("jira-lage.board-lage", { all: !!opts.all }, { trigger: { kind: "manual" } }).catch((e) => console.error("[jira-lage] the board briefing failed", e));
+      return { ok: true, message: t("The board briefing is running — the cards fill in as parts are done.") };
+    }
     // The tickets you're in — or (on request) all, also those without you.
     // (The briefing runs on the sync host, when there is one: it is told the scope there.)
     const { delegates } = await import("@/lib/host/role");

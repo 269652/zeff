@@ -25,7 +25,19 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   revolut: { port: "revolut-ext", steps: [] },
   gitlab: { port: "gitlab-ext", steps: ["gitlab"] },
   jira: { port: "jira-ext", steps: ["jira"] },
+  // (the Board-Lage run is the port's flow; the boards' databases, Meine Lage, the ticket picker and the assign button stay the kernel's — they read the same tables)
+  "jira-lage": { port: "jira-lage-ext", steps: ["boardlage"] },
   keep: { port: "keep-ext", steps: ["keep"] },
+  // (the review of the todos for actions: the port's flow takes the step; the briefing runs the flow — lib/runs/run.ts)
+  "auto-actions": { port: "auto-actions-ext", steps: ["autoactions"] },
+  // (structured questions: the port's lambda plans and phrases — questions/ask.ts askStructured asks it; the query layer is the kernel's: data.views, data.query)
+  questions: { port: "questions-ext", steps: [] },
+  // (what you should know: the port's flows summarize — know/server-actions.ts and the People matching step run them; the brief itself is the kernel's: brief.get)
+  know: { port: "know-ext", steps: [] },
+  // (open loops: the port's lambdas work them out — loops/query.ts reads their answer; your word and the closings are its flows)
+  loops: { port: "loops-ext", steps: [] },
+  // (News: the port's flow fetches, filters, tags and discovers — its page is the plugin's view; the settings page, the Today page's news and the Workspace database of what you kept stay the kernel's and read the same tables)
+  news: { port: "news-ext", steps: ["news"] },
 };
 
 /**
