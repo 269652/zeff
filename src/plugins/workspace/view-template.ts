@@ -234,7 +234,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   tab: T({ id: "text", label: "text", n: "text" }),
   // A dialog (center) or a drawer (side=right), open while state.<bind> is filled.
   dialog: T({ bind: "text", title: "text", side: { oneOf: ["center", "right"] }, wide: { oneOf: ["true", "false"] } }),
-  input: T({ /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
+  input: T({ /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", /** true: a textarea grows with what is written in it (up to 320 px). */ grow: { oneOf: ["true", "false"] }, bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
   slider: T({ bind: "text", min: "num", max: "num", step: "num", label: "text", value: "text", unit: "text" }, true),
   calendar: T({ source: "list", date: "list", bind: "text", empty: "text" }),
   heatmap: T({ source: "list", date: "list", value: "list", calc: { oneOf: ["count", "sum"] }, weeks: "int", label: "text", unit: "text" }, true),

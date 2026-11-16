@@ -132,6 +132,14 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     setWas(a.current ?? "");
     setV(a.current ?? "");
   }
+  // (grow=true: a textarea that is as high as what is in it, up to 320 px.)
+  const box = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || a.grow !== "true") return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
+  }, [v, a.grow]);
   useEffect(() => {
     if (v === (a.current ?? "")) return;
     const timer = setTimeout(() => env.setState(a.bind, v), type === "text" || type === "textarea" || type === "email" || type === "url" ? 250 : 0);
@@ -159,7 +167,7 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
   const rows = Number(a.rows) > 0 ? Math.min(40, Number(a.rows)) : undefined;
   const field =
     type === "textarea" ? (
-      <textarea className={`input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
+      <textarea ref={box} className={`input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     ) : (
       <input type={type} className={`input py-1 text-sm ${type === "color" ? "h-8 w-12 p-0.5" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     );

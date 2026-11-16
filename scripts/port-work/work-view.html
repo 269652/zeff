@@ -1,5 +1,5 @@
-<state name="sel" value="" keep=url/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value="" keep=true/><state name="all" value="false"/><state name="qpick" value=""/><state name="note" value=""/><state name="qo0" value=""/><state name="qo1" value=""/><state name="qo2" value=""/><state name="qo3" value=""/><state name="preview" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
-<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}, branches={{ state.branchopen }}, all={{ state.all }}, msg={{ state.msg }}, qpick={{ state.qpick }}, qo0={{ state.qo0 }}, qo1={{ state.qo1 }}, qo2={{ state.qo2 }}, qo3={{ state.qo3 }}" every=2 debounce="300"/>
+<state name="sel" value="" keep=url/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value="" keep=true/><state name="all" value="false"/><state name="qpick" value=""/><state name="note" value=""/><state name="qo0" value=""/><state name="qo1" value=""/><state name="qo2" value=""/><state name="qo3" value=""/><state name="preview" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="cbrowse" value="0"/><state name="cdir" value=""/><state name="cdirtype" value=""/><state name="cuse" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
+<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}, cbrowse={{ state.cbrowse }}, cdir={{ state.cdir }}, cuse={{ state.cuse }}, cbranch={{ state.cbranch }}, branches={{ state.branchopen }}, all={{ state.all }}, msg={{ state.msg }}, qpick={{ state.qpick }}, qo0={{ state.qo0 }}, qo1={{ state.qo1 }}, qo2={{ state.qo2 }}, qo3={{ state.qo3 }}" every=2 debounce="300"/>
 <data name="panes" lambda="work.panes" with="run={{ data.x.session.runId }}" when="{{ data.x.session.runId }}" every=5/>
 <on event="work-changed" action="reload"/>
 <on event="work-started" action="state" state="sel" value="run:{{ data.started.runId }}"/>
@@ -57,7 +57,7 @@
 <heading level=1>{{ data.x.labels.newTitle }}</heading>
 <muted>{{ data.x.labels.newHint }}</muted>
 <input bind="newticket" placeholder="Ticket (optional, like ABC-123)"/>
-<input bind="newmsg" rows=4 placeholder="What should the worker do?"/>
+<input bind="newmsg" grow=true rows=4 placeholder="What should the worker do?"/>
 {{#each data.x.composer.files}}<row gap=2 align=center><small>📎 {{ name }} · {{ size }}</small><button run="work.attach-remove" with="scope=new, ref={{ ref }}" emit="work-changed" label="✕" variant=quiet/></row>{{/each}}
 <upload bind="busyup2" run="work.attach" with="scope=new" multiple=true zone=view label="📎 Attach files or pictures" emit="work-changed"/>
 <section title="{{ data.x.composer.labels.options }}" collapsible=true open=false>
@@ -71,39 +71,28 @@
 {{/if}}
 <row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.repo }}</muted></small>{{#each data.x.composer.repos}}<button action="state" state="crepo" value="{{ path }}" label="{{ name }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
 <row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.where }}</muted></small>{{#each data.x.composer.workspaces}}<button action="state" state="cws" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
-<input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/>
-</col>
-</section>
-<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ state.newticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}, attach=new" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.folder }}</muted></small><text>{{ data.x.composer.repoNow }}</text><button action="state" state="cbrowse" value="{{ state.cbrowse == '1' ? '0' : '1' }}" label="{{ data.x.composer.labels.browse }}" variant=quiet/></row>
+{{#if data.x.composer.browsing}}
+<col gap=1>
+{{#if data.x.composer.folders.ok}}
+<row gap=1 wrap=true align=center><input bind="cdirtype" placeholder="{{ data.x.composer.folders.path }}"/><button action="state" state="cdir" value="{{ state.cdirtype }}" label="{{ data.x.composer.labels.go }}"/>{{#if data.x.composer.folders.parent}}<button action="state" state="cdir" value="{{ data.x.composer.folders.parent }}" label="↑ {{ data.x.composer.labels.up }}" variant=quiet/>{{/if}}<button action="state" state="cuse" value="{{ data.x.composer.folders.path }}" label="{{ data.x.composer.labels.use }}" variant=primary/></row>
+<small><muted>{{ data.x.composer.folders.path }}</muted></small>
+<row gap=1 wrap=true>{{#each data.x.composer.folders.dirs}}<button action="state" state="cdir" value="{{ path }}" label="{{ name }}" variant=quiet/>{{/each}}</row>
+{{#else}}<text tone="bad">{{ data.x.composer.folders.error }}</text>{{/if}}
 </col>
 {{/if}}
-{{#if data.x.mode == 'ticket'}}
-<col gap=3>
-<heading level=2>{{ data.x.ticketPage.title }}</heading>
-{{#if data.x.ticketPage.url}}<a href="{{ data.x.ticketPage.url }}">open ↗</a>{{/if}}
-{{#if data.x.ticketPage.summary}}<text>{{ data.x.ticketPage.summary }}</text>{{/if}}
-{{#if data.x.ticketPage.facts}}<small><muted>{{ data.x.ticketPage.facts }}</muted></small>{{/if}}
-<b>{{ data.x.ticketPage.sessionsLabel }}</b>
-{{#each data.x.ticketPage.sessions}}
-<row gap=3 align=center>
-<mono>{{ ref }}</mono>
-<button action="state" state="sel" value="run:{{ id }}" label="{{ title }}" variant=quiet/>
-<grow/>
-<small>{{ status }}</small><small><muted>{{ at }}</muted></small>
-</row>
-{{/each}}
-<input bind="newmsg" rows=3 placeholder="New session — what should we work on?"/>
-<section title="{{ data.x.composer.labels.options }}" collapsible=true open=false>
-<col gap=2>
-<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.provider }}</muted></small>{{#each data.x.composer.providers}}<button action="state" state="cprov" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
-{{#if data.x.composer.live}}
-<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.mode }}</muted></small>{{#each data.x.composer.modes}}<button action="state" state="cmode" value="{{ id }}" label="{{ label }}" tip="{{ hint }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
-<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.model }}</muted></small>{{#each data.x.composer.models}}<button action="state" state="cmodel" value="{{ value }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
-{{#if data.x.composer.showEffort}}<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.effort }}</muted></small>{{#each data.x.composer.efforts}}<button action="state" state="ceffort" value="{{ value }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>{{/if}}
-{{#if data.x.composer.admin}}<toggle bind="celev" label="As administrator"/>{{/if}}
+{{#if data.x.composer.branches}}<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.branches }}</muted></small>{{#each data.x.composer.branches}}<button action="state" state="cbranch" value="{{ name }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'quiet' }}"/>{{/each}}</row>{{/if}}
+<input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/><row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.folder }}</muted></small><text>{{ data.x.composer.repoNow }}</text><button action="state" state="cbrowse" value="{{ state.cbrowse == '1' ? '0' : '1' }}" label="{{ data.x.composer.labels.browse }}" variant=quiet/></row>
+{{#if data.x.composer.browsing}}
+<col gap=1>
+{{#if data.x.composer.folders.ok}}
+<row gap=1 wrap=true align=center><input bind="cdirtype" placeholder="{{ data.x.composer.folders.path }}"/><button action="state" state="cdir" value="{{ state.cdirtype }}" label="{{ data.x.composer.labels.go }}"/>{{#if data.x.composer.folders.parent}}<button action="state" state="cdir" value="{{ data.x.composer.folders.parent }}" label="↑ {{ data.x.composer.labels.up }}" variant=quiet/>{{/if}}<button action="state" state="cuse" value="{{ data.x.composer.folders.path }}" label="{{ data.x.composer.labels.use }}" variant=primary/></row>
+<small><muted>{{ data.x.composer.folders.path }}</muted></small>
+<row gap=1 wrap=true>{{#each data.x.composer.folders.dirs}}<button action="state" state="cdir" value="{{ path }}" label="{{ name }}" variant=quiet/>{{/each}}</row>
+{{#else}}<text tone="bad">{{ data.x.composer.folders.error }}</text>{{/if}}
+</col>
 {{/if}}
-<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.repo }}</muted></small>{{#each data.x.composer.repos}}<button action="state" state="crepo" value="{{ path }}" label="{{ name }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
-<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.where }}</muted></small>{{#each data.x.composer.workspaces}}<button action="state" state="cws" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+{{#if data.x.composer.branches}}<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.branches }}</muted></small>{{#each data.x.composer.branches}}<button action="state" state="cbranch" value="{{ name }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'quiet' }}"/>{{/each}}</row>{{/if}}
 <input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/>
 </col>
 </section>
@@ -244,7 +233,7 @@
 {{#else}}
 <input bind="note" placeholder="What should it do instead? (it reads this)"/>
 <row gap=2 wrap=true>
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow" emit="work-changed" label="Allow" variant=primary/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow" emit="work-changed" label="Allow" variant=primary keys="enter"/>
 {{#if always}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, always=true" emit="work-changed" label="{{ alwaysLabel }}" tip="{{ alwaysTip }}"/>{{/if}}
 <button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, message={{ state.note }}" then="note=" emit="work-changed" label="Deny"/>
 <button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, interrupt=true, message={{ state.note }}" then="note=" emit="work-changed" label="Deny & stop" tip="Deny and stop its turn"/>
@@ -277,7 +266,7 @@
 </box>
 {{/if}}
 {{#each data.x.session.files}}<row gap=2 align=center><small>📎 {{ name }} · {{ size }}</small><button run="work.attach-remove" with="scope={{ data.x.session.attachScope }}, ref={{ ref }}" emit="work-changed" label="✕" variant=quiet/></row>{{/each}}
-<input bind="msg" rows=3 placeholder="{{ data.x.session.placeholder }}" enter="{{ data.x.session.isShell ? 'send-shell' : (data.x.session.canReplyLive ? 'send-live' : 'send-msg') }}"/>
+<input bind="msg" grow=true rows=3 placeholder="{{ data.x.session.placeholder }}" enter="{{ data.x.session.isShell ? 'send-shell' : (data.x.session.canReplyLive ? 'send-live' : 'send-msg') }}"/>
 <row gap=2 wrap=true align=center>
 {{#if data.x.session.isShell}}
 <button run="work.live" with="run={{ data.x.session.runId }}, do=shell, cmd={{ data.x.session.shellCmd }}" into="shellout" then="msg=" emit="work-changed" label="Run in its folder" variant=primary disabled="{{ not data.x.session.shellCmd }}"/>

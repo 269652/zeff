@@ -462,16 +462,39 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     group: "work",
     label: "The branches a session can switch to",
     summary: "The branches of the git repo a session works in (and where each is checked out), with the current one.",
-    input: [f("run", "number", { required: true })],
+    input: [f("run", "number"), f("path", "text")],
     output: "{ ok, error, current, branches: [{ name, remote, current, worktree }] }",
     run: async (i) => {
       need();
       const { getRun } = await import("@/lib/work/store");
       const { listBranches, repoRoot } = await import("@/lib/work/git");
+      // (A folder of its own instead of a session: the branches a new session can start from.)
+      const own = String(i.path ?? "").trim();
+      if (own) {
+        if (!repoRoot(own)) return { ok: false, error: t("{folder} isn't in a git repo.", { folder: own }), branches: [] };
+        return { ok: true, ...listBranches(own) };
+      }
       const run = getRun(int(i.run));
       if (!run?.cwd) return { ok: false, error: t("This session has no folder of its own."), branches: [] };
       if (!repoRoot(run.cwd)) return { ok: false, error: t("{folder} isn't in a git repo.", { folder: run.cwd }), branches: [] };
       return { ok: true, ...listBranches(run.cwd) };
+    },
+  },
+  {
+    name: "work.folders",
+    group: "work",
+    label: "The folders of this computer",
+    summary: "The sub-folders of a folder (names only; no path: the home folder, ::drives: the drives on Windows), with which are git repos — what a new session's folder is picked from.",
+    input: [f("path", "text")],
+    output: "{ ok, error, path, parent, repo, dirs: [{ name, path, repo }] }",
+    run: async (i) => {
+      need();
+      const { listFolder } = await import("@/lib/work/folders");
+      try {
+        return { ok: true, ...listFolder(String(i.path ?? "")) };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e), dirs: [] };
+      }
     },
   },
   {
