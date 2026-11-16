@@ -1,6 +1,6 @@
 import { extWorkPanels } from "@/lib/ext/work";
 import { PluginNotInstalled } from "@/components/PluginNotInstalled";
-import { isInstalled } from "@/plugins/state";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
 import type { Metadata } from "next";
 import { t } from "@/lib/i18n/server";
 import { redirect } from "@/lib/redirect";
@@ -37,6 +37,14 @@ export default async function WorkPage({
   // A plugin's page: there while it's installed.
   if (!isInstalled("work")) return <PluginNotInstalled id="work" />;
   const sp = await searchParams;
+  // The plugin stands in for the built-in (state.ts PROVIDED_BY): its page of the Workspace is the screen; what was picked (a run, a ticket) goes along.
+  if (onlyThroughPort("work")) {
+    const page = (await import("@/plugins/work/to-plugin")).workCodePage();
+    if (page) {
+      const pick = Number(sp.run) ? `run:${Number(sp.run)}` : sp.ticket !== undefined ? `ticket:${sp.ticket || "-"}` : "";
+      return redirect(`/workspace/${page}${pick ? `?s.sel=${encodeURIComponent(pick)}` : ""}`);
+    }
+  }
   // The tabs from before (todos, runs, branches, settings): their settings are on the Settings page now.
   if (sp.tab === "settings") redirect("/settings/time#work");
   if (sp.tab) redirect("/work");

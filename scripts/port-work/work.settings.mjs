@@ -78,6 +78,8 @@ export async function handler(_event, context) {
       boards: r.boards.length ? r.boards.map((b) => boardName.get(b) ?? t("board {id}", { id: b })).join(", ") : t("no boards"),
       tickets: r.tickets.join(", "),
       instructions: r.instructions,
+      systems: r.systems ?? "",
+      systemsNote: r.systems ? "" : r.systemsRead ? t("The knowledge names no systems for this repo.") : t("Not read yet — the next Knowledge assignment does it, or read them now."),
       delivery: r.delivery,
       mr: r.delivery === "mr",
       direct: r.delivery === "direct",

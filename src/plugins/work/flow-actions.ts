@@ -23,6 +23,33 @@ const int = (v: unknown) => {
 const bool = (v: unknown) => v === true || v === "true" || v === 1 || v === "1";
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+/** The rule "allow always" would add, in words (null: none). */
+function alwaysLabel(suggestions: unknown[]): string | null {
+  const parts: string[] = [];
+  for (const s of suggestions as { type?: string; mode?: string; rules?: { toolName?: string; ruleContent?: string }[]; directories?: string[] }[]) {
+    if (s.type === "setMode" && s.mode) parts.push(s.mode === "acceptEdits" ? t("accept edits this session") : t("mode {m}", { m: s.mode }));
+    else if (s.type === "addRules") parts.push(...(s.rules ?? []).map((r) => (r.ruleContent ? `${r.toolName}(${r.ruleContent})` : (r.toolName ?? "?"))));
+    else if (s.type === "addDirectories") parts.push(t("access to {d}", { d: (s.directories ?? []).join(", ") }));
+  }
+  return parts.length ? parts.join(", ").slice(0, 80) : null;
+}
+
+/** The files and pictures waiting to go with the next message (scope: "new" or "run:<id>") — kept in a pref, taken when it is sent. */
+const PENDING_KEY = "workPendingAttachments";
+async function pendingOf(scope: string): Promise<{ ref: string; name: string; size: number }[]> {
+  const { getPref } = await import("@/lib/prefs");
+  const all = getPref<Record<string, { ref: string; name: string; size: number }[]>>(PENDING_KEY, {});
+  return Array.isArray(all[scope]) ? all[scope] : [];
+}
+async function setPending(scope: string, list: { ref: string; name: string; size: number }[]) {
+  const { getPref, setPref } = await import("@/lib/prefs");
+  const all = { ...getPref<Record<string, unknown>>(PENDING_KEY, {}) };
+  if (list.length) all[scope] = list;
+  else delete all[scope];
+  setPref(PENDING_KEY, all);
+}
+const scopeOf = (v: unknown) => (/^(new|run:\d+)$/.test(String(v ?? "")) ? String(v) : "");
+
 /** A log line with its long texts cut (a live view re-reads the tail every second: bounded). */
 function slim(l: import("@/lib/work/shared").WorkLogLine) {
   const o: Record<string, unknown> = { ...l };
@@ -41,14 +68,24 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     summary:
       "The tickets with sessions (a session = a todo's conversation with a worker, shown as its newest run), each with its sessions: id, ref, status, whether it is live or waits for you, provider, title, time, todo, branch, archived; and how many are archived and running.",
     input: [f("archived", "boolean", { help: "Your archived sessions too (marked)." })],
-    output: "{ tickets: [{ ticket, summary, status, url, openTodos, active, lastAt, sessions: [{ id, ref, status, live, waiting, provider, title, at, todoId, branch, archived }] }], archivedCount, running }",
+    output: "{ tickets: [{ ticket, summary, status, url, openTodos, active, lastAt, sessions: [{ id, ref, status, live, waiting, provider, title, at, todoId, branch, archived }] }], archivedCount, running, gitMissing, settingsPage, tabs: [{ id, title, plugin, href }], panels: [{ id, plugin, entry, title }] }",
     run: async (i) => {
       need();
       const { sessionTickets } = await import("@/lib/work/sessions");
       const { archivedSessions } = await import("@/lib/work/session-admin");
       const tickets = sessionTickets({ archived: bool(i.archived) });
       const running = tickets.reduce((n, x) => n + x.sessions.filter((s) => s.status === "running").length, 0);
-      return { tickets: tickets.filter((x) => x.sessions.length > 0), archivedCount: archivedSessions().size, running };
+      const { gitAvailable, gitMissingMessage } = await import("@/lib/git");
+      const { extWorkPanels } = await import("@/lib/ext/work");
+      return {
+        tickets: tickets.filter((x) => x.sessions.length > 0),
+        archivedCount: archivedSessions().size,
+        running,
+        gitMissing: gitAvailable() ? "" : gitMissingMessage(),
+        settingsPage: (await import("./to-plugin")).workSettingsPage(),
+        tabs: extWorkPanels("tab").map((x) => ({ id: x.id, title: x.title, plugin: x.pluginName, href: x.href })),
+        panels: extWorkPanels("session").map((x) => ({ id: x.id, plugin: x.plugin, entry: x.entry, title: x.title })),
+      };
     },
   },
   {
@@ -101,9 +138,9 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       const l = last.live;
       const busyNow = last.status === "running" ? (await (await import("@/lib/work/live-state")).liveState(last.id)).busy : false;
       const live = s
-        ? { kind: "session", busy: !!busyNow, host: s.host, queued: s.queued, modes: s.modes, asks: s.asks.map((a) => ({ requestId: a.requestId, tool: a.tool, description: a.description, reason: a.reason, at: a.at, always: a.suggestions.length > 0, input: { command: clip(String(a.input.command ?? ""), 1500), file_path: String(a.input.file_path ?? a.input.path ?? ""), plan: clip(String(a.input.plan ?? ""), 8000), questions: Array.isArray(a.input.questions) ? a.input.questions.slice(0, 4) : undefined, url: String(a.input.url ?? ""), pattern: String(a.input.pattern ?? "") } })), model: s.model, effort: s.effort, allowBypass: s.allowBypass, features: s.features, provider: s.provider }
+        ? { kind: "session", busy: !!busyNow, host: s.host, queued: s.queued, modes: s.modes, asks: s.asks.map((a) => ({ requestId: a.requestId, tool: a.tool, description: a.description, reason: a.reason, at: a.at, always: a.suggestions.length > 0, alwaysLabel: alwaysLabel(a.suggestions), diffs: a.tool === "Edit" ? [{ old: clip(String(a.input.old_string ?? ""), 1500), new: clip(String(a.input.new_string ?? ""), 1500) }] : a.tool === "MultiEdit" && Array.isArray(a.input.edits) ? (a.input.edits as Record<string, string>[]).slice(0, 8).map((x) => ({ old: clip(String(x.old_string ?? ""), 800), new: clip(String(x.new_string ?? ""), 800) })) : [], input: { command: clip(String(a.input.command ?? ""), 1500), file_path: String(a.input.file_path ?? a.input.path ?? ""), plan: clip(String(a.input.plan ?? ""), 8000), questions: Array.isArray(a.input.questions) ? a.input.questions.slice(0, 4) : undefined, url: String(a.input.url ?? ""), pattern: String(a.input.pattern ?? "") } })), mode: l?.mode ?? "", model: s.model, models: s.models.map((m) => ({ value: m.value, label: m.label })), effort: s.effort, allowBypass: s.allowBypass, features: s.features, provider: s.provider, commands: s.commands.slice(0, 300), shellPending: s.shellPending, sessionElevated: s.elevated }
         : l
-          ? { kind: "live", busy: !!l.busy, permission: l.permission ?? null }
+          ? { kind: "live", busy: !!l.busy, permission: l.permission ?? null, mode: l.mode, modes: l.modes, waiting: l.waiting }
           : null;
       const cost = runs.reduce((n, r) => n + (r.costUsd ?? 0), 0) + (s?.costUsd && !last.costUsd ? s.costUsd : 0);
       return {
@@ -225,9 +262,10 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       const { claudeSessionSettings } = await import("@/lib/work/store");
       const { MAX_PARALLEL, MAX_RESERVED } = await import("@/lib/work/slots");
       const { listRepos, repoChoices } = await import("@/lib/repos");
+      const { getRepoSystems } = await import("@/plugins/knowledge/repo-systems-store");
       const copilot = aiChoice().provider === "copilot" ? await (await import("@/plugins/copilot-cli/cli")).copilotModels() : [];
       const d = workSettingsData(copilot);
-      return { settings: d.settings, claude: claudeSessionSettings(), preferred: d.preferred, defaultModel: d.defaultModel, models: d.models, pools: d.pools, repos: listRepos(), choices: repoChoices(), limits: { maxParallel: MAX_PARALLEL, maxReserved: MAX_RESERVED }, admin: isInstalled("work-elevated") };
+      return { settings: d.settings, claude: claudeSessionSettings(), preferred: d.preferred, defaultModel: d.defaultModel, models: d.models, pools: d.pools, repos: listRepos().map((r) => ({ ...r, systems: getRepoSystems(r.id)?.summary ?? null, systemsRead: !!getRepoSystems(r.id) })), choices: repoChoices(), limits: { maxParallel: MAX_PARALLEL, maxReserved: MAX_RESERVED }, admin: isInstalled("work-elevated") };
     },
   },
   {
@@ -323,6 +361,100 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       if (ctx.dryRun) return { dryRun: true };
       (await import("@/lib/repos")).deleteRepo(int(i.id));
       return {};
+    },
+  },
+  {
+    name: "work.attach",
+    group: "work",
+    label: "Attach a file or picture to the next message",
+    summary: "A file a view's upload brought (token) kept for the next message of this scope (new | run:<id>): pictures and documents, at most 10, 20 MB each — the worker reads them (a live session takes pictures). Needs the “api” permission.",
+    input: [f("scope", "text", { required: true }), f("token", "text", { required: true }), f("name", "text", { required: true })],
+    output: "{ ref, name, size }",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      const scope = scopeOf(i.scope);
+      if (!scope) throw new Error(t("Unknown action."));
+      const fsx = await import("node:fs");
+      const { stagedPath } = await import("@/plugins/workspace/uploads-staging");
+      const from = await stagedPath(i.token);
+      if (!fsx.existsSync(from)) throw new Error(t("The uploaded file isn't there any more — upload it again."));
+      if (ctx.dryRun) return { dryRun: true };
+      const { saveAttachment, MAX_ATTACHMENTS } = await import("@/lib/work/attachments");
+      const list = await pendingOf(scope);
+      if (list.length >= MAX_ATTACHMENTS) throw new Error(t("At most {n} files.", { n: MAX_ATTACHMENTS }));
+      const saved = saveAttachment(String(i.name ?? "file"), fsx.readFileSync(/*turbopackIgnore: true*/ from));
+      fsx.rmSync(/*turbopackIgnore: true*/ from, { force: true });
+      await setPending(scope, [...list, saved]);
+      return saved;
+    },
+  },
+  {
+    name: "work.attach-remove",
+    group: "work",
+    label: "Take an attachment off the next message",
+    summary: "One waiting attachment (ref) or all of them (no ref) of a scope dropped. Needs the “api” permission.",
+    input: [f("scope", "text", { required: true }), f("ref", "text")],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      const scope = scopeOf(i.scope);
+      if (!scope || ctx.dryRun) return {};
+      await setPending(scope, i.ref ? (await pendingOf(scope)).filter((x) => x.ref !== String(i.ref)) : []);
+      return {};
+    },
+  },
+  {
+    name: "work.attachments",
+    group: "work",
+    label: "The attachments waiting for the next message",
+    summary: "The files and pictures of a scope (new | run:<id>) waiting to go with the next message.",
+    input: [f("scope", "text", { required: true })],
+    output: "{ files: [{ ref, name, size }] }",
+    run: async (i) => {
+      need();
+      return { files: await pendingOf(scopeOf(i.scope)) };
+    },
+  },
+  {
+    name: "work.session-files",
+    group: "work",
+    label: "Files of a session's folder, for @",
+    summary: "The files in a session's folder whose path contains q (at most what the message box shows).",
+    input: [f("run", "number", { required: true }), f("q", "text")],
+    output: "{ files: [path] }",
+    run: async (i) => {
+      need();
+      const { getRun } = await import("@/lib/work/store");
+      const run = getRun(int(i.run));
+      if (!run?.cwd) return { files: [] };
+      const { sessionFiles } = await import("@/lib/work/session-git");
+      try {
+        return { files: await sessionFiles(run, String(i.q ?? "")) };
+      } catch {
+        return { files: [] };
+      }
+    },
+  },
+  {
+    name: "work.repo-systems",
+    group: "work",
+    label: "Read the repos' systems from the knowledge",
+    summary: "The systems (Prod, Test/Stage, Dev) of all repos read from the knowledge again by the AI. Needs the “api” permission.",
+    input: [],
+    output: "{ message }",
+    writes: true,
+    run: async (_i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { readRepoSystemsAction } = await import("./server-actions");
+      const r = await readRepoSystemsAction();
+      if (!r?.ok) throw new Error(r?.error ?? t("Didn't work."));
+      return { message: r.message ?? t("Saved.") };
     },
   },
   {
@@ -432,7 +564,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     group: "work",
     label: "Start a session",
     summary: "A new session (a new todo and a worker on it, like the Code tab's message box): instruction, ticket, repoId, provider. Needs the flow's “api” permission. Never in a dry run.",
-    input: [f("instruction", "text", { required: true }), f("ticket", "text"), f("repoId", "number"), f("provider", "text"), f("repoPath", "text"), f("branch", "text"), f("workspace", "text", { help: "worktree | branch | checkout" }), f("mode", "text"), f("model", "text"), f("effort", "text"), f("elevated", "boolean")],
+    input: [f("instruction", "text", { required: true }), f("ticket", "text"), f("repoId", "number"), f("provider", "text"), f("repoPath", "text"), f("branch", "text"), f("workspace", "text", { help: "worktree | branch | checkout" }), f("mode", "text"), f("model", "text"), f("effort", "text"), f("elevated", "boolean"), f("attach", "text", { help: "The pending attachments of this scope (new | run:<id>) go with it." })],
     output: "{ runId }",
     writes: true,
     run: async (i, ctx) => {
@@ -440,13 +572,16 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       need();
       if (ctx.dryRun) return { dryRun: true };
       const { startSessionAction } = await import("./server-actions");
-      const r = await startSessionAction({ instruction: String(i.instruction ?? ""), ticket: String(i.ticket ?? ""), repoId: int(i.repoId) || undefined, provider: String(i.provider ?? "") || undefined,
+      const scope = scopeOf(i.attach);
+      const pending = scope ? await pendingOf(scope) : [];
+      const r = await startSessionAction({ attachments: pending.map((x) => x.ref), instruction: String(i.instruction ?? ""), ticket: String(i.ticket ?? ""), repoId: int(i.repoId) || undefined, provider: String(i.provider ?? "") || undefined,
         repoPath: String(i.repoPath ?? "") || undefined,
         branch: String(i.branch ?? "") || undefined,
         workspace: String(i.workspace ?? "") || undefined,
         session: { ...(i.mode ? { permissionMode: String(i.mode) } : {}), ...(i.model ? { model: String(i.model) } : {}), ...(i.effort ? { effort: String(i.effort) as never } : {}), ...(bool(i.elevated) ? { elevated: true } : {}) },
       });
       if (!r.ok) throw new Error(r.error);
+      if (scope) await setPending(scope, []);
       return { runId: r.runId };
     },
   },
@@ -455,7 +590,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     group: "work",
     label: "Send a message into a session",
     summary: "Your next message in a session's conversation (queued while the worker still answers; a finished run goes on with it). Needs the “api” permission.",
-    input: [f("run", "number", { required: true }), f("text", "text", { required: true })],
+    input: [f("run", "number", { required: true }), f("text", "text"), f("attach", "text")],
     output: "{ runId }",
     writes: true,
     run: async (i, ctx) => {
@@ -463,8 +598,11 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       need();
       if (ctx.dryRun) return { dryRun: true };
       const { startSessionAction } = await import("./server-actions");
-      const r = await startSessionAction({ instruction: String(i.text ?? ""), continueRunId: int(i.run) });
+      const scope = scopeOf(i.attach);
+      const pending = scope ? await pendingOf(scope) : [];
+      const r = await startSessionAction({ instruction: String(i.text ?? ""), continueRunId: int(i.run), attachments: pending.map((x) => x.ref) });
       if (!r.ok) throw new Error(r.error);
+      if (scope) await setPending(scope, []);
       return { runId: r.runId };
     },
   },
@@ -489,8 +627,10 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       f("effort", "text"),
       f("option", "text"),
       f("text", "text"),
+      f("cmd", "text"),
+      f("attach", "text"),
     ],
-    output: "{}",
+    output: "{ out, code }",
     writes: true,
     run: async (i, ctx) => {
       mayChange(ctx);
@@ -513,7 +653,22 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
           : what === "answer"
             ? { do: "answer", requestId: String(i.requestId ?? ""), answer: { behavior: i.behavior === "deny" ? ("deny" as const) : ("allow" as const), always: bool(i.always), message: String(i.message ?? "") || undefined, interrupt: bool(i.interrupt), then: String(i.then ?? "") || undefined, answers } }
             : { do: what, text: String(i.text ?? ""), mode: String(i.mode ?? ""), model: String(i.model ?? ""), effort: String(i.effort ?? "") };
-      return await liveDo(int(i.run), body);
+      // Pictures waiting for this message go along with it (base64, as the message box sends them).
+      const scope = scopeOf(i.attach);
+      if (what === "send" && scope) {
+        const pending = await pendingOf(scope);
+        if (pending.length) {
+          const { resolveAttachments } = await import("@/lib/work/attachments");
+          const fsx = await import("node:fs");
+          const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
+          const images = resolveAttachments(pending.map((x) => x.ref)).map((a) => ({ mediaType: types[a.name.split(".").pop()?.toLowerCase() ?? ""] ?? "", data: fsx.readFileSync(/*turbopackIgnore: true*/ a.path).toString("base64") }));
+          (body as { images?: unknown }).images = images;
+        }
+      }
+      if (what === "shell") (body as { cmd?: string }).cmd = String(i.cmd ?? "");
+      const out = await liveDo(int(i.run), body);
+      if (what === "send" && scope && !(out as { fresh?: unknown }).fresh) await setPending(scope, []);
+      return out;
     },
   },
   {

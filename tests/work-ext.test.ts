@@ -131,7 +131,7 @@ test("a session's page: the conversation lines as the log reads them, the state,
 
 test("what changes something is a flow with the permission api: archive and delete a session, stop a queued run; the dry run touches nothing", { skip }, async () => {
   const { a, b, c, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["work.admin", "work.archive", "work.branch", "work.dangling-end", "work.delete", "work.git", "work.live", "work.repo-delete", "work.repo-delivery", "work.repo-save", "work.send", "work.setting", "work.start", "work.stop"]);
+  assert.deepEqual([...allowed].sort(), ["work.admin", "work.archive", "work.attach", "work.attach-remove", "work.branch", "work.dangling-end", "work.delete", "work.git", "work.live", "work.repo-delete", "work.repo-delivery", "work.repo-save", "work.repo-systems", "work.send", "work.setting", "work.start", "work.stop"]);
   const engine = await import("@/plugins/workspace/flows/engine");
   const { sessionTickets } = await import("@/lib/work/sessions");
   const ids = () => sessionTickets().flatMap((t) => t.sessions.map((s) => s.id));
@@ -163,6 +163,7 @@ test("the screen's template draws without an error: new, a session (idle and ask
   assert.deepEqual(draw(await call("work.screen", { sel: "run:99999" }), { sel: "run:99999" }).errors, []);
   assert.deepEqual(draw(await call("work.screen", { q: "nothing-matches-this" }), { q: "nothing-matches-this" }).errors, []);
   // A live session asking: a permission, a plan, a question — shaped as the lambda gives them.
+  const ASK_BASE = { has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x" };
   const asking = {
     mode: "session",
     groups: [],
@@ -188,11 +189,24 @@ test("the screen's template draws without an error: new, a session (idle and ask
       kind: "session",
       busy: true,
       queuedLabel: "1 message(s) wait their turn.",
-      modes: [{ id: "default", label: "Ask", hint: "asks" }],
+      modes: [{ id: "default", label: "Ask", hint: "asks", sel: true }],
+      models: [{ value: "", label: "Default", sel: true }],
+      efforts: [{ value: "", label: "Effort: default", sel: true }],
+      menu: [{ next: "/x ", label: "/x", hint: "" }],
+      files: [{ ref: "a/b.png", name: "b.png", size: "3 KB" }],
+      attachScope: "run:7",
+      hasAsk: true,
+      isShell: false,
+      shellCmd: "",
+      hostText: "waits for your answer",
+      shellPendingLabel: "1 command output(s) go along with your next message",
+      panels: [{ key: "x0", plugin: "p", entry: "e.html", title: "P" }],
+      paneOptions: ",x0:P",
+      copilot: { mode: "agent", modes: [{ id: "a#agent", name: "Agent", sel: true, hint: "h" }], waiting: "your move", idle: true, status: "waiting for you" },
       asks: [
-        { requestId: "r1", tool: "Bash", plan: false, question: false, title: "It wants to use Bash", description: "", detail: "npm test", planText: "", always: true, questions: [], oneQuestion: false, bypass: false },
-        { requestId: "r2", tool: "ExitPlanMode", plan: true, question: false, title: "Its plan — go ahead?", description: "", detail: "", planText: "# Plan", always: false, questions: [], oneQuestion: false, bypass: true },
-        { requestId: "r3", tool: "AskUserQuestion", plan: false, question: true, title: "It asks you", description: "", detail: "", planText: "", always: false, questions: [{ question: "Which?", header: "", options: [{ requestId: "r3", label: "A", description: "", json: '{"Which?":"A"}' }] }], oneQuestion: true, bypass: false },
+        { requestId: "r1", tool: "Bash", plan: false, question: false, title: "It wants to use Bash", description: "", detail: "npm test", planText: "", always: true, questions: [], bypass: false, ...ASK_BASE, diff: "- a\n+ b", reason: "why", more: "(+2 more)" },
+        { requestId: "r2", tool: "ExitPlanMode", plan: true, question: false, title: "Its plan", description: "", detail: "", planText: "# Plan", always: false, questions: [], bypass: true, ...ASK_BASE },
+        { requestId: "r3", tool: "AskUserQuestion", plan: false, question: true, title: "It asks you", description: "", detail: "", planText: "", always: false, bypass: false, ...ASK_BASE, has0: true, has1: true, qt0: "Which?", qt1: "And?", ready: true, submit: "{}", questions: [{ question: "Which?", header: "H", idx: 0, multi: false, other: "", ready: true, answer: "A", options: [{ label: "A", description: "", on: true, mark: "● ", next: "{}" }] }] },
       ],
       permission: null,
       canReplyLive: true,
@@ -306,7 +320,7 @@ test("the settings: read as the Settings page reads them, one setting changed at
   // The settings template draws.
   const { renderView } = await import("@/plugins/workspace/view-template");
   const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work-settings.html"), "utf8");
-  const withRepo = { ...shown, repos: [{ id: 1, name: "R", path: "C:/r", ok: true, state: "on main", gitlabProject: "", boardsText: "", boards: "no boards", tickets: "", instructions: "", delivery: "mr", mr: true, direct: false }], pools: [{ source: "learn", label: "Reserved for Learn", n: 1, more: 2, less: 0, hint: "x" }] };
+  const withRepo = { ...shown, repos: [{ id: 1, name: "R", path: "C:/r", ok: true, state: "on main", gitlabProject: "", boardsText: "", boards: "no boards", tickets: "", instructions: "", systems: "", systemsNote: "Not read yet", delivery: "mr", mr: true, direct: false }], pools: [{ source: "learn", label: "Reserved for Learn", n: 1, more: 2, less: 0, hint: "x" }] };
   for (const state of [{}, { instred: "1", instr: "x" }, { agented: "1" }, { repoedit: "1" }])
     assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: { ...state }, app: {}, data: { s: withRepo, result: { message: "Saved." } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(state));
   assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: null }, db: { id: 1, title: "Code settings" } } as never).errors, []);
@@ -353,4 +367,53 @@ test("the rest of the page: dangling sessions are listed and ended, a session's 
   const s = await call<Record<string, unknown>>("work.settings", {});
   for (const adminInfo of [{ windows: true, elevated: true, task: false, how: "UAC", taskText: "not set up" }, { windows: true, elevated: false, task: true, how: "task", taskText: "set up" }, { windows: false }])
     assert.deepEqual(renderView(sTemplate, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: { ...s, admin: true, adminInfo } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(adminInfo));
+});
+
+test("attachments: a staged upload is kept for the next message of its scope, listed on the screen and taken off again; the kit's frame shows another address only", { skip }, async () => {
+  const { call } = await world();
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const { stagingDir } = await import("@/plugins/workspace/uploads-staging");
+  const dir = await stagingDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const token = "a".repeat(32);
+  fs.writeFileSync(path.join(dir, token), Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]));
+  assert.equal((await engine.runFlow("work.attach", { scope: "bad", token, name: "x.png" })).status, "failed");
+  const dry = await engine.runFlow("work.attach", { scope: "new", token, name: "shot.png" }, { dry: true });
+  assert.equal(dry.status, "done");
+  assert.ok(fs.existsSync(path.join(dir, token)), "a dry run keeps the staged file");
+  const done = await engine.runFlow("work.attach", { scope: "new", token, name: "shot.png" });
+  assert.equal(done.status, "done", done.error ?? undefined);
+  assert.ok(!fs.existsSync(path.join(dir, token)), "the staged file is taken");
+  type C = { composer: { files: { ref: string; name: string; size: string }[] } };
+  const screen = await call<C>("work.screen", {});
+  assert.deepEqual(screen.composer.files.map((f) => f.name), ["shot.png"]);
+  const { resolveAttachments } = await import("@/lib/work/attachments");
+  assert.equal(resolveAttachments([screen.composer.files[0].ref]).length, 1, "the worker can read it");
+  assert.equal((await engine.runFlow("work.attach-remove", { scope: "new", ref: screen.composer.files[0].ref })).status, "done");
+  assert.deepEqual((await call<C>("work.screen", {})).composer.files, []);
+  // The frame of the kit.
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const draw = (t: string) => renderView(t, { rows: [], props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
+  assert.deepEqual(draw('<frame src="http://localhost:3000" h=400 title="Preview"/>').errors, []);
+  assert.deepEqual(draw('<frame plugin="my-plugin" entry="panel.html" run="3" ticket="A-1" todo="2"/>').errors, []);
+  assert.equal(draw('<frame src="/api/work/1/prompt"/>').errors.length, 1, "a page of Zeff's own is refused");
+  assert.equal(draw('<frame src="javascript:alert(1)"/>').errors.length, 1);
+});
+
+test("switching to the plugin: its pages are found, the built-in stands in through it, the engine's actions go on working", { skip }, async () => {
+  const { call } = await world();
+  const state = await import("@/plugins/state");
+  const ports = await import("@/plugins/ports");
+  const port = ports.PORTS.find((p) => p.builtin === "work");
+  assert.ok(port, "the Code port is registered");
+  await port!.switch();
+  const { workCodePage, workSettingsPage } = await import("@/plugins/work/to-plugin");
+  const { getPage } = await import("@/plugins/workspace/store");
+  assert.equal(getPage(workCodePage()!)?.title, "Sessions");
+  assert.equal(getPage(workSettingsPage()!)?.title, "Code settings");
+  assert.equal(state.isInstalled("work"), true, "the built-in counts as there through its port");
+  assert.equal(state.onlyThroughPort("work"), true);
+  // The kernel's reads still answer (the screens of the port are what ask them).
+  const screen = await call<{ settingsHref: string }>("work.screen", {});
+  assert.equal(screen.settingsHref, `/workspace/${workSettingsPage()}`);
 });

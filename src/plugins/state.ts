@@ -44,6 +44,8 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   knowledge: { port: "knowledge-ext", steps: [] },
   // (the Explorer: the port's screen is a view of the Workspace, its writes are flows; the disk, the viewer's file route, the watchers and the imports stay the kernel's — fs.* actions, /api/explorer/file)
   explorer: { port: "explorer-ext", steps: [] },
+  // (Code: the port's page is the screen — /work, /repos and the Code section of the Settings open it; the workers, runs, the work host, the logs and the live sessions are the kernel's: the work.session-* actions)
+  work: { port: "work-ext", steps: [] },
 };
 
 /**

@@ -45,8 +45,8 @@ export const PORTS: Port[] = [
       await (await import("./people/to-plugin")).switchPeopleScreensToPlugin();
       return r;
     } },
-  // (Code: only the screens are the port's so far — the built-in Code tab stays on beside them until the port is 1:1; the engine stays the kernel's)
-  { builtin: "work", plugin: "work-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("work", { port: "work-ext", flow: "work.start", minutes: async () => 0, keepBuiltin: true }) },
+  // (Code: the port's screens, settings and flows — the workers, runs, the work host, the logs and the live sessions stay the kernel's)
+  { builtin: "work", plugin: "work-ext", switch: async () => (await import("./work/to-plugin")).switchWorkToPlugin() },
   { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
 ];
 

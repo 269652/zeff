@@ -7,7 +7,8 @@ import { AdminSessionsForm } from "@/components/work/AdminSessionsForm";
 import { t } from "@/lib/i18n/server";
 import { rich } from "@/lib/i18n/rich";
 import { PLUGINS } from "@/plugins/catalog";
-import { isInstalled } from "@/plugins/state";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
+import { redirect } from "@/lib/redirect";
 import { elevationMode, taskInstalled, zeffElevated } from "@/plugins/work-elevated/elevate";
 
 export const metadata: Metadata = { title: "Admin sessions" };
@@ -19,6 +20,10 @@ export const metadata: Metadata = { title: "Admin sessions" };
 export default async function AdminSessionsPage() {
   await connection();
   if (!isInstalled("work-elevated")) return <PluginNotInstalled id="work-elevated" />;
+  if (onlyThroughPort("work")) {
+    const page = (await import("@/plugins/work/to-plugin")).workSettingsPage();
+    if (page) return redirect(`/workspace/${page}`);
+  }
   const beta = PLUGINS.find((p) => p.id === "work-elevated")?.beta ?? "";
   const windows = process.platform === "win32";
   const [task, elevated] = windows ? await Promise.all([taskInstalled(), zeffElevated()]) : [false, false];

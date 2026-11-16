@@ -1,6 +1,7 @@
 import { EmptyState } from "@/components/EmptyState";
 import { PluginNotInstalled } from "@/components/PluginNotInstalled";
-import { isInstalled } from "@/plugins/state";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
+import { redirect } from "@/lib/redirect";
 import type { Metadata } from "next";
 import { t } from "@/lib/i18n/server";
 import { rich } from "@/lib/i18n/rich";
@@ -41,6 +42,10 @@ export default async function ReposPage() {
   await connection();
   // A plugin's page: there while it's installed.
   if (!isInstalled("work")) return <PluginNotInstalled id="work" />;
+  if (onlyThroughPort("work")) {
+    const page = (await import("@/plugins/work/to-plugin")).workSettingsPage();
+    if (page) return redirect(`/workspace/${page}`);
+  }
   const repos = listRepos();
   const choices = repoChoices();
   const boardName = new Map(choices.boards.map((b) => [b.id, b.name]));

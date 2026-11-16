@@ -61,7 +61,7 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "work.screen": {
     label: "Code: what the screen shows",
     what: "The sessions list (grouped and sorted), and by what is picked a session's conversation with its asks, a ticket's page or the new-session page — shaped from the engine's reads.",
-    zeff: ["work.session-list", "work.session-open", "work.composer", "work.dangling", "work.branches"],
+    zeff: ["work.session-list", "work.session-open", "work.composer", "work.dangling", "work.branches", "work.attachments", "work.session-files"],
     timeoutMs: 30000,
   },
   "work.settings": {
@@ -98,7 +98,7 @@ const flow = (id: string, name: string, title: string, description: string, acti
     inputs: [],
     nodes: [
       { id: "do", kind: "action", action, input },
-      { id: "done", kind: "return", value: { runId: "{{ steps.do.runId }}", runs: "{{ steps.do.runs }}", message: "{{ steps.do.message }}", url: "{{ steps.do.url }}" } },
+      { id: "done", kind: "return", value: { runId: "{{ steps.do.runId }}", runs: "{{ steps.do.runs }}", message: "{{ steps.do.message }}", url: "{{ steps.do.url }}", out: "{{ steps.do.out }}", code: "{{ steps.do.code }}", ref: "{{ steps.do.ref }}" } },
     ],
     requested: { api: true },
     triggers: [{ kind: "manual" }],
@@ -132,8 +132,8 @@ write(
           },
           rows: [{ id: "r1", title: "Code", cells: {}, content: { type: "doc", content: [{ type: "paragraph" }] } }],
         },
-        flow("i3", "work.start", "Start a session", "A new session (a new todo and a worker on it): input instruction, ticket, repoId, provider, repoPath, branch, workspace, mode, model, effort, elevated. Output { runId }.", "work.session-start", { instruction: "{{ input.instruction }}", ticket: "{{ input.ticket }}", repoId: "{{ input.repoId }}", provider: "{{ input.provider }}", repoPath: "{{ input.repoPath }}", branch: "{{ input.branch }}", workspace: "{{ input.workspace }}", mode: "{{ input.mode }}", model: "{{ input.model }}", effort: "{{ input.effort }}", elevated: "{{ input.elevated }}" }),
-        flow("i4", "work.send", "Send a message into a session", "Your next message in a session's conversation (input run, text). Output { runId }.", "work.session-send", { run: "{{ input.run }}", text: "{{ input.text }}" }),
+        flow("i3", "work.start", "Start a session", "A new session (a new todo and a worker on it): input instruction, ticket, repoId, provider, repoPath, branch, workspace, mode, model, effort, elevated. Output { runId }.", "work.session-start", { instruction: "{{ input.instruction }}", ticket: "{{ input.ticket }}", repoId: "{{ input.repoId }}", provider: "{{ input.provider }}", repoPath: "{{ input.repoPath }}", branch: "{{ input.branch }}", workspace: "{{ input.workspace }}", mode: "{{ input.mode }}", model: "{{ input.model }}", effort: "{{ input.effort }}", elevated: "{{ input.elevated }}", attach: "{{ input.attach }}" }),
+        flow("i4", "work.send", "Send a message into a session", "Your next message in a session's conversation (input run, text). Output { runId }.", "work.session-send", { run: "{{ input.run }}", text: "{{ input.text }}", attach: "{{ input.attach }}" }),
         flow("i5", "work.live", "Do something in a live session", "Send, answer an ask, interrupt, switch the mode (input run, do, text, requestId, behavior, always, message, interrupt, then, answers, mode, option).", "work.session-live", {
           run: "{{ input.run }}",
           do: "{{ input.do }}",
@@ -147,6 +147,8 @@ write(
           answers: "{{ input.answers }}",
           mode: "{{ input.mode }}",
           option: "{{ input.option }}",
+          cmd: "{{ input.cmd }}",
+          attach: "{{ input.attach }}",
         }),
         {
           id: "i10",
@@ -168,6 +170,9 @@ write(
         flow("i15", "work.branch", "Switch a session's branch", "The branch a session works on (input run, branch). Output { message }.", "work.session-branch", { run: "{{ input.run }}", branch: "{{ input.branch }}" }),
         flow("i16", "work.dangling-end", "Kill all dangling sessions", "Every dangling session stopped, the workers free. Output { message }.", "work.dangling-end", {}),
         flow("i17", "work.admin", "Set up or remove automatic admin sessions", "input do: install | remove | uac. Output { message }.", "work.admin-do", { do: "{{ input.do }}" }),
+        flow("i18", "work.attach", "Attach a file or picture", "A file the upload brought, kept for the next message (input scope: new | run:<id>, token, name). Output { ref, name, size }.", "work.attach", { scope: "{{ input.scope }}", token: "{{ input.token }}", name: "{{ input.name }}" }),
+        flow("i19", "work.attach-remove", "Take an attachment off", "One waiting attachment, or all of a scope (input scope, ref).", "work.attach-remove", { scope: "{{ input.scope }}", ref: "{{ input.ref }}" }),
+        flow("i20", "work.repo-systems", "Read the repos' systems", "The systems of all repos read from the knowledge again. Output { message }.", "work.repo-systems", {}),
         flow("i9", "work.git", "Commit, push, merge request, dev servers", "In a session's folder: input run, do (commit | push | mr | proc-start | proc-stop), message, title, name. Output { message, url }.", "work.session-git", { run: "{{ input.run }}", do: "{{ input.do }}", message: "{{ input.message }}", title: "{{ input.title }}", name: "{{ input.name }}" }),
         flow("i6", "work.stop", "Stop a session's run", "A run stopped or taken out of the queue (input run).", "work.session-stop", { run: "{{ input.run }}" }),
         flow("i7", "work.archive", "Archive a session", "A session out of the list, or back (input todo, archived: true | false).", "work.session-archive", { todo: "{{ input.todo }}", archived: "{{ input.archived }}" }),
