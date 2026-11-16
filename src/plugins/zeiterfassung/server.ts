@@ -1,3 +1,4 @@
+import "./flow-actions"; // (time.month, time.week … for lambdas and flows)
 import { t } from "@/lib/i18n/server";
 import { reviewLinks } from "@/lib/review/point";
 import { workspaceSources } from "@/plugins/workspace/source-point";
