@@ -3,6 +3,7 @@ import { listEntryTypes } from "@/lib/entry-types";
 import { FALLBACK_TYPE_COLOR } from "@/lib/entry-types-shared";
 import { formatHours } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
+import { ticketInfos } from "./tickets";
 
 /**
  * The analysis of the booked time as figures and words, ready to draw: what src/app/analysis/page.tsx works out from `getAnalysis` (the same
@@ -38,6 +39,7 @@ export function analysisScreen(input: { weeks?: unknown; tickets?: string; split
         : ` · ${t("Jira metrics: all tickets")}`
       : ""
   }`;
+  const tk = ticketInfos(a.topTickets.map((x) => x.ticket));
   const card = (label: string, value: string, tone = "plain", hint = "") => ({ label, value, tone, hint });
 
   return {
@@ -89,7 +91,7 @@ export function analysisScreen(input: { weeks?: unknown; tickets?: string; split
     parallel: a.weeks.map((w) => ({ week: `W${w.label}`, tickets: w.wip })),
     splitItems: split === "type" ? typeItems : tagItems,
     splitEmpty: split === "type" ? t("No entries.") : t("No tagged entries."),
-    ticketItems: a.topTickets.map((x) => ({ key: x.ticket, label: x.ticket, value: x.hours, valueLabel: `${h(x.hours)} h`, color: "#6366f1" })),
+    ticketItems: a.topTickets.map((x) => ({ key: x.ticket, label: x.ticket, url: tk(x.ticket).url, tip: tk(x.ticket).tip, value: x.hours, valueLabel: `${h(x.hours)} h`, color: "#6366f1" })),
     foot: a.jira
       ? t("“Tickets closed” buckets synced Jira tickets by their resolution date; some done tickets have no resolution date and aren't counted per week. Sync tickets on the Jira tab.")
       : t("“Tickets worked” counts distinct ticket keys booked in a week (activity, not closures). Sync Jira on the Jira tab to track actual closures."),

@@ -1,0 +1,123 @@
+<data name="r" lambda="zeiterfassung.rules" with="n={{ state.rn }}" when="{{ state.view == 'settings' }}"/>
+<on event="rules-changed" action="reload"/>
+{{#if data.r}}
+<col gap=3>
+  {{#if data.rsaved.rsaved.message}}<callout tone=good>{{ data.rsaved.rsaved.message }}</callout>{{/if}}
+
+  <section title="Entry type rules">
+    <col gap=2>
+      <text tone=muted>Infer an entry's type (Ticket, Meeting, Internal, Other, Absence) from its job and description — e.g. job Abwesenheit + “Urlaub” → Absence. The first rule that matches wins.</text>
+      {{#each data.r.typeRules}}
+      <row gap=2 align=center wrap=true>
+        <text>When job is <b>{{ job }}</b> and description contains <b>{{ text }}</b> → <b>{{ type }}</b></text>
+        <button run="zeiterfassung.rule-op" with="what=types, op=up, index={{ i }}" into="rsaved" emit="rules-changed" label="↑" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=types, op=down, index={{ i }}" into="rsaved" emit="rules-changed" label="↓" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=types, op=remove, index={{ i }}" into="rsaved" emit="rules-changed" label="✕" variant=quiet/>
+      </row>
+      {{/each}}
+      <grid cols=3 gap=2 min=180>
+        <select bind="tr_job" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="When job is"/>
+        <input bind="tr_text" label="and description contains"/>
+        <select bind="tr_type" options="{{ data.r.typeOptions | tojson }}" label="→ Type"/>
+      </grid>
+      <row gap=2>
+        <button run="zeiterfassung.rule-op" with="what=types, op=add, jobNumber={{ state.tr_job }}, description={{ state.tr_text }}, type={{ state.tr_type }}" into="rsaved" then="tr_text=" emit="rules-changed" label="Add rule" variant=primary/>
+        <button run="zeiterfassung.rule-op" with="what=types, op=none, apply=true" into="rsaved" emit="rules-changed" label="Apply to existing entries" confirm="Re-type the existing entries by these rules?" variant=plain/>
+      </row>
+    </col>
+  </section>
+
+  <section title="Report rewriting">
+    <col gap=2>
+      <text tone=muted>Rules that rewrite and group the “Report” view on the weekly page — a condition on each entry maps to an output label, and optionally to tags for those entries. The first rule that matches wins.</text>
+      {{#each data.r.reportRules}}
+      <row gap=2 align=center wrap=true>
+        <text>When <b>{{ when }}</b> → <b>{{ template }}</b> <small><muted>{{ tags }}</muted></small></text>
+        <button run="zeiterfassung.rule-op" with="what=report, op=up, index={{ i }}" into="rsaved" emit="rules-changed" label="↑" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=report, op=down, index={{ i }}" into="rsaved" emit="rules-changed" label="↓" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=report, op=remove, index={{ i }}" into="rsaved" emit="rules-changed" label="✕" variant=quiet/>
+      </row>
+      {{/each}}
+      <grid cols=3 gap=2 min=180>
+        <select bind="rr_f1" options="{{ data.r.fieldOptions | tojson }}" label="Condition 1"/><input bind="rr_v1" label="value"/>
+        <input bind="rr_template" label="Output" placeholder="{ticket}: {desc}"/>
+        <select bind="rr_f2" options="{{ data.r.fieldOptions | tojson }}" label="Condition 2"/><input bind="rr_v2" label="value"/>
+        <input bind="rr_tags" label="Tags" placeholder="mob"/>
+      </grid>
+      <small><muted>Leave a value empty to leave its condition out; no condition at all matches every entry.</muted></small>
+      <row gap=2>
+        <button run="zeiterfassung.rule-op" with="what=report, op=add, f1={{ state.rr_f1 }}, v1={{ state.rr_v1 }}, f2={{ state.rr_f2 }}, v2={{ state.rr_v2 }}, template={{ state.rr_template }}, tags={{ state.rr_tags }}" into="rsaved" then="rr_v1=" emit="rules-changed" label="Add rule" variant=primary/>
+        <button run="zeiterfassung.rule-op" with="what=report, op=none, apply=true" into="rsaved" emit="rules-changed" label="Tag existing entries" confirm="Give the existing entries the tags of their rule?" variant=plain/>
+      </row>
+    </col>
+  </section>
+
+  {{#if data.r.meetings}}
+  <section title="Meeting → job rules">
+    <col gap=2>
+      <text tone=muted>Auto-pick a job when importing meetings, by matching the meeting title — e.g. book every “Mob Programming” meeting on your Relaunch job.</text>
+      {{#each data.r.meetingRules}}
+      <row gap=2 align=center wrap=true>
+        <text>Title contains <b>{{ match }}</b> → <b>{{ job }}</b>{{#if group}} <small><muted>(group meeting)</muted></small>{{/if}}</text>
+        <button run="zeiterfassung.rule-op" with="what=meetings, op=up, index={{ i }}" into="rsaved" emit="rules-changed" label="↑" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=meetings, op=down, index={{ i }}" into="rsaved" emit="rules-changed" label="↓" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=meetings, op=remove, index={{ i }}" into="rsaved" emit="rules-changed" label="✕" variant=quiet/>
+      </row>
+      {{/each}}
+      <grid cols=3 gap=2 min=180>
+        <input bind="mr_match" label="Title contains"/>
+        <select bind="mr_job" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>
+        <toggle bind="mr_group" label="Group meeting (a mob day)"/>
+      </grid>
+      <row gap=2>
+        <button run="zeiterfassung.rule-op" with="what=meetings, op=add, match={{ state.mr_match }}, jobNumber={{ state.mr_job }}, group={{ state.mr_group }}" into="rsaved" then="mr_match=" emit="rules-changed" label="Add rule" variant=primary/>
+        <button run="zeiterfassung.rule-op" with="what=meetings, op=none, apply=true" into="rsaved" emit="rules-changed" label="Reapply to imported meetings" confirm="Move the imported meetings that match a rule to its job?" variant=plain/>
+      </row>
+      <row gap=2 align=end>
+        <select bind="mr_default" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="Job for every other meeting"/>
+        <button run="zeiterfassung.rule-op" with="what=meetings, op=default, jobNumber={{ state.mr_default | default(data.r.meetingDefaultJob) }}" into="rsaved" emit="rules-changed" label="Save" variant=plain/>
+      </row>
+    </col>
+  </section>
+
+  <section title="Meeting exclude rules">
+    <col gap=2>
+      <text tone=muted>Imported meetings whose title contains one of these start unticked — for placeholders and reminders like “Zeiten in Chrono Erfassen”.</text>
+      {{#each data.r.excludeRules}}
+      <row gap=2 align=center><text>{{ value }}</text><button run="zeiterfassung.rule-op" with="what=exclude, op=remove, index={{ i }}" into="rsaved" emit="rules-changed" label="✕" variant=quiet/></row>
+      {{/each}}
+      <row gap=2 align=end>
+        <input bind="ex_value" label="Title contains"/>
+        <button run="zeiterfassung.rule-op" with="what=exclude, op=add, value={{ state.ex_value }}" into="rsaved" then="ex_value=" emit="rules-changed" label="Add" variant=primary/>
+      </row>
+    </col>
+  </section>
+  {{/if}}
+
+  <section title="Entry types">
+    <col gap=2>
+      {{#each data.r.entryTypes}}
+      <row gap=2 align=center wrap=true>
+        <dot color="{{ color }}"/><b>{{ label }}</b><small><muted>{{ used }} ×{{#if builtin}} · built in{{/if}}</muted></small>
+        <button action="state" state="typeedit" value="{{ key }}" label="Edit" variant=plain/>
+        {{#if not builtin}}<button run="zeiterfassung.rule-op" with="what=entry-type, op=remove, key={{ key }}" confirm="Delete this type?" into="rsaved" emit="rules-changed" label="Delete" variant=danger/>{{/if}}
+      </row>
+      {{/each}}
+      <row gap=2 align=end>
+        <input bind="nt_label" label="New type"/>
+        <input bind="nt_color" type=color label="Color" value="#6366f1"/>
+        <button run="zeiterfassung.rule-op" with="what=entry-type, op=add, label={{ state.nt_label }}, color={{ state.nt_color | default('#6366f1') }}" into="rsaved" then="nt_label=" emit="rules-changed" label="Add type" variant=primary/>
+      </row>
+    </col>
+  </section>
+  <dialog bind="typeedit" title="Entry types">
+    {{#each data.r.entryTypes | where('key', state.typeedit)}}
+    <col gap=2>
+      <input bind="et_label" label="Name" value="{{ label }}"/>
+      <input bind="et_color" type=color label="Color" value="{{ color }}"/>
+      <row gap=2><button run="zeiterfassung.rule-op" with="what=entry-type, op=update, key={{ key }}, label={{ state.et_label | default(label) }}, color={{ state.et_color | default(color) }}" into="rsaved" then="typeedit=" emit="rules-changed" label="Save" variant=primary/></row>
+    </col>
+    {{/each}}
+  </dialog>
+</col>
+{{#else}}<text tone=muted>…</text>{{/if}}

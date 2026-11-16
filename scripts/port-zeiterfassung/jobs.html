@@ -1,7 +1,42 @@
 <data name="j" lambda="zeiterfassung.jobs" with="n={{ state.jn }}" when="{{ state.view == 'jobs' }}"/>
 <on event="jobs-changed" action="reload"/>
 {{#if data.j}}
+<data name="d" lambda="zeiterfassung.job-detail" with="ref={{ state.jd }}" when="{{ state.jd }}"/>
 <col gap=3>
+  {{#if state.jd}}{{#if data.d.found}}
+  <section title="{{ data.d.title }}" aside="{{ data.d.sub }}">
+    <col gap=2>
+      <row gap=2 align=center wrap=true>
+        <button action="state" state="jd" value="" label="← All jobs" variant=plain/>
+        {{#if data.d.inactive}}<small><muted>inactive</muted></small>{{/if}}
+        {{#if data.d.job}}<small><muted>{{ data.d.job }}</muted></small>{{/if}}
+        <button run="zeiterfassung.job-delete" with="kind={{ data.d.kind }}, id={{ data.d.id }}" confirm="{{ data.d.deleteConfirm }}" then="jd=" emit="jobs-changed" done="Deleted." label="Delete" variant=danger/>
+      </row>
+      {{#if data.d.noJobWarning}}<callout tone=warn>{{ data.d.noJobWarning }}</callout>{{/if}}
+      {{#if data.d.today}}
+      <section title="Book days" collapsible=true open=false>
+        <col gap=2>
+          <text tone=muted>One entry per working day — e.g. all days of a training. Single entries can also be booked on the project from the week page (“Book on”).</text>
+          <grid cols=4 gap=2 min=150>
+            <input bind="bd_from" type=date label="From" value="{{ data.d.today }}"/>
+            <input bind="bd_to" type=date label="To"/>
+            <input bind="bd_hours" type=number label="Hours" placeholder="the day's target"/>
+            <select bind="bd_type" options="{{ data.d.typeOptions | tojson }}" label="Type"/>
+          </grid>
+          <input bind="bd_desc" label="Description" value="{{ data.d.title }}"/>
+          <row gap=2><button run="zeiterfassung.book-days" with="id={{ data.d.id }}, from={{ state.bd_from | default(data.d.today) }}, to={{ state.bd_to }}, hours={{ state.bd_hours }}, type={{ state.bd_type }}, description={{ state.bd_desc | default(data.d.title) }}" into="jsaved" emit="jobs-changed" label="Book days" variant=primary/></row>
+        </col>
+      </section>
+      {{/if}}
+      <datatable source="data.d.entries" empty="No entries.">
+        <column label="Date">{{ dateText }}</column>
+        <column label="Description">{{ description }}{{#if ticket}} <small><muted>{{ ticket }}</muted></small>{{/if}}</column>
+        <column label="Type">{{ type }}</column>
+        <column label="Hours" align=right>{{ hours }}</column>
+      </datatable>
+    </col>
+  </section>
+  {{/if}}{{/if}}
   {{#if data.jsaved.jsaved.message}}<callout tone=good>{{ data.jsaved.jsaved.message }}</callout>{{/if}}
   <text tone=muted>Job numbers that time can be booked on — from the web UI or via the MCP report_time tool.</text>
   <section title="New job">
@@ -26,6 +61,7 @@
       <column label="Status">{{ status }}</column>
       <column label="">
         <row gap=1 justify=end>
+          <button action="state" state="jd" value="job:{{ id }}" label="Open" variant=plain/>
           <button action="state" state="jobedit" value="{{ id }}" label="Edit" variant=plain/>
           <button run="zeiterfassung.job-save" with="id={{ id }}, active={{ active ? 'false' : 'true' }}" emit="jobs-changed" label="{{ toggle }}" variant=plain/>
         </row>
@@ -75,6 +111,7 @@
       <column label="Status">{{ status }}</column>
       <column label="">
         <row gap=1 justify=end>
+          <button action="state" state="jd" value="project:{{ id }}" label="Open" variant=plain/>
           <button action="state" state="projectedit" value="{{ id }}" label="Edit" variant=plain/>
           <button run="zeiterfassung.project-save" with="id={{ id }}, active={{ active ? 'false' : 'true' }}" emit="jobs-changed" label="{{ toggle }}" variant=plain/>
         </row>

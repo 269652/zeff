@@ -2,7 +2,13 @@ import { listDefaultTagMaps } from "@/lib/default-tags";
 import { formatHours } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
 import { listJobs } from "@/lib/jobs";
-import { listProjects } from "@/lib/projects";
+import { getJobHours, listEntries } from "@/lib/entries";
+import { listEntryTypes } from "@/lib/entry-types";
+import { getProject, listProjects } from "@/lib/projects";
+import { formatDate } from "@/lib/format";
+import { typeMapOf } from "@/lib/entry-types-shared";
+import { getJob } from "@/lib/jobs";
+import { todayIso } from "@/lib/week";
 
 /**
  * The jobs and the projects as lists, ready to draw: what src/app/jobs/page.tsx and src/app/projects/page.tsx show (the same functions, the same
@@ -45,5 +51,47 @@ export function jobsScreen() {
     })),
     jobOptions: listJobs().map((j) => [j.number, `${j.number} ${j.name}`] as [string, string]),
     figures: { jobs: jobs.length, projects: projects.length, hours: jobs.reduce((a, j) => a + j.totalHours, 0) },
+  };
+}
+
+/** One job's or project's own page: what it has booked, its entries, and for a project the days to book on it at once. */
+export function jobDetail(input: { kind?: string; id?: unknown }) {
+  const id = Number(input.id);
+  if (!Number.isInteger(id)) return { found: false };
+  const isProject = input.kind === "project";
+  const types = typeMapOf(listEntryTypes());
+  const entries = (list: ReturnType<typeof listEntries>) =>
+    list.map((e) => ({ id: e.id, date: e.date, dateText: formatDate(e.date), description: e.description, ticket: e.ticket ?? "", type: types[e.type]?.label ?? e.type, hours: formatHours(e.hours) }));
+  if (isProject) {
+    const p = getProject(id);
+    if (!p) return { found: false };
+    const list = listEntries({ projectId: id, limit: 500 });
+    return {
+      found: true,
+      kind: "project",
+      id,
+      title: p.title,
+      inactive: !p.active,
+      sub: t("{hours}h booked in {n} entries", { hours: formatHours(p.totalHours), n: p.entryCount }),
+      job: p.job ? `${p.job.number} ${p.job.name}` : t("No job yet"),
+      noJobWarning: !p.job && p.entryCount > 0 ? t("The Chrono export skips these entries until you pick the project's job below.") : "",
+      deleteConfirm: p.entryCount ? t("Delete project {title}? Its {n} entries stay booked on the job, just without the project.", { title: p.title, n: p.entryCount }) : t("Delete project {title}?", { title: p.title }),
+      today: todayIso(),
+      typeOptions: listEntryTypes().map((x) => [x.key, x.label] as [string, string]),
+      entries: entries(list),
+    };
+  }
+  const j = getJob(id);
+  if (!j) return { found: false };
+  const list = listEntries({ jobId: id, limit: 200 });
+  return {
+    found: true,
+    kind: "job",
+    id,
+    title: `${j.number} ${j.name}`,
+    inactive: !j.active,
+    sub: t("{hours}h booked in {n} entries", { hours: formatHours(getJobHours(id)), n: list.length }),
+    deleteConfirm: t("Delete job {number}? This only works if no time is booked on it.", { number: j.number }),
+    entries: entries(list),
   };
 }

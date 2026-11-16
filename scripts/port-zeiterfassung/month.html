@@ -111,7 +111,7 @@
     <datatable source="data.m.entryList" empty="No entries.">
       <column label="Date">{{ dateText }}</column>
       <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>
-      <column label="Description">{{ description }}{{#if ticket}} <small><muted>{{ ticket }}</muted></small>{{/if}}</column>
+      <column label="Description">{{ description }}{{#if ticket}} {{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<small><muted>{{ ticket }}</muted></small>{{/if}}{{/if}}</column>
       <column label="Type"><dot color="{{ color }}"/> {{ type }}</column>
       <column label="Hours" align=right>{{ hours }}</column>
     </datatable>

@@ -11,6 +11,7 @@ import { getJobReportSummaries, jobSummariesToText } from "@/lib/report";
 import { getDayTargets } from "@/lib/schedule";
 import { absenceLabels, type AbsenceType } from "@/lib/schedule-shared";
 import { isoDate, todayIso } from "@/lib/week";
+import { ticketInfos } from "./tickets";
 
 /**
  * The monthly report as figures and words, ready to draw: what src/app/month/page.tsx works out from the booked time, the schedule and the report rules
@@ -217,6 +218,7 @@ export function monthScreen(input: { month?: string; by?: string } = {}) {
   }));
   const summaryText = jobSummariesToText(`${formatMonth(month)}${by ? ` · ${by}` : ""}`, report.total, jobs, h);
 
+  const tk = ticketInfos(report.entries.map((e) => e.ticket));
   const first = month.weeks[0];
   const last = month.weeks[month.weeks.length - 1];
   return {
@@ -255,6 +257,8 @@ export function monthScreen(input: { month?: string; by?: string } = {}) {
     summaries,
     summaryText,
     entryList: report.entries.map((e) => ({
+      ticketUrl: tk(e.ticket).url,
+      ticketTip: tk(e.ticket).tip,
       id: e.id,
       date: e.date,
       dateText: formatDate(e.date),

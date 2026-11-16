@@ -66,6 +66,60 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "time.job-detail",
+    group: "time",
+    label: "One job's or project's page",
+    summary: "What a job's or a project's own page shows (input kind job|project, id): its title, what it has booked, its entries (a job's 200 newest, a project's 500), for a project the job it is on and the types and today's date for booking days.",
+    input: [f("kind", "text"), f("id", "number", { required: true })],
+    output: "{ found, kind, title, sub, entries, … }",
+    run: async (i) => {
+      const { jobDetail } = await import("./jobs-data");
+      return jobDetail({ kind: text(i.kind), id: i.id });
+    },
+  },
+  {
+    name: "time.job-delete",
+    group: "time",
+    label: "Delete a job or a project",
+    summary: "Deletes a job or a project (input kind job|project, id) — a job with entries is refused, a project's entries stay without a project. Output { ok }; a refusal is an error.",
+    input: [f("kind", "text", { required: true }), f("id", "number", { required: true })],
+    output: "{ ok }",
+    writes: true,
+    run: async (i) => {
+      if (text(i.kind) === "project") (await import("@/lib/projects")).deleteProject(Number(i.id));
+      else (await import("@/lib/jobs")).deleteJob(Number(i.id));
+      return { ok: true };
+    },
+  },
+  {
+    name: "time.book-days",
+    group: "time",
+    label: "Book the working days of a range on a project",
+    summary: "One entry per working day from from to to on a project (input id, from, to, hours, fillUp: only what the day lacks, description, type), as the project's page does it. Output { ok, message }; nothing to book is an error.",
+    input: [f("id", "number", { required: true }), f("from", "text"), f("to", "text"), f("hours", "text"), f("fillUp", "boolean"), f("description", "text"), f("type", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { t } = await import("@/lib/i18n/server");
+      const { formatHours } = await import("@/lib/format");
+      const { bookProjectDays } = await import("@/lib/project-days");
+      const hoursText = text(i.hours).trim();
+      const { booked, skipped } = bookProjectDays({
+        projectId: Number(i.id),
+        from: text(i.from),
+        to: text(i.to),
+        hours: hoursText ? Number(hoursText.replace(",", ".")) : undefined,
+        fillUp: i.fillUp === true || i.fillUp === "true",
+        description: text(i.description),
+        type: text(i.type) || undefined,
+      });
+      const total = booked.reduce((a, b) => a + b.hours, 0);
+      const skippedText = skipped.length ? ` ${t("Skipped {days}.", { days: skipped.map((s) => `${s.date} (${s.reason})`).join(", ") })}` : "";
+      if (booked.length === 0) throw new Error(`${t("Nothing to book.")}${skippedText}`);
+      return { ok: true, message: (booked.length === 1 ? t("Booked {hours} h on 1 day.", { hours: formatHours(total) }) : t("Booked {hours} h on {n} days.", { hours: formatHours(total), n: booked.length })) + skippedText };
+    },
+  },
+  {
     name: "time.job-save",
     group: "time",
     label: "Create or change a job",
@@ -212,6 +266,86 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
       }
       const a = sch.createAbsence({ startDate: start, endDate: end, type, hours, note: text(i.note).trim() || null });
       return { ok: true, message: t("Added {type} {dates}.", { type: label, dates: `${a.startDate}${a.endDate !== a.startDate ? `–${a.endDate}` : ""}` }) };
+    },
+  },
+  {
+    name: "time.day",
+    group: "time",
+    label: "The day (or the week) drafted for booking",
+    summary: "End of day: the day's finished meetings not booked yet, the agents' open suggestions and the tickets worked on, as lines to take over (input date: an earlier day, default today; week: a week key or \"current\" for the whole week, day by day). Each line names the view states its edits live in (kh hours, kj job, kd words, ki ticked, ks separate).",
+    input: [f("date", "text"), f("week", "text")],
+    output: "{ mode, title, intro, days: [{ date, head, sub, rows: [{ k, kh, kj, kd, ki, ks, kind, include, hours, description, from, jobOptions … }] }] }",
+    run: async (i) => {
+      const { dayScreen } = await import("./day-data");
+      return dayScreen({ date: text(i.date), week: text(i.week) });
+    },
+  },
+  {
+    name: "time.day-book",
+    group: "time",
+    label: "Book the day as the lines stand",
+    summary: "Books a day's lines as you took them over (input date; state: the view's state as JSON — the lines' edits by their names, a line without an edit as proposed): meetings as calendar entries (each once), suggestions accepted, tickets as entries, parallel work grouped. Output { message, created } — created can be taken back with time.day-undo; a line that fails is named in the error.",
+    input: [f("date", "date", { required: true }), f("state", "text")],
+    output: "{ ok, message, created }",
+    writes: true,
+    run: async (i) => {
+      const { bookFromState } = await import("./day-data");
+      const raw = text(i.state).trim();
+      const r = await bookFromState(text(i.date), raw ? (JSON.parse(raw) as Record<string, unknown>) : {});
+      return { ok: true, message: r.message, created: JSON.stringify(r.created) };
+    },
+  },
+  {
+    name: "time.day-undo",
+    group: "time",
+    label: "Take a day's booking back",
+    summary: "Deletes the entries a time.day-book created (input created: its answer), only those still as booked. Output { ok, message }.",
+    input: [f("created", "text", { required: true })],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { undoFromText } = await import("./day-data");
+      return { ok: true, ...(await undoFromText(text(i.created))) };
+    },
+  },
+  {
+    name: "time.rules",
+    group: "time",
+    label: "The rules of time tracking",
+    summary: "The entry type rules, the report rewriting rules (when → label, tags), the meeting → job rules with their default job, the meeting exclude rules and the entry types (with their use), as Settings → Time tracking edits them — and the options of the forms.",
+    input: [],
+    output: "{ typeRules, reportRules, meetingRules, meetingDefaultJob, excludeRules, entryTypes, jobOptions, typeOptions, fieldOptions, meetings }",
+    run: async () => {
+      const { rulesScreen } = await import("./rules-data");
+      return rulesScreen();
+    },
+  },
+  {
+    name: "time.rule-op",
+    group: "time",
+    label: "Change a list of rules, one step",
+    summary:
+      "One change of a list: what types | report | meetings | exclude | entry-type, op add | remove | up | down (| default for the meeting default job | update for an entry type), index of the rule. add: types (jobNumber, description, type), report (f1,v1 … f3,v3 conditions as field/value, template, tags), meetings (match, jobNumber, group), exclude (value), entry-type (label, color); update/remove entry-type take key. apply: also re-type / re-tag / re-book existing entries. Output { ok, message }; a refusal is an error.",
+    input: [f("what", "text", { required: true }), f("op", "text", { required: true }), f("index", "number"), f("apply", "boolean"), f("jobNumber", "text"), f("description", "text"), f("type", "text"), f("f1", "text"), f("v1", "text"), f("f2", "text"), f("v2", "text"), f("f3", "text"), f("v3", "text"), f("template", "text"), f("tags", "text"), f("match", "text"), f("group", "boolean"), f("value", "text"), f("label", "text"), f("color", "text"), f("key", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { ruleOp } = await import("./rules-data");
+      return { ok: true, ...ruleOp(i) };
+    },
+  },
+  {
+    name: "time.entry-op",
+    group: "time",
+    label: "Edit an entry, its group or a day's break",
+    summary:
+      "One edit, as the weekly report's own actions do it. op: update (id, date, bookOn, hours, description, ticket, type, tags, comment, start, isGroup), copy (id, date), link (id, spanId), unlink (id), collect (id of a collecting entry), start (id, start), span-mode (spanId, mode), ungroup (spanId), parallel (ids, mode combine|divide|sequential) or pauses (dates comma separated, text: the break, \"none\" for no break, empty to remove). Output { ok, message }; a refusal is an error.",
+    input: [f("op", "text", { required: true }), f("id", "number"), f("date", "text"), f("bookOn", "text"), f("hours", "text"), f("description", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("spanId", "text"), f("mode", "text"), f("ids", "text"), f("dates", "text"), f("text", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { entryOp } = await import("./entry-ops");
+      return { ok: true, ...entryOp(i) };
     },
   },
   {
