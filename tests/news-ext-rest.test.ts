@@ -241,3 +241,35 @@ test("an account that had the built-in keeps its data: the retired plugin row go
   const { getSqlite } = await import("@/db");
   assert.equal((getSqlite().prepare("select count(*) n from news_items").get() as { n: number }).n >= 7, true);
 });
+
+test("the pages as the browser draws them: the page's lambdas asked with what the render gave, again with the answers — in every view, 0 errors", { skip }, async () => {
+  const { drawLive } = await import("./news-live-render");
+  const template = fs.readFileSync(path.join(repoPlugin("news-ext"), "views", "news.html"), "utf8");
+  for (const s of [{}, { view: "discover" }, { view: "latest", stream: "0" }, { view: "saved" }, { view: "filtered" }, { view: "hidden" }, { topic: "Bahn" }, { topic: "story:Streik bei der Bahn" }, { category: "Tech" }, { like: "1" }, { reading: "1" }, { limit: "48" }] as Record<string, string>[]) {
+    const d = await drawLive(template, s);
+    assert.deepEqual(d.errors, [], `${JSON.stringify(s)}: ${JSON.stringify(d.errors)}`);
+    assert.ok(d.data.news && (d.data.fresh as { count?: number } | undefined)?.count !== undefined, "the screen's and the fresh count's answers came");
+  }
+});
+
+test("the page's copy of the template follows the plugin: a copy made before is replaced once, one you changed is left alone", { skip }, async () => {
+  const { newsApp, refreshNewsApp } = await import("@/plugins/workspace/news-app");
+  const w = await import("@/plugins/workspace/store");
+  const { getPref, setPref } = await import("@/lib/prefs");
+  const id = (await newsApp())!;
+  const plugin = fs.readFileSync(path.join(repoPlugin("news-ext"), "views", "news.html"), "utf8");
+  const old = '<state name="view" value="foryou"/>\n<data name="news" lambda="news.screen" with="view={{ state.view }}"/>\n<text>old</text>';
+  const set = (template: string) => {
+    const d = w.getDatabase(id)!;
+    w.updateSchema(id, { ...d.schema, views: d.schema.views.map((v) => ({ ...v, template })) });
+  };
+  const now = () => w.getDatabase(id)!.schema.views[0].template;
+  setPref("news.workspaceApp.templateHash", ""); // (made before the hash was kept)
+  set(old);
+  await refreshNewsApp();
+  assert.equal(now(), plugin, "replaced once");
+  set(old + "\n<text>mine</text>"); // (changed here, the hash is the plugin's)
+  await refreshNewsApp();
+  assert.ok(now()!.includes("mine"), "left alone");
+  assert.ok(getPref<string>("news.workspaceApp.templateHash", ""));
+});

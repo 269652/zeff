@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { getPref, setPref } from "@/lib/prefs";
@@ -7,6 +8,8 @@ import type { DbSchema, View } from "./model";
 
 const PREF = "news.workspaceApp";
 const PLUGIN = "news-ext";
+const HASH = "news.workspaceApp.templateHash";
+const hash = (s: string) => crypto.createHash("sha1").update(s).digest("hex");
 
 /** The News plugin's page template (its app view `views/news.html`), null: the plugin isn't in the plugins folder or isn't on. */
 async function pluginTemplate(): Promise<string | null> {
@@ -18,6 +21,29 @@ async function pluginTemplate(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * The page's views carry a copy of the plugin's template (the Workspace keeps a view's template in the database): when the plugin brings a newer one, the copy is replaced —
+ * unless it was changed here (what was written last is remembered by its hash; a copy made before that is replaced once). Server only.
+ */
+export async function refreshNewsApp(): Promise<void> {
+  const known = getPref<number | null>(PREF, null);
+  if (!known) return;
+  const template = await pluginTemplate();
+  if (!template) return;
+  const { getDatabase, updateSchema } = await import("./store");
+  const db = getDatabase(known);
+  if (!db || db.page.archivedAt) return;
+  const last = getPref<string>(HASH, "");
+  const isNews = (v: View) => v.type === "app" && v.app === "template" && !!v.template && v.template.includes('lambda="news.screen"');
+  const stale = db.schema.views.filter((v) => isNews(v) && v.template !== template && (!last || hash(v.template!) === last));
+  if (!stale.length) {
+    if (!last && db.schema.views.some((v) => isNews(v) && v.template === template)) setPref(HASH, hash(template));
+    return;
+  }
+  updateSchema(known, { ...db.schema, views: db.schema.views.map((v) => (stale.includes(v) ? { ...v, template } : v)) });
+  setPref(HASH, hash(template));
 }
 
 /**
@@ -35,7 +61,9 @@ export async function newsApp(): Promise<number | null> {
     if (db.schema.views.some((v) => v.type === "app" && v.app === "news")) {
       const views = db.schema.views.map((v): View => (v.type === "app" && v.app === "news" ? { ...v, app: "template", template } : v));
       updateSchema(known, { ...db.schema, views });
+      setPref(HASH, hash(template));
     }
+    await refreshNewsApp();
     return known;
   }
   const { newView } = await import("./model");
@@ -43,5 +71,6 @@ export async function newsApp(): Promise<number | null> {
   const id = createPage({ kind: "database", title: t("News"), icon: "📰", schema });
   updatePage(id, { fullWidth: true, favorite: true });
   setPref(PREF, id);
+  setPref(HASH, hash(template));
   return id;
 }

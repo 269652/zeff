@@ -96,7 +96,7 @@ write(
     {
       format: 1,
       id: "news-ext",
-      version: "1.1.0",
+      version: "1.2.0",
       name: "News",
       description: "Your news, gathered for you: the feeds you pick, everything scored for you.",
       icon: "📰",
@@ -436,7 +436,7 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "news-ext",
       name: "News",
-      version: "0.2.0",
+      version: "0.3.0",
       description: "Your news, gathered for you: the feeds you pick plus a search per interest, everything scored for you, filtered by an agent, tagged, with an overview, stories, discovery, a page and settings of its own, a widget, a Today line and the news you kept for databases.",
       author: "Zeff",
       apiVersion: 1,
