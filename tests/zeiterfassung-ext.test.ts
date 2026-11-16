@@ -722,12 +722,12 @@ test("opened live: the installed view, its rows as the page hands them, German w
     // the dialogs, with the ids of what is there
     const w = (await openLive(template, db, { view: "week", week: weeks[0] }, lang)).flowData.w as any;
     const id = String(w.entryList[0].id);
-    for (const st of [{ entryedit: id }, { groupedit: id }, { entrycopy: id }, { hoursedit: id }, { ctxentry: id }, { pauseday: w.table.foot.pause[0].iso }, { n_ctx: "true", n_group: "true" }]) {
+    for (const st of [{ entryedit: id }, { groupedit: id }, { entrycopy: id }, { hoursedit: id }, { ctxentry: id }, { pauseday: w.table.foot.pause[0].iso }, { n_ctx: "true", n_group: "true" }] as Record<string, string>[]) {
       const o = await openLive(template, db, { view: "week", week: weeks[0], ...st }, lang);
       assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${JSON.stringify(st)}`);
     }
     const j = (await openLive(template, db, { view: "jobs" }, lang)).flowData.j as any;
-    for (const st of [{ jd: `job:${j.jobs[0].id}`, jobedit: String(j.jobs[0].id) }, ...(j.projects[0] ? [{ jd: `project:${j.projects[0].id}`, projectedit: String(j.projects[0].id) }] : [])]) {
+    for (const st of [{ jd: `job:${j.jobs[0].id}`, jobedit: String(j.jobs[0].id) }, ...(j.projects[0] ? [{ jd: `project:${j.projects[0].id}`, projectedit: String(j.projects[0].id) }] : [])] as Record<string, string>[]) {
       const o = await openLive(template, db, { view: "jobs", ...st }, lang);
       assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${JSON.stringify(st)}`);
     }
