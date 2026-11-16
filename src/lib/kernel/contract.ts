@@ -84,7 +84,7 @@ export const KERNEL_CONTRACT = {
   metaOps: ["block.delete", "block.save", "blocks.list", "database.alter", "database.create", "flow.delete", "flow.save", "flows.list", "page.archive", "page.create", "page.delete", "page.update", "plugin.delete", "plugin.save", "plugins.list", "schema", "tree"],
 
   /** The steps a flow is made of (workspace/flows/types.ts). The actions a step runs come through `workspace.flowActions`. */
-  flowNodes: ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail"],
+  flowNodes: ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail", "fn", "apply", "while", "tx"],
 
   /** The elements of the view language (workspace/view-template.ts). */
   viewElements: [

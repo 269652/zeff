@@ -1,0 +1,32 @@
+{
+  "name": "dsl.account-mark",
+  "title": "Mark a recipient as your own account, a credit account, or neither (the server DSL)",
+  "description": "The lambda finances.account-mark as a flow: same result for the same event; with save=true it also keeps the preference — what a lambda (which only reads) could not.",
+  "inputs": [
+    { "name": "key", "type": "text" },
+    { "name": "kind", "type": "text" },
+    { "name": "save", "type": "boolean", "default": false }
+  ],
+  "permissions": { "pref": ["finances.ownAccounts"] },
+  "nodes": [
+    { "id": "key", "kind": "set", "vars": { "key": "{{ input.key | default('') | text | trim }}" } },
+    { "id": "need", "kind": "if", "when": "vars.key == ''", "then": [{ "id": "nokey", "kind": "fail", "message": "No recipient." }], "else": [] },
+    { "id": "read", "kind": "action", "action": "core.pref.get", "input": { "key": "finances.ownAccounts" } },
+    { "id": "all", "kind": "set", "vars": { "all": "{{ steps.read.value | default({}) }}" } },
+    {
+      "id": "mark",
+      "kind": "if",
+      "when": "input.kind == 'own' or input.kind == 'credit'",
+      "then": [{ "id": "put", "kind": "set", "vars": { "all": "{{ vars.all | setKey(vars.key, input.kind) }}" } }],
+      "else": [{ "id": "drop", "kind": "set", "vars": { "all": "{{ vars.all | omit(vars.key) }}" } }]
+    },
+    {
+      "id": "keep",
+      "kind": "if",
+      "when": "input.save",
+      "then": [{ "id": "write", "kind": "action", "action": "core.pref.set", "input": { "key": "finances.ownAccounts", "value": "{{ vars.all }}" } }],
+      "else": []
+    },
+    { "id": "done", "kind": "return", "value": { "value": "{{ vars.all }}" } }
+  ]
+}

@@ -179,3 +179,67 @@ export async function lambdaTypesAction(files: Draft) {
     return { libs: await typingsOf(l) };
   });
 }
+
+// ---------------------------------------------------------------------------
+// The capabilities (ws_capabilities): the rows the engine goes by — kernel actions declared, wrappers, programs.
+// ---------------------------------------------------------------------------
+
+/** Every capability row, with what it is made of and how many versions it has. */
+export async function capabilitiesAction() {
+  return run(async () => {
+    const { ensureDeclared } = await import("@/plugins/workspace/flows/declare");
+    const { listCapabilities, listCapabilityVersions } = await import("@/plugins/workspace/flows/capabilities");
+    ensureDeclared();
+    return {
+      capabilities: listCapabilities().map((c) => ({
+        name: c.name,
+        label: c.label,
+        summary: c.summary,
+        group: c.group ?? "",
+        class: c.class ?? (("nodes" in c.impl ? "program" : "wrapper") as string),
+        made: ("command" in c.impl ? "command" : "use" in c.impl ? "use" : "nodes") as "command" | "use" | "nodes",
+        enabled: c.enabled,
+        writes: !!c.writes,
+        versions: listCapabilityVersions(c.name).length,
+      })),
+    };
+  });
+}
+
+/** One capability whole, with its versions (newest first). */
+export async function capabilityAction(name: string) {
+  return run(async () => {
+    const { getCapability, declaredRow, listCapabilityVersions } = await import("@/plugins/workspace/flows/capabilities");
+    const cap = declaredRow(String(name)) ?? getCapability(String(name));
+    if (!cap) throw new Error(`There is no capability “${name}”.`);
+    return { capability: cap, versions: listCapabilityVersions(cap.name).map((v) => ({ version: v.version, at: v.at })) };
+  });
+}
+
+/** A capability saved — checked first: every problem comes back with its place. */
+export async function saveCapabilityAction(raw: unknown) {
+  return run(async () => {
+    const { normalizeCapability, saveCapability } = await import("@/plugins/workspace/flows/capabilities");
+    const { cap, problems } = normalizeCapability(raw);
+    if (!cap) return { saved: false as const, problems };
+    saveCapability(cap);
+    return { saved: true as const, problems: [] as string[], capability: cap };
+  });
+}
+
+/** An earlier version back (a new version; nothing is lost). */
+export async function restoreCapabilityAction(name: string, version: number) {
+  return run(async () => ({ capability: (await import("@/plugins/workspace/flows/capabilities")).restoreCapability(String(name), Number(version)) }));
+}
+
+/** One of your own capabilities (a wrapper or a program) deleted; a declared kernel action can only be switched off. */
+export async function deleteCapabilityAction(name: string) {
+  return run(async () => {
+    const { getCapability, deleteCapability } = await import("@/plugins/workspace/flows/capabilities");
+    const c = getCapability(String(name));
+    if (!c) throw new Error(`There is no capability “${name}”.`);
+    if ("command" in c.impl) throw new Error("A kernel action is declared from its code: switch it off instead of deleting it.");
+    deleteCapability(c.name);
+    return {};
+  });
+}

@@ -11,7 +11,7 @@ import { BRANCH_LABEL, nodeBranches, nodeSummary, type Slot } from "../tree";
  * between two nodes adds one there.
  */
 
-export const KIND_ICON: Record<FlowNodeKind, string> = { action: "⚡", set: "📝", if: "🔀", switch: "🔀", foreach: "🔁", parallel: "⫴", try: "🛟", script: "⌨", ask: "💬", approve: "✋", wait: "⏳", call: "↪", return: "⏎", fail: "⛔" };
+export const KIND_ICON: Record<FlowNodeKind, string> = { action: "⚡", set: "📝", if: "🔀", switch: "🔀", foreach: "🔁", parallel: "⫴", try: "🛟", script: "⌨", ask: "💬", approve: "✋", wait: "⏳", call: "↪", return: "⏎", fail: "⛔", fn: "ƒ", apply: "ƒ()", while: "🔄", tx: "🧾" };
 
 export type NodeRun = { status: "ok" | "failed" | "skipped" | "waiting" | "dry"; ms: number };
 

@@ -15,9 +15,12 @@ const kids = (n: FlowNode): [string, FlowNode[]][] => {
     case "switch":
       return [...n.cases.map((c, i): [string, FlowNode[]] => [`case:${i}`, c.nodes]), ["default", n.default]];
     case "foreach":
+    case "fn":
+    case "while":
+    case "tx":
       return [["nodes", n.nodes]];
     case "try":
-      return [["nodes", n.nodes], ["catch", n.catch]];
+      return [["nodes", n.nodes], ["catch", n.catch], ...(n.finally ? ([["finally", n.finally]] as [string, FlowNode[]][]) : [])];
     case "parallel":
       return n.branches.map((b, i): [string, FlowNode[]] => [`branch:${i}`, b]);
     default:
@@ -135,6 +138,14 @@ export function newNode(nodes: FlowNode[], kind: FlowNodeKind, action?: string):
       return { id, kind, value: "" };
     case "fail":
       return { id, kind, message: "" };
+    case "fn":
+      return { id, kind, name: "myFunction", params: [], nodes: [] };
+    case "apply":
+      return { id, kind, fn: "", args: {} };
+    case "while":
+      return { id, kind, when: "", nodes: [], max: 200 };
+    case "tx":
+      return { id, kind, nodes: [] };
   }
 }
 
@@ -188,6 +199,14 @@ export function nodeSummary(n: FlowNode): string {
       return typeof n.value === "string" ? n.value || "—" : "an object";
     case "fail":
       return n.message;
+    case "fn":
+      return `function ${n.name}(${n.params.join(", ")})`;
+    case "apply":
+      return n.fn || "(which function?)";
+    case "tx":
+      return "all or nothing";
+    case "while":
+      return `while ${n.when || "…"}`;
   }
 }
 
