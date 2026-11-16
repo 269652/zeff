@@ -10,6 +10,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { swapPlugin } from "./lib/swap-reads.mts";
 import { build } from "esbuild";
 
 const ROOT = process.cwd();
@@ -809,4 +810,6 @@ owed to, what is open after your payments, the next instalment or deadline, and 
 - **With the built-in off**: People, the first look, a Revolut statement and the bank still see and match your cases — they ask the kernel who keeps them (\`lib/cases/there.ts\`) and run this plugin's flows.
 `,
 );
+// (the kernel's plain reads → their SQL replacements, with the grants they need — scripts/lib/swap-reads.mts)
+swapPlugin(dir);
 console.log(`${dir}: lib ${r.outputFiles[0].text.length} bytes, ${keys.size} texts (de ${Object.keys(strings.de).length}, es ${Object.keys(strings.es).length})`);

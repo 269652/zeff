@@ -560,3 +560,29 @@ test("more SQL replacements (mail.messages, mail.unread, documents.texts) answer
   const capped = await both("mail.messages", {}, { sql: ["emails"] });
   assert.equal((capped.f as { messages: unknown[] }).messages.length, 5000, "without the grant: the default cap");
 });
+
+test("the generators' last step swaps a plugin's plain reads for their SQL replacements, with the grants", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { swapPlugin } = (await import("../scripts/lib/swap-reads.mts" as string)) as { swapPlugin: (dir: string) => string[] };
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dsl-swap-"));
+  fs.mkdirSync(path.join(dir, "lambdas", "x.one"), { recursive: true });
+  fs.writeFileSync(path.join(dir, "lambdas", "x.one", "lambda.json"), JSON.stringify({ name: "x.one", label: "x", what: "x", kind: "function", zeff: ["store.query", "people.names", "mail.messages"] }));
+  fs.writeFileSync(path.join(dir, "lambdas", "x.one", "index.mjs"), 'export async function handler(e, context) { const a = await context.zeff.call("people.names", { ids: [1] }); const b = await context.zeff.call("mail.messages", {}); const c = await context.zeff.call("store.query", {}); return [a, b, c]; }');
+  fs.writeFileSync(path.join(dir, "x.package.json"), JSON.stringify({ flows: [{ name: "x.sync", nodes: [{ id: "n", kind: "action", action: "messages.count", input: { folder: "a" } }, { id: "m", kind: "action", action: "store.query", input: {} }], permissions: { store: ["x.y"] } }] }));
+  const first = swapPlugin(dir);
+  assert.deepEqual(first.sort(), [path.join("lambdas", "x.one", "index.mjs"), path.join("lambdas", "x.one", "lambda.json"), "x.package.json"].sort());
+  const man = JSON.parse(fs.readFileSync(path.join(dir, "lambdas", "x.one", "lambda.json"), "utf8"));
+  assert.deepEqual(man.zeff, ["store.query", "read.people.names", "read.mail.messages"]);
+  assert.deepEqual(man.sql, ["emails", "people"]);
+  assert.equal(man.sqlMaxRows, 50000);
+  const code = fs.readFileSync(path.join(dir, "lambdas", "x.one", "index.mjs"), "utf8");
+  assert.match(code, /call\("read\.people\.names"/);
+  assert.match(code, /call\("store\.query"/, "what is no swapped read stays");
+  const pkg = JSON.parse(fs.readFileSync(path.join(dir, "x.package.json"), "utf8"));
+  assert.equal(pkg.flows[0].nodes[0].action, "read.messages.count");
+  assert.equal(pkg.flows[0].nodes[1].action, "store.query");
+  assert.deepEqual(pkg.flows[0].permissions, { store: ["x.y"], sql: ["emails"] });
+  assert.deepEqual(swapPlugin(dir), [], "idempotent");
+});

@@ -12,6 +12,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { swapPlugin } from "./lib/swap-reads.mts";
 
 const ROOT = process.cwd();
 const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
@@ -289,6 +290,7 @@ ${c.description}
 **Switching:** Plugins → ${c.name} (built-in) → *Switch to the plugin*.
 `,
   );
+  swapPlugin(dir);
   console.log(`${dir}: ${c.name} ${version}`);
 }
 
