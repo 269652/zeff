@@ -23,6 +23,8 @@ export const ADOPTABLE: Record<string, string[]> = {
   "cases-ext": ["cases", "case_sources", "case_parties", "bank_transactions", "case_warnings"],
   // (keep_own_notes: only read — which of your boards' notes are synced with Google Keep)
   "keep-ext": ["keep_notes", "keep_own_notes"],
+  // (the files Zeff recorded as its own in Drive: nothing goes up twice through the switch)
+  "google-drive-ext": ["google_drive_files"],
 };
 
 /**
@@ -31,6 +33,8 @@ export const ADOPTABLE: Record<string, string[]> = {
  */
 export const ADOPTABLE_PREFS: Record<string, string[]> = {
   "finances-ext": ["finances.ownAccounts", "cases.income", "cases.incomeFacts"],
+  // (the folders of your Drive the built-in read into the documents — taken over once)
+  "google-drive-ext": ["googleDrive.pullFolders"],
 };
 
 /** The built-ins' sources their ports may stand in for (a source's `replaces`), by the port's plugin id: the databases that read it go on. */

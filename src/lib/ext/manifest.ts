@@ -298,6 +298,18 @@ const settingDecl = z.object({
   default: z.union([z.string().max(500), z.number(), z.boolean()]).optional(),
   options: z.array(z.string().max(100)).max(50).optional(),
 });
+const oauthDecl = z.object({
+  id: shortId.describe("Its id (unique in the plugin): <plugin>.<id> in the oauth actions and a flow's permissions."),
+  label: z.string().min(1).max(60),
+  authUrl: z.string().regex(/^https:\/\/[^\s]{4,300}$/, "an https address").describe("Where the user signs in (the provider's authorization endpoint)."),
+  tokenUrl: z.string().regex(/^https:\/\/[^\s]{4,300}$/, "an https address").describe("Where the code and the refresh token are exchanged for access tokens."),
+  scopes: z.array(z.string().min(1).max(200)).min(1).max(20).describe("What it asks for by default."),
+  scopeSets: z.record(shortId, z.array(z.string().min(1).max(200)).min(1).max(20)).default({}).describe('More of what it can ask for, by name: connecting "with" one asks for that set instead (a narrow and a wide access).'),
+  clientId: z.string().regex(/^[a-zA-Z][\w]{0,39}$/).describe("The key of its settings (kind text or secret) that holds the client id."),
+  clientSecret: z.string().regex(/^[a-zA-Z][\w]{0,39}$/).describe("The key of its settings (kind secret) that holds the client secret."),
+  authParams: z.record(z.string().max(60), z.string().max(200)).default({}).describe('More parameters of the sign-in address ({ "access_type": "offline" }).'),
+  identity: z.enum(["none", "id_token"]).default("none").describe("id_token: the e-mail address in the id token the provider sends (to show who is connected)."),
+});
 const reviewLinkDecl = z.object({
   id: shortId,
   label: z.string().min(1).max(60),
@@ -341,6 +353,7 @@ const contributes = z.object({
   lambdas: relPath.optional().describe("A folder of lambdas (<name>/lambda.json and its code, _lib.mjs shared): lookups and functions that run without the Notebook, each in a Node process of its own with only the domains and Zeff calls it names. Their secrets are the plugin's settings they name."),
   tools: z.array(toolDecl).max(30).default([]).describe("Tools for the AI (Zeff's MCP, the Workspace chat, agents), each done by a plugin function — beside Zeff's own."),
   settings: z.array(settingDecl).max(30).default([]).describe("What the user sets for it (Plugins → its Settings): texts, numbers, choices and secrets (kept encrypted). Its functions get them as `inputs.zeffSettings`."),
+  oauth: z.array(oauthDecl).max(5).default([]).describe("Signing in to a service with an OAuth client of the user's own (authorization code with PKCE): the kernel serves the way there and back (/api/ext/oauth/<plugin>/<id>/connect and /callback), keeps the tokens encrypted and refreshes them. Its lambdas ask for a fresh access token (the read action oauth.token); its flows call the service as the user (oauth.fetch, oauth.upload, oauth.download). The client id and secret are its settings."),
   reviewLinks: z.array(reviewLinkDecl).max(10).default([]).describe("Things waiting on a page of their own: the review queue shows how many and links there."),
   workspacePackages: z.array(relPath).max(20).default([]).describe("Workspace apps it brings: package files (JSON — a page exported with its databases, widgets, flows), offered under New → templates and made with one click."),
   locales: z
@@ -377,7 +390,7 @@ export const manifestSchema = z
       .describe("Where newer versions of it are: a GitHub repository (one repository may hold many plugins, each in a folder with its own zeff-plugin.json and version). Plugins → Sources checks it and updates on a click."),
     apiVersion: z.number().int().min(1).max(API_VERSION).describe(`The extension API version it was written for (this Zeff speaks up to ${API_VERSION}).`),
     permissions: z.array(permissionId).max(30).default([]).describe("What it may do (granted by you): exec, network, prompt, and the permissions plugins bring (work.read, todos.write, workspace.write …)."),
-    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], stores: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [] }),
+    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], stores: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [], oauth: [] }),
   })
   .superRefine((m, ctx) => {
     const has = (p: Permission) => m.permissions.includes(p);

@@ -72,7 +72,7 @@ export const KERNEL_CONTRACT = {
   },
 
   /** What a plugin's manifest may bring (`contributes` in zeff-plugin.json, lib/ext/manifest.ts). */
-  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
+  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "oauth", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
 
   /** What a server function or a Notebook cell may ask Zeff for (`zeff.*` in Python and Node.js; notebook/zeff-access.ts). */
   functionCalls: ["add_row", "ai", "api", "call", "database", "databases", "delete_row", "meta", "metric", "metrics", "output", "outputs", "publish", "table", "tables", "update_row"],

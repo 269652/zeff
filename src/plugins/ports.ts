@@ -27,6 +27,7 @@ export const PORTS: Port[] = [
   { builtin: "jira", plugin: "jira-ext", switch: async () => (await import("./jira/to-plugin")).switchJiraToPlugin() },
   { builtin: "keep", plugin: "keep-ext", switch: async () => (await import("./keep/to-plugin")).switchKeepToPlugin() },
   { builtin: "revolut", plugin: "revolut-ext", switch: async () => (await import("./revolut/to-plugin")).switchRevolutToPlugin() },
+  { builtin: "google-drive", plugin: "google-drive-ext", switch: async () => (await import("./google-drive/to-plugin")).switchGoogleDriveToPlugin() },
   { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },
 ];
 
