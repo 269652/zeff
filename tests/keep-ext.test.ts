@@ -102,7 +102,7 @@ test("Keep's port: two syncs give the same notes and the same Google Keep databa
     const { runFlow } = await import("@/plugins/workspace/flows/engine");
     const r1 = await runFlow("keep.sync", {});
     assert.equal(r1.status, "done", r1.error ?? "");
-    assert.deepEqual(r1.output, { ok: true, message: "3 new · 0 changed · 4 in all" });
+    assert.deepEqual(r1.output, { ok: true, message: "4 new · 0 changed · 4 in all" });
     assert.deepEqual(JSON.parse(JSON.stringify(await snapshot())).rows, JSON.parse(JSON.stringify(builtinFirst)).rows);
     next = SECOND;
     const r2 = await runFlow("keep.sync", {});

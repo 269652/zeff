@@ -129,10 +129,10 @@ test("another plugin adds its own series through the point — gone while it is 
   const series = await world();
   const { correlationSeries } = await import("@/lib/series/series-point");
   const { setInstalled } = await import("@/plugins/state");
-  correlationSeries.contribute("news", [{ id: "news.read", series: () => [{ id: "news:read", label: "News read", group: "News", kind: "number", values: new Map([["2026-10-01", 3]]) }] }]);
-  setInstalled("news", true);
+  correlationSeries.contribute("agenda", [{ id: "news.read", series: () => [{ id: "news:read", label: "News read", group: "News", kind: "number", values: new Map([["2026-10-01", 3]]) }] }]);
+  setInstalled("agenda", true);
   assert.ok((await series.allSeries({ from: "2026-10-01", to: "2026-10-03" })).some((s) => s.id === "news:read"));
-  setInstalled("news", false);
+  setInstalled("agenda", false);
   assert.ok(!(await series.allSeries({ from: "2026-10-01", to: "2026-10-03" })).some((s) => s.id === "news:read"));
 });
 

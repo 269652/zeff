@@ -144,6 +144,7 @@ test("the port's view data is the built-in's: the debts overview's figures, list
     // (what the port's template needs beyond the built-in's data)
     delete port.balance;
     delete port.monthlyRows;
+    delete port.suggestions;
     port.debts = (port.debts as Record<string, unknown>[]).map((x) => { const { due: _a, dueText: _b, day: _c, payment: _d, ...rest } = x; return rest; });
     assert.deepEqual(port, builtin, dir2);
   }

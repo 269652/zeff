@@ -60,8 +60,9 @@ for (const [tool, allowed] of Object.entries(WRITES))
   });
 
 test("a todo's actions are run only from a click (or a worker you started)", () => {
+  // todos/engine.ts: the flow action behind the todo screen's Run button (a flow with the permission api — your click).
   // workspace/actions/pages.ts: runJobDeliveryAction, the job card's "run the delivery" button.
-  assert.deepEqual(using("runTodoOpsNow("), ["src/lib/ops.ts", "src/plugins/todos/server-actions.ts", "src/plugins/workspace/actions/pages.ts"]);
+  assert.deepEqual(using("runTodoOpsNow("), ["src/lib/ops.ts", "src/plugins/todos/engine.ts", "src/plugins/workspace/actions/pages.ts"]);
   assert.deepEqual(using("runTodoOps("), ["src/lib/ops.ts", "src/lib/work/runner.ts"]);
   assert.deepEqual(using("RUNNERS"), ["src/lib/ops.ts", "src/plugins/actions/run.ts"]);
 });
@@ -78,14 +79,14 @@ const GOOGLE_WRITES: Record<string, string[]> = {
   "sendGmailDraft(": ["src/lib/google/gmail-send.ts"],
   "archiveGmail(": ["src/plugins/gmail/run.ts"],
   "markGmailUnread(": ["src/plugins/gmail/run.ts"],
-  "insertGcalEvent(": ["src/lib/google/calendar-write.ts", "src/plugins/calendar/server-actions.ts", "src/plugins/google-calendar/run.ts"],
-  "patchGcalEvent(": ["src/lib/google/calendar-write.ts", "src/plugins/calendar/server-actions.ts"],
-  "respondGcalEvent(": ["src/lib/google/calendar-write.ts", "src/plugins/calendar/server-actions.ts"],
+  "insertGcalEvent(": ["src/lib/calendar/save.ts", "src/lib/google/calendar-write.ts", "src/plugins/calendar/proposals.ts", "src/plugins/calendar/server-actions.ts", "src/plugins/google-calendar/run.ts"],
+  "patchGcalEvent(": ["src/lib/calendar/save.ts", "src/lib/google/calendar-write.ts", "src/plugins/calendar/server-actions.ts"],
+  "respondGcalEvent(": ["src/lib/calendar/save.ts", "src/lib/google/calendar-write.ts", "src/plugins/calendar/server-actions.ts"],
   "runGmailCompose(": ["src/lib/ops.ts", "src/plugins/gmail/run.ts"],
   "runGmailComposeOnTodo(": ["src/plugins/gmail/run.ts", "src/plugins/gmail/server-actions.ts"],
-  "gmailRowChange(": ["src/plugins/gmail/run.ts", "src/plugins/gmail/server-actions.ts"],
+  "gmailRowChange(": ["src/plugins/gmail/run.ts", "src/plugins/gmail/server-actions.ts", "src/plugins/workspace/flows/mail-actions.ts"],
   "runGcalEvent(": ["src/plugins/google-calendar/run.ts"],
-  "runGcalEventOnTodo(": ["src/plugins/calendar/server-actions.ts", "src/plugins/google-calendar/run.ts"],
+  "runGcalEventOnTodo(": ["src/lib/calendar/save.ts", "src/plugins/calendar/server-actions.ts", "src/plugins/google-calendar/run.ts"],
   // (The one door every write to Google goes through — and only these modules knock.)
   "googleWrite": ["src/lib/google/calendar-write.ts", "src/lib/google/gmail-send.ts", "src/lib/google/gmail-write.ts", "src/lib/google/write-guard.ts"],
 };

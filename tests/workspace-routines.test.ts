@@ -112,7 +112,7 @@ test("routineView: what the controls block shows — the routine, its newest run
   // a run of an agent that its worker ended: brought up to date when the view is made
   const run = r.startRun(page, { kind: "manual" });
   r.setWorkRun(run, 77);
-  const done = routineView(page, { workRun: (id) => (id === 77 ? { status: "done", summary: "Fertig." } : undefined) })!;
+  const done = routineView(page, { workRun: (id) => (id === 77 ? { status: "done", summary: "Fertig." } : undefined), reached: () => true })!;
   assert.equal(done.runs[0].status, "done");
   assert.equal(done.runs[0].workRunId, 77, "linked to its worker run (the Code tab)");
   // an automation: its steps

@@ -24,7 +24,7 @@ test("a source's health from its own table: WhatsApp's runs say ok, but nothing 
   await seedWhatsapp();
   const { noteSyncResult } = await import("@/lib/sync/health");
   const { computeSourceHealth, sourceIncidents, arrivalsOf } = await import("@/lib/sync/source-health");
-  assert.ok(arrivalsOf("whatsapp")!.length > 100, "read from the emails of the WhatsApp folder");
+  assert.ok(arrivalsOf("whatsapp", at(22, 12).getTime())!.length > 100, "read from the emails of the WhatsApp folder");
   assert.equal(arrivalsOf("drivebackup"), null, "a step without items of its own");
 
   noteSyncResult("whatsapp", true, "0 new", at(22, 11, 50).toISOString());
