@@ -76,7 +76,8 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     output: "{ rows: [{ id, ref, ticket, alsoTickets, text, kind, kindLabel, owner, status, source, note, due, dueDays, group, flagged, deferred, bubbledUp, repeats, workerDone, needsInput, lastError, opsCount, notesCount, byWorker, createdAt, doneAt }], counts: { open, waiting, done, worker }, tickets: { [key]: { summary, status, url } }, briefing: boolean }",
     run: async (i) => {
       const store = await import("@/lib/todos/store");
-      const { TODO_KIND_LABELS } = await import("@/lib/todos/shared");
+      const { TODO_KIND_LABELS, opTitle } = await import("@/lib/todos/shared");
+      const { translator } = await import("@/lib/i18n/shared");
       const { groupOf } = await import("@/lib/todos/groups");
       const { daysUntil } = await import("@/lib/todos/due-shared");
       const { deferral } = await import("@/lib/todos/deferral");
@@ -140,6 +141,8 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           byWorker: t.byWorker,
           createdAt: t.createdAt,
           doneAt: t.doneAt ?? "",
+          opsTitles: t.ops.map((o) => opTitle(o, translator("en"))),
+          opsWhy: t.autoOpsWhy ?? "",
           origin,
           away: (t.away ?? []).map((a) => ({ name: a.name, until: a.until })),
           workRun: busy[t.id] ?? 0,
@@ -293,6 +296,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           const o = op as unknown as Record<string, unknown>;
           return { index, type: op.type, title: opTitle(op, en), heading: note.heading, detail: note.detail ?? "", body: note.body ?? "", runnable: !href, href: href ?? "", hasText: "body" in op, transfer: op.type === "bank-transfer" ? { name: String(o.name ?? ""), iban: String(o.iban ?? ""), bic: String(o.bic ?? ""), amount: String(o.amount ?? ""), purpose: String(o.purpose ?? "") } : null };
         }),
+        attachments: (await import("@/plugins/documents/attachments")).todoAttachments(t.refs).map((d) => ({ id: d.id, ref: d.ref, name: d.name, image: d.kind === "image" })),
         opsWhy: t.autoOpsWhy ?? "",
         alternatives: t.alternatives ?? [],
         payment: await (async () => {
@@ -604,7 +608,10 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const ai = aiChoice();
       const hours = (facts: { hours?: number }[]) => facts.reduce((s, x) => s + (x.hours ?? 0), 0);
       const written = new Map((good?.result?.tickets ?? []).map((x) => [x.key, x]));
-      const tickets = (good?.facts.tickets ?? []).map((tk) => ({ key: tk.key, summary: tk.summary, status: tk.status ?? "", url: tk.url ?? "", lead: written.get(tk.key)?.lead ?? "", done: written.get(tk.key)?.done ?? [], hours: hours(tk.facts), facts: tk.facts.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) }));
+      const { entityHeadline, entitySourceLabel, entityText, entityWhoWhen } = await import("@/lib/entities-shared");
+      const ents = good ? (await import("@/lib/runs/recap")).recapEntities(good) : {};
+      const badges = (key: string) => (ents[key] ?? []).map((e) => ({ label: entitySourceLabel(e), headline: entityHeadline(e), text: entityText(e).slice(0, 1200), who: entityWhoWhen(e).author ?? "", at: entityWhoWhen(e).at ?? "" }));
+      const tickets = (good?.facts.tickets ?? []).map((tk) => ({ key: tk.key, badges: badges(tk.key), summary: tk.summary, status: tk.status ?? "", url: tk.url ?? "", lead: written.get(tk.key)?.lead ?? "", done: written.get(tk.key)?.done ?? [], hours: hours(tk.facts), facts: tk.facts.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) }));
       const other = good ? { done: good.result?.other ?? [], hours: hours(good.facts.other), facts: good.facts.other.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) } : { done: [], hours: 0, facts: [] };
       const later = shiftWorkday(day, 1);
       return {

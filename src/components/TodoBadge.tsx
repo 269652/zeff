@@ -13,7 +13,7 @@ const day = (iso: string) => formatDate(iso, { weekday: false });
 const full = (iso: string) => formatDayTime(iso, { year: true });
 
 /** Where a todo is shown: the Todos page (its Done tab once it's closed) — brought into view there. */
-export const todoHref = (t: Pick<TodoView, "id" | "status">) => (t.status === "open" ? `/todos#todo-${t.id}` : `/todos?todos=done#todo-${t.id}`);
+export const todoHref = (t: Pick<TodoView, "id" | "status">) => `/t/${t.id}`;
 
 const STATUS = (t: T) => ({ open: t("open"), done: t("done"), dismissed: t("dismissed") });
 

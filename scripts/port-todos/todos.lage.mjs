@@ -19,6 +19,16 @@ export async function handler(event, context) {
   // (what was closed in the last week stays under its ticket, as on the page)
   const recent = doneAll.rows.filter((r) => r.doneAt && r.doneAt >= weekAgo);
   const att = String(event?.att ?? "");
+  // What "Run now" does, in order — each step as the Sync menu has it: the syncs it runs first (the Auswerten settings), then the Lage and its steps.
+  const stepKeys = [...b.presync, "boards", "review", "matching", "autoactions"];
+  const sync = await zeff.call("sync.steps", { keys: stepKeys });
+  const sinceT = (iso) => {
+    if (!iso) return t("not synced yet");
+    const m = Math.max(0, Math.round((Date.now() - new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) || iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`).getTime()) / 60000));
+    return m < 1 ? t("just now") : m < 60 ? t("{n} min ago", { n: m }) : m < 1440 ? t("{n} h ago", { n: Math.round(m / 60) }) : t("{n} d ago", { n: Math.round(m / 1440) });
+  };
+  const healthOf = new Map((sync.health ?? []).map((h) => [h.key, h]));
+  const steps = stepKeys.flatMap((k) => sync.steps.filter((x) => x.key === k)).map((x) => ({ key: x.key, label: x.label, what: x.what, running: x.running, ok: x.lastOk !== false, failed: x.lastOk === false, text: x.running ? t("syncing…") : `${sinceT(x.lastAt)}${x.lastMessage ? ` · ${x.lastMessage}` : ""}`, health: healthOf.get(x.key)?.reason ?? "", href: x.href }));
   const ATT = { feedback: [t("Open question"), "#f97316"], active: [t("In progress"), "#0d9488"], check: [t("Testing / Review"), "#6366f1"], spec: [t("Spec"), "#a855f7"], blocked: [t("Waiting on others"), "#a1a1aa"], ready: [t("Ready"), "#cbd5e1"], stale: [t("Stalled"), "#d6d3d1"] };
   const PHASES = { sync: t("syncing first"), jira: t("reading Jira and Zeff"), ai: t("analyzing"), saving: t("saving"), mailtodos: t("finding todos in mails and WhatsApp"), mails: t("matching mails to the todos"), notetodos: t("finding todos in notes"), knowledge: t("matching knowledge to the todos"), notes: t("matching notes to the todos"), calendarmatch: t("matching appointments to the todos"), calendartodos: t("finding todos in appointments"), documents: t("finding todos in documents"), docrelations: t("matching documents to the todos"), people: t("finding the people in the todos"), autoactions: t("taking actions for the todos") };
   const when = (iso) => (iso ? new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) || iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`).toLocaleString(locale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
@@ -71,5 +81,8 @@ export async function handler(event, context) {
     nListed: b.listed.length,
     empty: t("No open tickets on the chosen boards."),
     presync: b.presync,
+    steps,
+    nSteps: steps.length,
+    stepsRunning: steps.some((x) => x.running),
   };
 }

@@ -385,6 +385,55 @@ export const PANEL_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "sync.steps",
+    group: "sync",
+    label: "Zeff's sync steps",
+    summary: "The sync steps of Zeff (or just these keys): where each is, whether it runs now, how it last went (when, whether well, what it said), how often it runs by itself and when next — and the steps that are not well with why: { all: { running, step }, steps: [{ key, label, href, what, running, lastAt, lastOk, lastMessage, everyMinutes, nextAt }], health }.",
+    input: [f("keys", "list")],
+    output: "{ all, steps, health }",
+    run: async (i) => {
+      const { syncOverview } = await import("@/lib/sync/registry");
+      const o = syncOverview();
+      const keys = (Array.isArray(i.keys) ? i.keys : typeof i.keys === "string" ? i.keys.split(",") : []).map((k) => String(k).trim()).filter(Boolean);
+      let health: { key: string; state: string; reason: string }[] = [];
+      try {
+        const { sourceHealth } = await import("@/lib/sync/source-health");
+        const { healthReason } = await import("@/lib/sync/source-health-shared");
+        health = (await sourceHealth()).flatMap((h) => (h.state === "ok" ? [] : [{ key: h.key, state: h.state, reason: healthReason(t, h) }]));
+      } catch {
+        health = [];
+      }
+      return { all: o.all, steps: keys.length ? keys.flatMap((k) => o.steps.filter((x) => x.key === k)) : o.steps, health };
+    },
+  },
+  {
+    name: "sync.run",
+    group: "sync",
+    label: "Run a sync step — or stop it",
+    summary: "One sync step started in the background (key) or, with stop, the one that runs stopped (what it started ends with it): { ok, message, error }. Needs the flow's permission api.",
+    input: [f("key", "text", { required: true }), f("stop", "boolean")],
+    output: OUT,
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "api");
+      if (ctx.dryRun) return done();
+      const reg = await import("@/lib/sync/registry");
+      if (!reg.isSyncKey(String(i.key))) return fail(t("Unknown sync."));
+      if (i.stop === true || i.stop === "true") return (await reg.stopSync(String(i.key))) ? done(t("Stopping.")) : fail(t("Not running."));
+      const r = await reg.startSync(String(i.key));
+      return r.ok ? done(r.message) : fail(r.message);
+    },
+  },
+  {
+    name: "people.search",
+    group: "people",
+    label: "Find a person by what is typed",
+    summary: "The people (at most 8) whose name, alias or account starts with what is typed — the ones starting with it first, then the starred: [{ id, name, jira }] — { people }. Empty without the People plugin.",
+    input: [f("q", "text")],
+    output: "{ people: [{ id, name, jira }] }",
+    run: async (i) => ({ people: await (await import("@/plugins/people/server-actions")).searchPeopleAction(String(i.q ?? "")) }),
+  },
+  {
     name: "todos.rows-seen",
     group: "todos",
     label: "The todos you have looked at",

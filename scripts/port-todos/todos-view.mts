@@ -49,6 +49,7 @@ const row = (): string => `<row gap=2 wrap=false align=start>
 <button run="todos-ext.recurrence" with="id={{ id }}, freq=yearly" emit="todos-changed" label="every year" variant=quiet/>
 </menu>
 {{/if}}{{/if}}
+{{#if opsLabel}}<hover width=420><button action="state" state="panel" value="{{ id }}" label="⚡ {{ opsLabel }}" variant=quiet/><hovercard>{{#each opsList}}<small>⚡ {{ text }}</small>{{/each}}{{#if opsWhy}}<small><muted>{{ opsWhy }}</muted></small>{{/if}}<small><muted>{{ opsHint }}</muted></small></hovercard></hover>{{/if}}
 {{#if merged}}<small><text tone=warn tip="{{ mergedTip }}">· {{ merged }}</text></small>{{/if}}
 {{#if time}}<button action="state" state="panel" value="{{ id }}" label="{{ time }}" variant=quiet/>{{/if}}
 {{#if reported}}<small><text tone=good tip="{{ reportedTip }}">· ✓ {{ reported }}</text></small>{{/if}}
@@ -84,6 +85,7 @@ export function todosViewTemplate(): string {
 <data name="day" lambda="todos.day" with="day={{ state.recapday }}" every="5" when="{{ state.part == 'recap' }}"/>
 <data name="today" lambda="todos.heute" when="{{ state.part == 'today' }}"/>
 <data name="pick" lambda="documents.attach-list" with="q={{ state.aq }}" debounce=250 when="{{ state.panel }}"/>
+<data name="men" lambda="todos.mention" with="text={{ state.newnote }}" debounce=250 when="{{ state.panel and state.newnote }}"/>
 <data name="p" lambda="todos.panel" with="id={{ state.panel }}" when="{{ state.panel }}"/>
 <state name="aq" value=""/><state name="abusy" value=""/>
 <data name="pick" lambda="documents.attach-list" with="q={{ state.aq }}" when="{{ state.panel }}" debounce="250"/>
