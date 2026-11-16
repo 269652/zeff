@@ -507,3 +507,37 @@ test("the rest of the row and the panel: repeats, notes changed, instruction, dr
   const html = JSON.stringify(r.nodes);
   for (const word of ["Hello Anna", "Do it differently", "Pay with GiroCode", "Instruction to Copilot", "Brand new thing"]) assert.ok(html.includes(word), word);
 });
+
+test("as the browser draws it: the state every <state> starts with, every todo's panel, every list — no template error, nothing drawn as undefined / [object …] / NaN (what scripts/live-todos-check.mts checks on a copy of real data)", { skip }, async () => {
+  const { call } = await world();
+  const { renderView, viewDefaults } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("todos-ext"), "views", "todos.html"), "utf8");
+  const defaults = viewDefaults(template);
+  assert.equal(defaults.part, "todos");
+  assert.equal(defaults.scope, "open");
+  const draw = (label: string, state: Record<string, string>, data: Record<string, unknown>) => {
+    const r = renderView(template, { rows: [], props: [], titleName: "Todos", state: { ...defaults, ...state }, app: {}, data, db: { id: 1, title: "Todos" } } as never);
+    assert.deepEqual(r.errors, [], label);
+    const text = JSON.stringify(r.nodes);
+    const junk = /undefined|\[object|NaN/.exec(text);
+    assert.ok(!junk, `${label}: drawn …${junk ? text.slice(Math.max(0, junk.index - 60), junk.index + 40) : ""}…`);
+    return text;
+  };
+  const lage = await call("todos.lage", {});
+  const open = await call<Screen>("todos.screen", { scope: "open" });
+  const ids = new Set<number>();
+  for (const scope of ["open", "done", "worker"]) {
+    const x = await call<Screen>("todos.screen", { scope });
+    draw(`list ${scope}`, { scope }, { lage, x });
+    for (const row of [...x.groups.flatMap((g) => g.items), ...x.waiting, ...x.rows]) ids.add(row.id);
+  }
+  assert.ok(ids.size >= 10);
+  for (const id of ids) draw(`panel T-${id}`, { panel: String(id) }, { lage, x: open, p: await call("todos.panel", { id }), pick: { items: [] } });
+  draw("activity", { scope: "activity" }, { lage, feed: await call("todos.feed", {}) });
+  draw("tickets", { part: "tickets" }, { lage });
+  draw("recap", { part: "recap" }, { lage, day: await call("todos.day", {}) });
+  draw("today", { part: "today" }, { lage, today: await call("todos.heute", {}) });
+  // Nothing loaded yet (the first draw of the browser): the template must stand without any of the data.
+  for (const part of ["todos", "tickets", "recap", "today"]) draw(`empty ${part}`, { part }, {});
+  draw("empty activity", { scope: "activity" }, {});
+});
