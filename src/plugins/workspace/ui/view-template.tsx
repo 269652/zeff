@@ -221,9 +221,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     const onKey = (e: KeyboardEvent) => {
       const hit = keyed.find((h) => keysMatch(h.a.keys, e));
       if (!hit) return;
-      // Typing in a field: only combinations with Ctrl/⌘/Alt count.
+      // Typing in a field (or on a focused button, which Enter presses itself): only combinations with Ctrl/⌘/Alt count.
       const el = e.target as HTMLElement | null;
-      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.tagName === "BUTTON" || el.isContentEditable);
       if (typing && !(e.ctrlKey || e.metaKey || e.altKey)) return;
       e.preventDefault();
       void runRef.current(hit.a);

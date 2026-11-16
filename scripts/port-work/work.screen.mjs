@@ -4,7 +4,7 @@ import { groupSessions, priorityOf, stamp, tFor } from "./lib.mjs";
  * What the Code screen shows (views/work.html reads it as data.x): the session list (grouped and sorted like the built-in's sidebar), and — by what is picked —
  * a session's conversation, a ticket's page or the new-session page. The kernel's reads work.session-list and work.session-open do the looking (the engine's own);
  * this shapes it for the view language: every line already a row of text, every ask already its buttons.
- * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail, branches, all, msg, qpick, qo0..qo3, cprov, cmode, cmodel, ceffort, crepo, cws }
+ * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail, branches, all, msg, qpick, qo0..qo3, cprov, cmode, cmodel, ceffort, crepo, cws, cbrowse, cdir, cuse }
  */
 const DOT = { running: "🔵", queued: "⚪", done: "🟢", failed: "🔴", cancelled: "⚪", interrupted: "🟠" };
 
@@ -93,7 +93,16 @@ export async function handler(event, context) {
     });
     const effort = efforts.includes(String(event?.ceffort ?? "")) && event?.ceffort ? String(event.ceffort) : ch?.defaultEffort ?? "";
     const inferred = ticketArg ? (c.ticketRepos[ticketArg] ?? "") : "";
-    const repo = c.repos.some((r) => r.path === event?.crepo) ? String(event.crepo) : inferred;
+    const repo = event?.cuse ? String(event.cuse) : c.repos.some((r) => r.path === event?.crepo) ? String(event.crepo) : inferred;
+    // The folder picker: any folder of this computer (the registered repos are the shortcuts), and the branches of the one chosen.
+    const browsing = String(event?.cbrowse) === "1";
+    let folders = null;
+    if (browsing) {
+      const l = await zeff.call("work.folders", { path: String(event?.cdir ?? "") });
+      folders = l.ok ? { ok: true, path: l.path, parent: l.parent, repo: l.repo, dirs: l.dirs.map((d) => ({ name: (d.repo ? "⎇ " : "") + d.name, path: d.path })) } : { ok: false, error: l.error, path: "", parent: "", dirs: [] };
+    }
+    const br = repo ? await zeff.call("work.branches", { path: repo }) : null;
+    const branchOf = String(event?.cbranch ?? "");
     const ws = ["worktree", "branch", "checkout"].includes(String(event?.cws)) ? String(event.cws) : "";
     out.composer = {
       provider: prov,
@@ -109,6 +118,10 @@ export async function handler(event, context) {
       admin: !!ch?.admin,
       repos: [{ path: "", name: inferred ? t("As Zeff infers it") : t("None"), sel: !repo }, ...c.repos.map((r) => ({ path: r.path, name: r.name, sel: r.path === repo }))],
       repo,
+      repoNow: repo ? repo : t("As Zeff infers it"),
+      browsing,
+      folders,
+      branches: br?.ok ? br.branches.filter((b) => !b.remote).slice(0, 40).map((b) => ({ name: b.name, label: (b.current ? "● " : "") + b.name, sel: b.name === branchOf })) : [],
       workspaces: [
         { id: "", label: t("As set in the Code settings"), sel: !ws },
         { id: "worktree", label: t("A worktree of its own"), sel: ws === "worktree" },
@@ -117,7 +130,7 @@ export async function handler(event, context) {
       ],
       workspace: ws,
       files: ((await zeff.call("work.attachments", { scope: "new" })).files ?? []).map((x) => ({ ref: x.ref, name: x.name, size: `${Math.max(1, Math.round(x.size / 1024))} KB` })),
-      labels: { options: t("Options"), provider: t("Backend"), mode: t("Mode"), model: t("Model"), effort: t("Effort"), repo: t("Repo"), where: t("Where it works"), branch: t("Branch (optional)") },
+      labels: { browse: t("Choose another folder …"), up: t("Up"), use: t("Use this folder"), go: t("Go"), folder: t("Folder"), branches: t("Branches"), options: t("Options"), provider: t("Backend"), mode: t("Mode"), model: t("Model"), effort: t("Effort"), repo: t("Repo"), where: t("Where it works"), branch: t("Branch (optional)") },
     };
   }
 

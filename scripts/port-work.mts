@@ -61,7 +61,7 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "work.screen": {
     label: "Code: what the screen shows",
     what: "The sessions list (grouped and sorted), and by what is picked a session's conversation with its asks, a ticket's page or the new-session page — shaped from the engine's reads.",
-    zeff: ["work.session-list", "work.session-open", "work.composer", "work.dangling", "work.branches", "work.attachments", "work.session-files"],
+    zeff: ["work.session-list", "work.session-open", "work.composer", "work.dangling", "work.branches", "work.attachments", "work.session-files", "work.folders"],
     timeoutMs: 30000,
   },
   "work.settings": {
@@ -113,7 +113,7 @@ write(
     {
       format: 1,
       id: "work-ext",
-      version: "1.0.1",
+      version: "1.1.0",
       name: "Code",
       description: "The Code tab in the Workspace: sessions with workers, their conversations, permission questions, tickets.",
       icon: "🛠️",

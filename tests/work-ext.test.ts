@@ -270,6 +270,28 @@ test("the message box's options: providers, modes, repos as the built-in's compo
   assert.deepEqual(screen.composer.modes.map((m) => m.id), (built.choices[built.defaultProvider]?.modes ?? []).map((m) => m.id));
   assert.deepEqual(screen.composer.workspaces.map((w) => w.id), ["", "worktree", "branch", "checkout"]);
   assert.ok(screen.composer.repos[0].sel, "no repo picked: the first, as Zeff infers it");
+  // Any folder of this computer, picked by browsing: its sub-folders with the git repos marked, and the branches of the one chosen.
+  const { execFileSync } = await import("node:child_process");
+  const top = fs.mkdtempSync(path.join(os.tmpdir(), "work-folders-"));
+  const proj = path.join(top, "proj");
+  fs.mkdirSync(proj);
+  fs.mkdirSync(path.join(top, "plain"));
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: proj });
+  execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x"], { cwd: proj });
+  type Pick = { composer: { browsing: boolean; repo: string; folders: { ok: boolean; path: string; dirs: { name: string; path: string }[] }; branches: { name: string }[] } };
+  const browse = await call<Pick>("work.screen", { cbrowse: "1", cdir: top });
+  assert.equal(browse.composer.folders.ok, true);
+  assert.deepEqual(browse.composer.folders.dirs.map((d) => d.name), ["⎇ proj", "plain"], "git repos first, marked");
+  const picked = await call<Pick>("work.screen", { cbrowse: "1", cdir: top, cuse: proj });
+  assert.equal(path.resolve(picked.composer.repo), path.resolve(proj));
+  assert.ok(picked.composer.branches.some((b) => b.name === "main"), "its branches are offered");
+  assert.equal((await call<Pick>("work.screen", { cbrowse: "1", cdir: path.join(top, "nope") })).composer.folders.ok, false);
+  const { renderView } = await import("@/plugins/work/../workspace/view-template");
+  const tpl = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work.html"), "utf8");
+  for (const ev of [{ cbrowse: "1", cdir: top }, { cbrowse: "1", cdir: top, cuse: proj }, { cbrowse: "1", cdir: path.join(top, "nope") }]) {
+    const x = await call("work.screen", ev);
+    assert.deepEqual(renderView(tpl, { rows: LIVE_ROWS, props: [], titleName: "Code", state: { cbrowse: "1" }, app: {}, data: { x }, db: { id: 1, title: "Code" } } as never).errors, [], JSON.stringify(ev));
+  }
 });
 
 test("the settings: read as the Settings page reads them, one setting changed at a time and checked, repos added, switched to direct delivery and removed", { skip }, async () => {
