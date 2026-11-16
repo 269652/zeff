@@ -33,6 +33,7 @@ import { pageNavProviders, type PageNav } from "./app-nav-point";
 import { extAppViews } from "./app-views";
 import type { DataType } from "./model";
 import { workspaceWidgets, type WidgetData, type WidgetItem, type WidgetTile, type WorkspaceWidget } from "./widget-point";
+import { correlationSeries, type Series, type SeriesProvider } from "@/lib/series/series-point";
 import { reviewLinks, reviewSources, type ReviewEntry, type ReviewLink, type ReviewSource } from "@/lib/review/point";
 
 const who = (p: ExtPlugin): Contributor => `ext:${p.id}`;
@@ -218,7 +219,7 @@ export function badgesFrom(prefix: string, v: unknown): Map<string, BadgePart[]>
       if (!o || !label) return [];
       const tone = TONES.includes(o.tone as BadgeTone) ? (o.tone as BadgeTone) : "activity";
       const count = typeof o.count === "number" && o.count > 0 ? Math.min(999, Math.floor(o.count)) : 1;
-      return [{ label, tone, count }];
+      return [{ label, tone, count, ...(o.todo === true ? { todo: true } : {}) }];
     });
     if (list.length) out.set(ref.slice(0, 200), list);
   }
@@ -227,7 +228,7 @@ export function badgesFrom(prefix: string, v: unknown): Map<string, BadgePart[]>
 
 rowBadgeSources.provide("ext:rowBadges", () =>
   enabledPlugins().flatMap((p) => {
-    const list = p.manifest.contributes.rowBadges.map((b) => ({ prefix: b.prefix, badges: async () => badgesFrom(b.prefix, await runPluginFunction(p.id, b.function, {})) }));
+    const list = p.manifest.contributes.rowBadges.map((b) => ({ prefix: b.prefix, badges: async () => badgesFrom(b.prefix, await runPart(p.id, { function: b.function, lambda: b.lambda }, {})) }));
     return list.length ? [{ plugin: who(p), impl: list }] : [];
   }),
 );
@@ -490,6 +491,36 @@ reviewLinks.provide("ext:reviewLinks", () =>
           const n = Number(await runPluginFunction(p.id, l.count, {}));
           return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
         },
+      }),
+    );
+    return list.length ? [{ plugin: who(p), impl: list }] : [];
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Daily series for the Correlations (contributes.seriesProviders): a lambda gives them for a period
+// ---------------------------------------------------------------------------
+
+/** A series lambda's answer as series: each with its values as a day → number object. */
+export function seriesFrom(v: unknown): Series[] {
+  return (Array.isArray(v) ? v : []).slice(0, 200).flatMap((x): Series[] => {
+    const o = obj(x);
+    const id = str(o?.id, 120);
+    const label = str(o?.label, 160);
+    if (!o || !id || !label) return [];
+    const kind = o.kind === "ordinal" || o.kind === "binary" ? o.kind : "number";
+    const values = new Map<string, number>();
+    for (const [day, n] of Object.entries(obj(o.values) ?? {})) if (/^\d{4}-\d{2}-\d{2}$/.test(day) && typeof n === "number" && Number.isFinite(n)) values.set(day, n);
+    return [{ id, label, group: str(o.group, 60) || label, kind, ...(str(o.unit, 20) ? { unit: str(o.unit, 20) } : {}), ...(Array.isArray(o.levels) ? { levels: o.levels.map((l) => str(l, 40)).filter(Boolean).slice(0, 12) } : {}), values }];
+  });
+}
+
+correlationSeries.provide("ext:series", () =>
+  enabledPlugins().flatMap((p) => {
+    const list = p.manifest.contributes.seriesProviders.map(
+      (s): SeriesProvider => ({
+        id: s.replaces ?? `${p.id}.${s.id}`,
+        series: async (range) => seriesFrom(await runPart(p.id, { lambda: s.lambda }, { from: range.from, to: range.to })),
       }),
     );
     return list.length ? [{ plugin: who(p), impl: list }] : [];

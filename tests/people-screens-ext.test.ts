@@ -290,3 +290,79 @@ test("what People has you confirm: the lambdas list what the built-in lists, the
   assert.equal(r.status, "done", r.error ?? "");
   assert.equal((getSqlite().prepare("select status from people_claims where id = ?").get(Number(entries[1].id)) as { status: string }).status, "rejected");
 });
+
+test("the rest: the badges of the rows, the days in touch for the Correlations, what runs in the background, open loops on a person's page", { skip }, async () => {
+  const { call, anna, db } = await world();
+  const { getSqlite } = await import("@/db");
+  // badges: the same as the built-in's own, in the registry the port's stand in
+  const { PEOPLE_ROW_BADGES_OWN, PEOPLE_ROW_BADGES } = await import("@/plugins/people/badges");
+  const own = JSON.parse(JSON.stringify(Object.fromEntries(await PEOPLE_ROW_BADGES_OWN.badges())));
+  assert.deepEqual(await call("people.row-badges", {}), own);
+  assert.equal((await PEOPLE_ROW_BADGES.badges()).size, 0, "the built-in's stands aside");
+  const { rowBadgeSources } = await import("@/plugins/workspace/row-badge-point");
+  const port = rowBadgeSources.all().flatMap((c) => c.impl).filter((x) => x.prefix === "person:");
+  assert.equal(port.length >= 1, true);
+  const viaPort = (await Promise.all(port.map((x) => x.badges()))).flatMap((m) => [...m.keys()]);
+  assert.deepEqual(viaPort.sort(), Object.keys(own).sort(), "the same rows get badges");
+  // the series: one per person in touch, 1 on a day in touch
+  const day = ago(10).slice(0, 10);
+  const range = { from: ago(30).slice(0, 10), to: new Date().toISOString().slice(0, 10) };
+  const series = await call<{ id: string; kind: string; values: Record<string, number> }[]>("people.series", range);
+  const mine = series.find((x) => x.id === `people:${anna}:contact`);
+  assert.ok(mine, "Anna's series");
+  assert.equal(mine!.kind, "binary");
+  assert.equal(Object.values(mine!.values).includes(1), true);
+  assert.equal(day.length, 10);
+  const { correlationSeries } = await import("@/lib/series/series-point");
+  const provider = correlationSeries.all().flatMap((c) => c.impl).find((x) => x.id === "people.contact" && x !== undefined);
+  assert.ok(provider);
+  const all = (await Promise.all(correlationSeries.all().flatMap((c) => c.impl).filter((x) => x.id === "people.contact").map((x) => x.series(range)))).flat();
+  assert.deepEqual(all.map((x) => x.id), series.map((x) => x.id), "the registry gives the port's series once");
+  // what runs in the background
+  const prog = await call<{ running: boolean }>("people.progress", {});
+  assert.equal(prog.running, false);
+  // open loops on the page: off without the Open loops plugin, listed with it
+  const { rawRows } = await import("@/plugins/workspace/store");
+  const row = rawRows(db).find((x) => x.cells.srcref === `person:${anna}`)!;
+  const off = await call<{ any: boolean; off: boolean }>("people.person", { row: row.id, part: "loops" });
+  assert.equal(off.any, false);
+  const { setInstalled } = await import("@/plugins/state");
+  setInstalled("loops" as never, true);
+  getSqlite()
+    .prepare("insert or ignore into people_claims (person_id, kind, text, evidence, source_ref, confidence, status, direction, due, created_at) values (?, 'commitment', 'Call the dentist', 'q', 'm9', 0.9, 'confirmed', 'theirs', '2026-01-02', ?)")
+    .run(anna, ago(3));
+  const on = await call<{ any: boolean; items: { text: string; ref: string; open: boolean }[] }>("people.person", { row: row.id, part: "loops" });
+  assert.equal(on.any, true);
+  assert.ok(on.items.some((x) => x.text === "Call the dentist" && x.open));
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const item = on.items.find((x) => x.text === "Call the dentist")!;
+  const r = await runFlow("people.loop", { ref: item.ref, op: "close" });
+  assert.equal(r.status, "done", r.error ?? "");
+  assert.equal((r.output as { ok: boolean }).ok, true);
+  const after = await call<{ items: { text: string; open: boolean }[] }>("people.person", { row: row.id, part: "loops" });
+  assert.equal(after.items.find((x) => x.text === "Call the dentist")?.open ?? false, false);
+  // the templates with these
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const dir = repoPlugin("people-ext");
+  const person = fs.readFileSync(path.join(dir, "views", "person.html"), "utf8");
+  const page = await call<Record<string, unknown>>("people.person", { row: row.id, part: "page" });
+  const v = renderView(person, { rows: [], props: [], titleName: "P", app: {}, db: { id: db, title: "People" }, now: new Date(), locale: "en", state: {}, data: { page, loops: on }, current: { id: row.id, title: "Anna", icon: "", cells: {}, createdAt: "", updatedAt: "" } } as never);
+  assert.deepEqual(v.errors, []);
+});
+
+test("the switch puts the screens in place: the overview and the person's page are the plugin's, and stay when the workspace opens", { skip }, async () => {
+  const { db, anna } = await world();
+  const { switchPeopleScreensToPlugin } = await import("@/plugins/people/to-plugin");
+  assert.deepEqual(await switchPeopleScreensToPlugin(), { db });
+  const { getDatabase } = await import("@/plugins/workspace/store");
+  const d = getDatabase(db)!;
+  assert.ok(d.schema.views.some((v) => v.type === "app" && v.app === "template" && /people\.screen/.test(v.template ?? "")), "the overview is the plugin's");
+  assert.ok(!d.schema.views.some((v) => v.type === "app" && v.app === "people"), "the built-in's overview is gone");
+  assert.ok(/people\.person/.test(d.schema.rowTemplate ?? ""), "the person's page is the plugin's");
+  const { rowViewFor } = await import("@/plugins/workspace/row-views");
+  assert.equal(rowViewFor(d.schema)?.id, "detail");
+  const { ensurePeopleDatabase } = await import("@/plugins/workspace/people-database");
+  await ensurePeopleDatabase();
+  assert.equal(getDatabase(db)!.schema.views.filter((v) => v.type === "app").length, d.schema.views.filter((v) => v.type === "app").length, "not made again");
+  assert.ok(anna);
+});

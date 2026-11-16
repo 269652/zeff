@@ -1,6 +1,7 @@
 <data name="page" lambda="people.person" with='{"row": {{ id }}, "part": "page"}'/>
 <data name="wiki" lambda="people.person" with='{"row": {{ id }}, "part": "wiki"}' when="{{ data.page.ready }}"/>
 <on event="person-changed" action="reload"/>
+<data name="loops" lambda="people.person" with='{"row": {{ id }}, "part": "loops"}' when="{{ data.page.ready }}"/>
 <state name="keep" value=""/>
 <state name="dkind" value="iban"/>
 <state name="dvalue" value=""/>
@@ -261,6 +262,35 @@
     <clamp lines=2>{{ text }}</clamp>
   </list>
 </section>
+
+{{#if data.loops.any}}
+<section title="Open loops">
+  <col gap=2>
+    {{#each data.loops.items}}
+    <box>
+      <row gap=2 align=baseline wrap=true><text tone="{{ mine ? 'warn' : 'plain' }}"><small>{{ who }}</small></text><badge color=gray>{{ kind }}</badge><col fill=true tip="{{ quote }}">{{ text }}</col></row>
+      <row gap=2 align=baseline wrap=true><muted>{{ since }}</muted>{{#if due}}<text tone="{{ overdue ? 'bad' : 'muted' }}"><small>{{ due }}</small></text>{{/if}}{{#if unconfirmed}}<muted tip="Read by the AI — confirm it or say it isn't one.">{{ unconfirmed }}</muted>{{/if}}{{#if href}}<a href="{{ href }}">where it was said</a>{{/if}}</row>
+      {{#if proposal}}
+      <box tone=good>
+        <small>{{ proposal.text }}{{#if proposal.href}} <a href="{{ proposal.href }}">show message</a>{{/if}}</small>
+        <row gap=2><button run="people.loop" with="ref={{ ref }}, op=accept-close" emit="person-changed" label="Yes, kept" tip="Close it — what you say is noted, so Zeff learns what keeps a promise"/><button run="people.loop" with="ref={{ ref }}, op=reject-close" emit="person-changed" label="No, still open" tip="This doesn't close it — it won't be proposed again"/></row>
+      </box>
+      {{/if}}
+      {{#if open}}
+      <row gap=1>
+        <button run="people.loop" with="ref={{ ref }}, op=close" emit="person-changed" label="Done" tip="Kept or answered — closed"/>
+        {{#if unconfirmed}}<button run="people.loop" with="ref={{ ref }}, op=confirm" emit="person-changed" label="Confirm" tip="Yes, this is open between you"/>{{/if}}
+        <button run="people.loop" with="ref={{ ref }}, op=dismiss" emit="person-changed" label="Not a loop" tip="Nothing is owed here — it goes, and Zeff learns from it"/>
+        {{#if overdue}}<button run="people.loop" with="ref={{ ref }}, op=later" emit="person-changed" label="Later" tip="Not on the Today page for a few days"/>{{/if}}
+      </row>
+      {{#else}}
+      <row gap=2><muted>{{ closed }}</muted><button run="people.loop" with="ref={{ ref }}, op=reopen" emit="person-changed" label="Reopen" tip="Not kept after all — open again (and not closed this way again)"/></row>
+      {{/if}}
+    </box>
+    {{/each}}
+  </col>
+</section>
+{{/if}}
 
 <rowtimeline row="{{ id }}" title="What happened"/>
 

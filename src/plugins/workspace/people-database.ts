@@ -23,7 +23,8 @@ export async function ensurePeopleDatabase(): Promise<void> {
     // The overview view (made before it existed: put first).
     const cur = getDatabase(known)!.schema;
     const app = appViewsFor("people")[0];
-    if (app && !cur.views.some((v) => v.type === "app" && v.app === app.id)) updateSchema(known, { ...cur, views: [{ ...newView(t(app.label), "table"), ...appViewFields(app) }, ...cur.views] });
+    // (the plugin's own overview — people-ext — stands in for it: not made again)
+    if (app && !cur.views.some((v) => v.type === "app" && (v.app === app.id || (v.app === "template" && /people\.screen/.test(v.template ?? ""))))) updateSchema(known, { ...cur, views: [{ ...newView(t(app.label), "table"), ...appViewFields(app) }, ...cur.views] });
     return;
   }
   if (getPref<number | null>(PEOPLE, null) !== null) return;

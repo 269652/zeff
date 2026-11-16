@@ -9,6 +9,8 @@
 <state name="todotext" value=""/>
 <state name="greetFor" value=""/>
 <data name="people" lambda="people.screen" with="circle={{ state.circle }}, only={{ state.only }}, sort={{ state.sort }}"/>
+<data name="prog" lambda="people.progress" every=5/>
+<on when="{{ not data.prog.running }}" action="reload"/>
 <on event="people-changed" action="reload"/>
 <on event="addperson" run="people.tool" with="tool=add, name={{ state.newname }}" done="Added ✓" then="adding=" emit="people-changed"/>
 <on event="savesettings" run="people.tool" with="tool=settings, weeks={{ state.setweeks }}, myName={{ state.setname }}, aboutMe={{ state.setabout }}" done="Saved." emit="people-changed"/>
@@ -128,10 +130,10 @@
   {{/if}}
 
   <box>
-    <section collapsible=true open="{{ data.people.running ? 'true' : 'false' }}" title="Tools and settings">
+    <section collapsible=true open="{{ data.prog.running ? 'true' : 'false' }}" title="Tools and settings">
       <button run="people.tool" with="tool=import" emit="people-changed" wide=true variant=primary label="Import from context (AI)" tip="The AI goes through the last 14 days of your mails, WhatsApp and Teams and makes profiles of the people in them."/>
-      {{#if data.people.datesProgress}}
-        <row gap=2><dot color="#f59e0b"/><text tone=muted>{{ data.people.datesProgress }}</text></row>
+      {{#if data.prog.datesProgress}}
+        <row gap=2><dot color="#f59e0b"/><text tone=muted>{{ data.prog.datesProgress }}</text></row>
       {{#else}}
         <button run="people.tool" with="tool=findAll" emit="people-changed" wide=true label="Find dates for everyone" tip="For everyone without a birthday: in the facts and (with the LLM plugin) by AI in the knowledge and the messages"/>
       {{/if}}
@@ -146,8 +148,8 @@
         <button run="people.tool" with="tool=classify" emit="people-changed" wide=true label="Place contacts (AI)" tip="The AI says for each contact not placed yet whether it is a person or an organisation and which circle it is in — from what Zeff knows of them. Yours stay. It also runs after each briefing."/>
         <button run="people.tool" with="tool=linkJira" emit="people-changed" wide=true label="Link Jira accounts" tip="Ties Jira users to the profiles by their names — so @-mentions in notes synced to Jira point to the right person. No AI."/>
       {{/if}}
-      {{#if data.people.compileProgress}}
-        <row gap=2><dot color="#6366f1"/><text tone=muted>{{ data.people.compileProgress }}</text></row>
+      {{#if data.prog.compileProgress}}
+        <row gap=2><dot color="#6366f1"/><text tone=muted>{{ data.prog.compileProgress }}</text></row>
       {{#else}}
         <row gap=1 wrap=false>
           <button run="people.tool" with="tool=compile" emit="people-changed" wide=true label="Compile summaries" tip="A summary of every person: what connects you, the key facts, the fun facts"/>
@@ -238,8 +240,8 @@
 
 <dialog bind="greetFor" title="Greeting">
   <col gap=2>
-    <text pre=true>{{ data.greeting.draft }}</text>
-    <row gap=2><copy text="{{ data.greeting.draft }}" label="Copy"/><button action="state" state="greetFor" value="" label="Close"/></row>
+    <input type=textarea rows=5 bind="greet{{ state.greetFor }}" value="{{ data.greeting.draft }}" label="Greeting"/>
+    <row gap=2><copy text="{{ data.greeting.draft }}" label="Copy"/>{{#if data.greeting.draft}}<button action="url" href="mailto:?subject=Happy birthday!&body={{ data.greeting.draft }}" label="✉ As a mail" variant=quiet/>{{/if}}<button action="state" state="greetFor" value="" label="Close"/></row>
   </col>
 </dialog>
 

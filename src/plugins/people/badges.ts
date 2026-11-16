@@ -40,7 +40,8 @@ export function unreadByPerson(people: Person[]): Map<number, number> {
  * their unread messages (their chats, mail from their addresses). Everything at once for all the people (a word test only where the
  * name is in the text at all). Server only.
  */
-export const PEOPLE_ROW_BADGES: RowBadgeSource = {
+/** The badges as the built-in works them out (what the port's lambda reads through `people.row-badges`). */
+export const PEOPLE_ROW_BADGES_OWN: RowBadgeSource = {
   prefix: "person:",
   badges: async () => {
     const out = new Map<string, BadgePart[]>();
@@ -97,4 +98,10 @@ export const PEOPLE_ROW_BADGES: RowBadgeSource = {
     for (const [id, n] of unreadByPerson(people)) add(id, { tone: "messages", count: n, label: n === 1 ? t("1 unread message") : t("{n} unread messages", { n }) });
     return out;
   },
+};
+
+/** … standing aside while the port declares its own (people-ext's rowBadges). */
+export const PEOPLE_ROW_BADGES: RowBadgeSource = {
+  prefix: PEOPLE_ROW_BADGES_OWN.prefix,
+  badges: async () => ((await (await import("./port-state")).portDeclares("rowBadges")) ? new Map<string, BadgePart[]>() : PEOPLE_ROW_BADGES_OWN.badges()),
 };

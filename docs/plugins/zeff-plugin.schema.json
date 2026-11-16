@@ -1301,6 +1301,38 @@
             ]
           }
         },
+        "seriesProviders": {
+          "default": [],
+          "description": "Daily series for the Correlations, given by a lambda for a period.",
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$",
+                "description": "Its id: <plugin id>.<this> among the Correlations' series providers."
+              },
+              "replaces": {
+                "description": "A port's: the built-in provider's id it takes over (its series keep their ids); the built-in's gives nothing while the port is on.",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9-]*\\.[a-z0-9.-]+$"
+              },
+              "lambda": {
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$",
+                "description": "The lambda (kind function) that gives the series for a period, called with { from, to } (days): [{ \"id\", \"label\", \"group\", \"kind\": \"number|ordinal|binary\", \"unit\"?, \"levels\"?, \"values\": { \"YYYY-MM-DD\": number } }]."
+              }
+            },
+            "required": [
+              "id",
+              "lambda"
+            ]
+          }
+        },
         "rowBadges": {
           "default": [],
           "description": "Badges on the rows its sources brought (by their refs), given by a plugin function.",
@@ -1315,14 +1347,19 @@
                 "description": "The rows its sources brought (by their record's ref) it puts badges on."
               },
               "function": {
+                "description": "The plugin function that gives the badges: { \"film:12\": [{ \"label\": \"2 new\", \"tone\": \"warn\" }] }.",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,39}$",
-                "description": "The plugin function that gives the badges: { \"film:12\": [{ \"label\": \"2 new\", \"tone\": \"warn\" }] }."
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "lambda": {
+                "description": "Or one of its lambdas (kind function) that gives them — it only reads. A part may say `todo: true` (counted in the todos' own pill).",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
               }
             },
             "required": [
-              "prefix",
-              "function"
+              "prefix"
             ]
           }
         },
