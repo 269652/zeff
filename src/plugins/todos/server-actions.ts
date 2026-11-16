@@ -68,30 +68,10 @@ export async function setTodoTextAction(id: number, text: string): Promise<Actio
  */
 export async function setTodoStatusAction(id: number, status: "open" | "done" | "dismissed", opts: { early?: boolean } = {}): Promise<ActionState & { confirm?: string }> {
   try {
-    if (!Number.isInteger(id) || !["open", "done", "dismissed"].includes(status)) return { ok: false, error: t("Unknown todo.") };
-    const { getTodo, setTodoStatus } = await import("@/lib/todos/store");
-    const { attributed } = await import("@/lib/todos/activity");
-    const before = getTodo(id);
-    if (status === "done" && before?.status === "open" && !opts.early) {
-      const { repeatNotYet } = await import("@/lib/todos/due-shared");
-      const { formatDate } = await import("@/lib/format");
-      const days = repeatNotYet(before);
-      if (days !== null) {
-        const ask = t("{ref} comes back every time — this one is only due on {date} (in {n} days). Mark it done already?", { ref: `T-${id}`, date: formatDate(before.due!.slice(0, 10)), n: days });
-        return { ok: false, error: ask, confirm: ask };
-      }
-    }
-    attributed("you", () => setTodoStatus(id, status, status === "open" ? null : undefined));
-    // A "done" someone suggested (a worker, an agent, a review), confirmed by you: a verdict for the ledger.
-    if (status === "done" && before?.workerDone && before.status === "open") {
-      const { recordFeedback } = await import("@/lib/learning/ledger");
-      const { workerDoneFeedback } = await import("@/lib/learning/sources");
-      recordFeedback(workerDoneFeedback(before, "accepted"));
-    }
-    // A step ticked off brings the next one (a delivery): its actions from git, at once — no AI.
-    if (status === "done") void import("@/lib/todos/delivery-ops").then((m) => m.attachOpenMrOps()).then(() => revalidateAll()).catch(() => {});
-    revalidateAll();
-    return { ok: true };
+    const { setStatusAsYou } = await import("./engine");
+    const r = await setStatusAsYou(id, status, { ...opts, afterOps: revalidateAll });
+    if (r.ok) revalidateAll();
+    return r;
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -197,10 +177,7 @@ export async function saveContextPrefsAction(step: string, patch: { sources?: Re
 /** A todo's deadline (YYYY-MM-DD) — or none. */
 export async function setTodoDueAction(todoId: number, due: string | null): Promise<ActionState> {
   try {
-    const { setTodoDue } = await import("@/lib/todos/store");
-    setTodoDue(Number(todoId), due ? String(due) : null);
-    // Set by you: the things that take their date from it follow (a debt of your own — todo-settle.ts).
-    (await import("@/lib/todos/settle")).pushTodoDue(Number(todoId));
+    await (await import("./engine")).setDueAsYou(todoId, due);
     revalidateAll();
     return { ok: true };
   } catch (err) {

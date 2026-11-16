@@ -65,6 +65,172 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "todos.rows",
+    group: "todos",
+    label: "The todos, ready for a screen",
+    summary:
+      "The todos as the Todos page shows them (scope open: yours and what you wait on, with the group each is in; done: done and dismissed, the latest first; worker: the workers' own), each with what a row needs — ref, ticket (and linked ones), kind, owner, text, source, note, due and days to it, whether it is flagged / set aside / back on top and why, repeats, a worker's done report, an agent's question, the last error, the number of actions and notes — plus the counts of every scope and the tickets' summaries and links.",
+    input: [f("scope", "text", { options: ["open", "done", "worker"] }), f("limit", "number")],
+    output: "{ rows: [{ id, ref, ticket, alsoTickets, text, kind, kindLabel, owner, status, source, note, due, dueDays, group, flagged, deferred, bubbledUp, repeats, workerDone, needsInput, lastError, opsCount, notesCount, byWorker, createdAt, doneAt }], counts: { open, waiting, done, worker }, tickets: { [key]: { summary, status, url } }, briefing: boolean }",
+    run: async (i) => {
+      const store = await import("@/lib/todos/store");
+      const { TODO_KIND_LABELS } = await import("@/lib/todos/shared");
+      const { groupOf } = await import("@/lib/todos/groups");
+      const { daysUntil } = await import("@/lib/todos/due-shared");
+      const { deferral } = await import("@/lib/todos/deferral");
+      const { lastGoodRun, latestRun } = await import("@/lib/runs/store");
+      const { getTicketCards } = await import("@/lib/jira/store");
+      const scope = i.scope === "done" || i.scope === "worker" ? i.scope : "open";
+      const limit = Math.max(1, Math.min(1000, Number(i.limit) || 300));
+      // The briefing's own order of tickets: what the page ranks the todos by.
+      const latest = latestRun();
+      const run = latest?.status === "ok" ? latest : lastGoodRun();
+      const keys = run?.tickets.map((x) => x.key) ?? [];
+      const analysed = new Set((run?.result?.tickets ?? []).map((x) => x.key));
+      const order = [...(run?.result?.tickets ?? []).map((x) => x.key), ...(run?.tickets ?? []).filter((x) => x.analyzed && !analysed.has(x.key)).map((x) => x.key)].filter((k) => keys.includes(k));
+      const rank = new Map(order.map((k, n) => [k, n]));
+      // (Without a briefing run there are no tickets to restrict to: all the open todos.)
+      const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+      const open = (run ? store.boardTodos([...keys, ""]) : store.listTodos({ status: "all", openOrDoneSince: since }).filter((t) => !t.byWorker && !t.mergedInto)).filter((t) => t.status === "open");
+      const worker = store.workerTodos();
+      const done = scope === "done" ? store.doneTodos(limit) : [];
+      const list = scope === "open" ? open : scope === "worker" ? worker : done;
+      const deferred = deferral(list);
+      const down = (t: { flaggedAt: string | null; workerDone: unknown; status: string; id: number }) => (t.flaggedAt ? -2 : t.workerDone && t.status === "open" ? -1 : deferred[t.id]?.deferred ? 1 : 0);
+      const sorted = scope === "open" ? [...list].sort((x, y) => down(x) - down(y) || (rank.get(x.ticket) ?? 99) - (rank.get(y.ticket) ?? 99) || x.id - y.id) : list;
+      const shown = sorted.slice(0, limit);
+      const rows = shown.map((t) => {
+        const d = deferred[t.id];
+        const isDeferred = !!d?.deferred;
+        return {
+          id: t.id,
+          ref: t.ref,
+          ticket: t.ticket,
+          alsoTickets: t.alsoTickets,
+          text: t.text,
+          kind: t.kind,
+          kindLabel: TODO_KIND_LABELS[t.kind],
+          owner: t.owner,
+          status: t.status,
+          source: t.source ?? "",
+          note: t.note ?? "",
+          due: t.due ? t.due.slice(0, 10) : "",
+          dueDays: t.due ? daysUntil(t.due.slice(0, 10)) : null,
+          group: t.status === "open" ? groupOf({ due: t.due, flaggedAt: t.flaggedAt, deferred: isDeferred }) : "",
+          flagged: !!t.flaggedAt,
+          deferred: isDeferred,
+          bubbledUp: d?.bubbledUp ?? "",
+          repeats: t.recurrence ? t.recurrence.freq : "",
+          workerDone: t.workerDone ? { by: t.workerDone.by, note: t.workerDone.note ?? "", suggested: !!t.workerDone.suggested } : null,
+          needsInput: t.needsInput ?? "",
+          lastError: (t as { lastError?: string }).lastError ?? "",
+          opsCount: t.ops.length,
+          notesCount: t.userNotes.length,
+          byWorker: t.byWorker,
+          createdAt: t.createdAt,
+          doneAt: t.doneAt ?? "",
+        };
+      });
+      const cards = getTicketCards(shown.map((t) => t.ticket).concat(shown.flatMap((t) => t.alsoTickets)));
+      return {
+        rows,
+        counts: { open: open.filter((t) => t.owner === "me").length, waiting: open.filter((t) => t.owner === "other").length, done: store.doneTodoTickets().count, worker: worker.filter((t) => t.status === "open").length },
+        tickets: Object.fromEntries(Object.entries(cards).map(([k, c]) => [k, { summary: c.summary, status: c.status, url: c.url ?? "" }])),
+        briefing: !!run,
+      };
+    },
+  },
+  {
+    name: "todos.set-status",
+    group: "todos",
+    label: "Tick a todo off, dismiss it, open it again",
+    summary:
+      "A todo's status, set by you, as ticking it on the Todos page does (what hangs on it follows: the settle hooks, a delivery's next step). A todo that comes back, ticked off more than a week before its day, is not done: the answer is { ok: false, confirm } and asks — send it again with early. Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("status", "text", { required: true, options: ["open", "done", "dismissed"] }), f("early", "boolean")],
+    output: "{ ok, confirm?, error? }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (ctx.dryRun) return { ok: true };
+      const r = await (await import("./engine")).setStatusAsYou(Number(i.id), String(i.status) as "open", { early: i.early === true || i.early === "true" });
+      return { ok: r.ok, ...(r.confirm ? { confirm: r.confirm } : {}), ...(r.error ? { error: r.error } : {}) };
+    },
+  },
+  {
+    name: "todos.flag",
+    group: "todos",
+    label: "Flag a todo as important",
+    summary: "A todo flagged important (it goes to the top of the list) or not. Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("flagged", "boolean", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (!ctx.dryRun) (await import("@/lib/todos/store")).setTodoFlagged(Number(i.id), i.flagged === true || i.flagged === "true");
+      return {};
+    },
+  },
+  {
+    name: "todos.defer",
+    group: "todos",
+    label: "Put a todo to the bottom — or back up",
+    summary: "A todo set aside for now (it comes back up when something new happens on it, in 3 days at the latest) or taken back up. Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("deferred", "boolean", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (!ctx.dryRun) (await import("@/lib/todos/store")).setTodoDeferred(Number(i.id), i.deferred === true || i.deferred === "true");
+      return {};
+    },
+  },
+  {
+    name: "todos.set-due",
+    group: "todos",
+    label: "A todo's due day",
+    summary: "A todo's due day (YYYY-MM-DD; empty: none), set by you — what takes its date from it follows (a debt of your own). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("due", "text")],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      const raw = typeof i.due === "string" ? i.due.trim() : "";
+      const due = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+      if (raw && !due) throw new Error("A due day is written YYYY-MM-DD.");
+      if (!ctx.dryRun) await (await import("./engine")).setDueAsYou(Number(i.id), due);
+      return {};
+    },
+  },
+  {
+    name: "todos.set-text",
+    group: "todos",
+    label: "A todo's words",
+    summary: "A todo's text changed (as in the todo block). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("text", "text", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (!ctx.dryRun) (await import("@/lib/todos/store")).setTodoText(Number(i.id), String(i.text ?? ""));
+      return {};
+    },
+  },
+  {
+    name: "todos.add-note",
+    group: "todos",
+    label: "A note on a todo",
+    summary: "Your note on a todo (context for the briefing, workers and agents). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("text", "text", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (!String(i.text ?? "").trim()) throw new Error("The note is empty.");
+      if (!ctx.dryRun) (await import("@/lib/todos/store")).addTodoUserNote(Number(i.id), String(i.text).trim());
+      return {};
+    },
+  },
+  {
     name: "todos.sources",
     group: "todos",
     label: "Where the todos come from",
