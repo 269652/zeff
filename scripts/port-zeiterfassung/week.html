@@ -74,9 +74,9 @@
     <col gap=2>
       <grid cols=4 gap=2 min=160>
         <input bind="n_date" type=date label="Date" value="{{ data.w.form.defaultDate }}"/>
-        <select bind="n_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>
+        {{#if data.w.form.bookOptions}}<select bind="n_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
         <input bind="n_hours" type=number label="Hours" placeholder="1.5"/>
-        <select bind="n_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>
+        {{#if data.w.form.typeOptions}}<select bind="n_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>{{#else}}<text tone=warn>…</text>{{/if}}
       </grid>
       <input bind="n_description" label="Description" placeholder="What did you do?"/>
       <grid cols=3 gap=2 min=160>
@@ -255,9 +255,9 @@
     <col gap=2>
       <grid cols=3 gap=2 min=170>
         <input bind="ee_date" type=date label="Date" value="{{ date }}"/>
-        <select bind="ee_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>
+        {{#if data.w.form.bookOptions}}<select bind="ee_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
         <input bind="ee_hours" type=number label="Hours" value="{{ hours }}"/>
-        <select bind="ee_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>
+        {{#if data.w.form.typeOptions}}<select bind="ee_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>{{#else}}<text tone=warn>…</text>{{/if}}
         <input bind="ee_ticket" label="Ticket" value="{{ ticket }}"/>
         <input bind="ee_start" label="Start" value="{{ start }}" placeholder="09:30"/>
       </grid>
