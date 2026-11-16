@@ -50,10 +50,10 @@ function liveRun(runs: RoutineRun[], activity: Activity): RoutineView["live"] {
   return { runId: run.id, startedAt: run.startedAt, workRunId: run.workRunId, workStatus: a?.status ?? null, activity: activityLines };
 }
 
-export function routineView(pageId: number, deps: { workRun?: Parameters<typeof syncAgentRuns>[0]; activity?: Activity } = {}): RoutineView | null {
+export function routineView(pageId: number, deps: { workRun?: Parameters<typeof syncAgentRuns>[0]; activity?: Activity; reached?: Parameters<typeof syncAgentRuns>[1] } = {}): RoutineView | null {
   const r = getRoutine(pageId);
   if (!r) return null;
-  syncAgentRuns(deps.workRun);
+  syncAgentRuns(deps.workRun, deps.reached);
   const schedules = r.triggers.filter((x) => x.kind === "schedule");
   const runs = routineRuns(pageId, 10);
   const planned =r.nextRunAt ?? (schedules.length ? new Date(Math.min(...schedules.map((s) => nextRunAfter(s, new Date())?.getTime() ?? Infinity))).toISOString() : null);
