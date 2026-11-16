@@ -31,13 +31,6 @@ export default async function WorkspacePage({ params }: { params: Promise<{ id: 
   // A database's app views: their templates in the database (yours and the AI's to change), kept up with the app's while unchanged.
   if (page.kind === "database") (await import("@/plugins/workspace/app-templates")).ensureAppTemplates(page.id);
   const fresh = getPage(page.id) ?? page;
-  // What a person's page shows comes with the page — nothing to fetch after it.
-  let person: unknown = null;
-  if (isRow && isInstalled("people") && getDatabase(page.dbId!)?.schema.dataType === "people") {
-    const { personOfRow, personBundle } = await import("@/plugins/people/blocks");
-    const pid = personOfRow(page.id);
-    if (pid) person = await personBundle(pid).catch(() => null);
-  }
   const row = isRow ? await loadDatabaseAction(page.dbId!) : null;
   const database = page.kind === "database" ? await loadDatabaseAction(page.id) : null;
   const form = page.kind === "form" ? (await import("@/plugins/workspace/forms")).getForm(page.id) : null;
@@ -73,7 +66,6 @@ export default async function WorkspacePage({ params }: { params: Promise<{ id: 
           .map((x) => ({ id: x.id, title: x.title, icon: x.icon, kind: x.kind })),
       }}
       row={row?.ok ? { initial: row.data, dbId: page.dbId! } : null}
-      person={person as never}
       database={database?.ok ? database.data : null}
       form={form}
       app={app}

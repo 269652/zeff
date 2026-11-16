@@ -6,9 +6,7 @@ import { JIRA_VIEW } from "@/plugins/jira/view-template.meta";
 import { GITLAB_VIEW } from "@/plugins/gitlab/view-template.meta";
 import { DEBTS_VIEW } from "@/plugins/finances/view-template.meta";
 import { CHAT_VIEW, INBOX_VIEW, MAIL_VIEW } from "@/plugins/mail-client/view-template.meta";
-import { PEOPLE_VIEW } from "@/plugins/people/view-template.meta";
 import { CASE_PAGE } from "@/plugins/cases/row-template.meta";
-import { PERSON_PAGE } from "@/plugins/people/row-template.meta";
 import type { T } from "@/lib/i18n/shared";
 import type { ActionMeta, PartMeta } from "./view-template";
 
@@ -43,7 +41,7 @@ export const TEMPLATE_VIEW: ViewAppMeta = {
     ].join("\n"),
 };
 
-const ALL: ViewAppMeta[] = [TEMPLATE_VIEW, AGENDA_VIEW, DEBTS_VIEW, CASES_VIEW, PEOPLE_VIEW, CALENDAR_VIEW, DOCUMENTS_VIEW, MAIL_VIEW, CHAT_VIEW, INBOX_VIEW, JIRA_VIEW, GITLAB_VIEW];
+const ALL: ViewAppMeta[] = [TEMPLATE_VIEW, AGENDA_VIEW, DEBTS_VIEW, CASES_VIEW, CALENDAR_VIEW, DOCUMENTS_VIEW, MAIL_VIEW, CHAT_VIEW, INBOX_VIEW, JIRA_VIEW, GITLAB_VIEW];
 
 export const viewAppMeta = (app: string): ViewAppMeta | undefined => ALL.find((m) => m.app === app);
 
@@ -58,5 +56,5 @@ export const DETAIL_PAGE: ViewAppMeta = {
   defaultTemplate: () => '<header title="{{ title }}"/>\n<transitions history=true/>',
 };
 
-const PAGES: ViewAppMeta[] = [PERSON_PAGE, CASE_PAGE, DETAIL_PAGE];
+const PAGES: ViewAppMeta[] = [CASE_PAGE, DETAIL_PAGE];
 export const rowViewMeta = (id: string): ViewAppMeta | undefined => PAGES.find((m) => m.app === id);

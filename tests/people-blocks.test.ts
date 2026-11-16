@@ -98,28 +98,6 @@ test("personOp: profile, note, star, dates, relations, review — and merge and 
   assert.equal(p.getPerson(id), null);
 });
 
-test("the people database's rows: a person's page is ONE custom-view block, its own text free — no detail layout page", async () => {
-  const { setInstalled } = await import("@/plugins/state");
-  for (const id of ["workspace", "people"]) setInstalled(id, true);
-  const w = await import("@/plugins/workspace/store");
-  const { createExtSourceDatabase } = await import("@/plugins/workspace/derived");
-  const { ensureRowView, rowViewOf } = await import("@/plugins/workspace/row-views");
-  const p = await import("@/plugins/people/store");
-  p.createPerson({ name: "Seiten Person" });
-  const db = await createExtSourceDatabase("people", "Seitenleute");
-  const d = w.getDatabase(db)!;
-  assert.equal(d.schema.dataType, "people", "typed from the start");
-  assert.equal((d.schema as { detailPage?: number }).detailPage, undefined, "no detail layout page");
-  assert.equal(rowViewOf(d.schema.dataType)?.id, "person");
-  const { runPipeline } = await import("@/plugins/workspace/pipeline");
-  await runPipeline(db, { ai: false });
-  const row = w.rawRows(db).find((r) => r.title === "Seiten Person")!;
-  ensureRowView(row.id);
-  const doc = JSON.stringify(w.getPage(row.id)!.content);
-  assert.match(doc, /"type":"rowView"/, "its page starts with the person's view");
-  assert.ok(!doc.includes("person-profile") && !doc.includes('"flexBox"'), "no dozen modules, no layout boxes");
-});
-
 test("the overview of the people database: what is coming up, what to check — and the tools", async () => {
   const { setInstalled } = await import("@/plugins/state");
   for (const id of ["workspace", "people"]) setInstalled(id, true);

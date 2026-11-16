@@ -23,58 +23,6 @@ async function peopleDb() {
 
 const widgetsOf = (doc: { content?: { type: string; attrs?: Record<string, unknown> }[] }) => (doc.content ?? []).filter((n) => n.type === "zeffWidget").map((n) => [n.attrs?.widget, n.attrs?.header]);
 
-test("a new person's page starts with the default layout — only when it has nothing of its own", async () => {
-  const { w, db } = await peopleDb();
-  const { ensureRowView } = await import("@/plugins/workspace/row-views");
-  const ada = w.addRow(db, { title: "Ada" });
-  assert.equal(ensureRowView(ada), true);
-  const doc = w.getPage(ada)!.content as never as { content: { type: string; attrs?: Record<string, unknown>; content?: unknown[] }[] };
-  assert.equal(doc.content[0].type, "rowView", "the view first");
-  assert.equal(doc.content[1].type, "paragraph");
-  assert.ok(doc.content[1].content?.length, "a short intro line");
-  assert.deepEqual(widgetsOf(doc), [["people.todos", "hide"], ["people.coming", "hide"], ["people.facts", "hide"], ["people.rhythm", "hide"]], "the person widgets, each without header");
-  for (const n of doc.content.filter((n) => n.type === "zeffWidget")) assert.equal(n.attrs?.config, "{}", "they take the page's person by themselves");
-
-  // A page with text of its own: the view, the text — no layout over it.
-  const bob = w.addRow(db, { title: "Bob" });
-  w.updatePage(bob, { content: { type: "doc", content: [para("Meine Notiz zu Bob")] } });
-  assert.equal(ensureRowView(bob), true);
-  assert.deepEqual((w.getPage(bob)!.content.content ?? []).map((n) => n.type), ["rowView", "paragraph"], "his text kept, nothing added");
-
-  // Not for a database without a person view.
-  const m = await import("@/plugins/workspace/model");
-  const other = w.createPage({ kind: "database", title: "Aufgaben", schema: { titleName: "Name", properties: [], views: [m.newView("Table")] } });
-  const task = w.addRow(other, { title: "T" });
-  assert.equal(ensureRowView(task), false);
-  assert.deepEqual(widgetsOf(w.getPage(task)!.content as never), []);
-});
-
-test("Use the default layout: on an existing person page that is (nearly) empty, its own lines kept — not on one with more", async () => {
-  const { w, db } = await peopleDb();
-  const { applyRowLayout, rowLayoutFits } = await import("@/plugins/workspace/row-views");
-  // A page made before the layout existed: just the view block and a short line.
-  const cleo = w.addRow(db, { title: "Cleo" });
-  w.updatePage(cleo, { content: { type: "doc", content: [{ type: "rowView" }, para("Kollegin")] } });
-  assert.equal(rowLayoutFits(cleo), true);
-  assert.equal(applyRowLayout(cleo), true);
-  const doc = w.getPage(cleo)!.content as never as { content: { type: string }[] };
-  assert.equal(doc.content[0].type, "rowView");
-  assert.deepEqual(widgetsOf(doc).map(([id]) => id), ["people.todos", "people.coming", "people.facts", "people.rhythm"]);
-  assert.match((await import("@/plugins/workspace/doc")).docText(doc as never), /Kollegin/, "her line kept");
-  assert.equal(rowLayoutFits(cleo), false, "it has widgets now");
-  assert.equal(applyRowLayout(cleo), false, "not twice");
-
-  // A page with a widget of its own, or with much text: no.
-  const dan = w.addRow(db, { title: "Dan" });
-  w.updatePage(dan, { content: { type: "doc", content: [{ type: "rowView" }, widget("people.news")] } });
-  assert.equal(rowLayoutFits(dan), false);
-  const eve = w.addRow(db, { title: "Eve" });
-  w.updatePage(eve, { content: { type: "doc", content: [{ type: "rowView" }, para("x".repeat(400))] } });
-  assert.equal(rowLayoutFits(eve), false);
-  assert.equal(applyRowLayout(eve), false);
-  assert.deepEqual(widgetsOf(w.getPage(eve)!.content as never), [], "nothing written");
-});
-
 test("All about a person leaves out what the detail widgets on the same page show (about the same person)", async () => {
   const { w, db } = await peopleDb();
   const people = await import("@/plugins/people/store");

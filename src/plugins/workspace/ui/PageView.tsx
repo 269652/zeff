@@ -19,8 +19,6 @@ import { DayEntry } from "./day-entry";
 import { FormPageBody } from "./form-page";
 import type { FormRun } from "../forms";
 import { LinkedPanel } from "./linked-panel";
-import { seedPerson } from "@/plugins/people/ui/PersonView";
-import type { PersonBundle } from "@/plugins/people/blocks";
 import { Editor, type SaveState } from "./Editor";
 import { COVERS, coverStyle, Dropdown, EmojiPicker, MenuItem, Modal, pickFile, uploadImage } from "./kit";
 import { kindIcon, type PageKind } from "../model";
@@ -144,13 +142,9 @@ function History({ pageId, onClose }: { pageId: number; onClose: () => void }) {
   );
 }
 
-export function PageView({ page, row, database, form, person, app }: { page: PageViewData; /** What a plugin shows on this page above its text (a learning space's courses — page-apps.ts). */ app?: ReactNode; row?: { initial: DatabaseData; dbId: number } | null; database?: DatabaseData | null; /** A form page: what it asks (forms.ts). */ form?: FormRun | null; /** What a person's page shows, as the server read it with the page (no round trip after it). */ person?: PersonBundle | null }) {
+export function PageView({ page, row, database, form, app }: { page: PageViewData; /** What a plugin shows on this page above its text (a learning space's courses — page-apps.ts). */ app?: ReactNode; row?: { initial: DatabaseData; dbId: number } | null; database?: DatabaseData | null; /** A form page: what it asks (forms.ts). */ form?: FormRun | null; }) {
   const t = useT();
   const router = useRouter();
-  // A person's view starts from what the server read with the page.
-  useState(() => {
-    if (person) seedPerson(page.id, person);
-  });
   const [title, setTitle] = useState(page.title);
   const [icon, setIcon] = useState(page.icon);
   const [cover, setCover] = useState(page.cover);

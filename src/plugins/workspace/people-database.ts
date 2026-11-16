@@ -1,9 +1,6 @@
 import { getPref, setPref } from "@/lib/prefs";
 import { isInstalled } from "@/plugins/state";
-import { t } from "@/lib/i18n/server";
-import { appViewFields, appViewsFor } from "./app-views";
-import { newView } from "./model";
-import { getDatabase, rawRows, updateSchema } from "./store";
+import { getDatabase, rawRows } from "./store";
 
 const PEOPLE = "workspace.peopleDb";
 
@@ -20,11 +17,8 @@ export async function ensurePeopleDatabase(): Promise<void> {
   if (known) {
     // The person's page is the custom view of its rows: a block at the start of each row's page (pages made before it get it now).
     (await import("./row-views")).ensureRowViews();
-    // The overview view (made before it existed: put first).
-    const cur = getDatabase(known)!.schema;
-    const app = appViewsFor("people")[0];
-    // (the plugin's own overview — people-ext — stands in for it: not made again)
-    if (app && !cur.views.some((v) => v.type === "app" && (v.app === app.id || (v.app === "template" && /people\.screen/.test(v.template ?? ""))))) updateSchema(known, { ...cur, views: [{ ...newView(t(app.label), "table"), ...appViewFields(app) }, ...cur.views] });
+    // The overview and the person's page: the People plugin's (people-ext) — Zeff has none of its own.
+    await (await import("@/plugins/people/to-plugin")).ensurePeopleScreens();
     return;
   }
   if (getPref<number | null>(PEOPLE, null) !== null) return;
@@ -34,6 +28,7 @@ export async function ensurePeopleDatabase(): Promise<void> {
   const { runPipeline } = await import("./pipeline");
   await runPipeline(id, { ai: false });
   (await import("./row-views")).ensureRowViews();
+  await (await import("@/plugins/people/to-plugin")).ensurePeopleScreens();
 }
 
 /** Where a person's page is: their row in the people database — the database itself without one (a profile not read in yet), the Workspace without a database. */

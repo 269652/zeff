@@ -805,6 +805,12 @@
                 "description": "The records are only read from where they live: a row cannot be made by hand.",
                 "type": "boolean"
               },
+              "pull": {
+                "description": "A two-way source: a flow of the plugin that gets { rows: [{ cells }] } (the rows of the database it fills) before each read and takes back what was edited in them (a box ticked off).",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+              },
               "lockedFields": {
                 "default": [],
                 "description": "Fields (by their id) the records fix: not changed by hand on the rows the source brings.",

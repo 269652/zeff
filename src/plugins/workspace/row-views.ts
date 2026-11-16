@@ -5,7 +5,6 @@ import type { DataType } from "./model";
 import { getPref, setPref } from "@/lib/prefs";
 import { removeSystemPages } from "@/lib/prompts/system-pages";
 import { archivePage, getDatabase, getPage, subtree, updatePage } from "./store";
-import { personPageLayout } from "@/plugins/people/page-layout";
 
 /**
  * A custom view of a row: a plugin brings ONE view for the rows of a database of a type (the person's page for the people
@@ -15,7 +14,6 @@ import { personPageLayout } from "@/plugins/people/page-layout";
 export type RowView = { id: string; plugin: string; dataType: DataType; label: string; /** What a page of such a row starts with after the block (when it has nothing of its own). */ layout?: () => DocNode[] };
 
 export const ROW_VIEWS: RowView[] = [
-  { id: "person", plugin: "people", dataType: "people", label: "Person", layout: personPageLayout },
   { id: "case", plugin: "cases", dataType: "cases", label: "Case" },
 ];
 

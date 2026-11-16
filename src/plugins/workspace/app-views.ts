@@ -16,7 +16,6 @@ export const APP_VIEWS: AppView[] = [
   { id: "mail", plugin: "mail-client", dataType: "mail", label: "Mail", icon: "✉" },
   { id: "chat", plugin: "mail-client", dataType: "message", label: "Chat", icon: "💬" },
   { id: "inbox", plugin: "mail-client", dataType: "inbox", label: "Inbox", icon: "📬" },
-  { id: "people", plugin: "people", dataType: "people", label: "Overview", icon: "👥" },
   { id: "calendar", plugin: "calendar", dataType: "calendar", label: "Calendar", icon: "📅" },
   { id: "documents", plugin: "documents", dataType: "documents", label: "Documents", icon: "🗂" },
   { id: "cases", plugin: "cases", dataType: "cases", label: "Overview", icon: "📁" },

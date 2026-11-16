@@ -18,7 +18,6 @@ import { ViewCode } from "./view-code";
  */
 
 const MODULES: Record<string, () => Promise<ViewAppModule>> = {
-  person: () => import("@/plugins/people/ui/row-parts").then((m) => m.default),
   case: () => import("@/plugins/cases/ui/row-parts").then((m) => m.default),
   // Any database's own detail page: no parts of a plugin, only the template.
   detail: () => import("./app-view").then((m) => ({ parts: {}, useAppData: m.useNoAppData })),

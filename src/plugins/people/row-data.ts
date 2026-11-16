@@ -2,7 +2,7 @@ import { formatDate, formatDayTime } from "@/lib/format";
 import { accountFor } from "@/lib/girocode";
 import type { T } from "@/lib/i18n/shared";
 import type { Appointment } from "./appointments";
-import type { KnowledgeOfPerson } from "./block-actions";
+import type { KnowledgeOfPerson } from "./wiki";
 import type { PersonBundle } from "./blocks";
 
 /**
