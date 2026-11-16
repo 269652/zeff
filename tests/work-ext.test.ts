@@ -163,6 +163,7 @@ test("the screen's template draws without an error: new, a session (idle and ask
   assert.deepEqual(draw(await call("work.screen", { sel: "run:99999" }), { sel: "run:99999" }).errors, []);
   assert.deepEqual(draw(await call("work.screen", { q: "nothing-matches-this" }), { q: "nothing-matches-this" }).errors, []);
   // A live session asking: a permission, a plan, a question — shaped as the lambda gives them.
+  const ASK_BASE = { has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x" };
   const asking = {
     mode: "session",
     groups: [],
@@ -203,9 +204,9 @@ test("the screen's template draws without an error: new, a session (idle and ask
       paneOptions: ",x0:P",
       copilot: { mode: "agent", modes: [{ id: "a#agent", name: "Agent", sel: true, hint: "h" }], waiting: "your move", idle: true, status: "waiting for you" },
       asks: [
-        { requestId: "r1", tool: "Bash", plan: false, question: false, title: "It wants to use Bash", description: "", detail: "npm test", planText: "", always: true, questions: [], bypass: false, has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x", diff: "- a\n+ b", reason: "why", more: "(+2 more)" },
-        { requestId: "r2", tool: "ExitPlanMode", plan: true, question: false, title: "Its plan", description: "", detail: "", planText: "# Plan", always: false, questions: [], bypass: true, has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x" },
-        { requestId: "r3", tool: "AskUserQuestion", plan: false, question: true, title: "It asks you", description: "", detail: "", planText: "", always: false, bypass: false, has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x", has0: true, has1: true, qt0: "Which?", qt1: "And?", ready: true, submit: "{}", questions: [{ question: "Which?", header: "H", idx: 0, multi: false, other: "", ready: true, answer: "A", options: [{ label: "A", description: "", on: true, mark: "● ", next: "{}" }] }] },
+        { requestId: "r1", tool: "Bash", plan: false, question: false, title: "It wants to use Bash", description: "", detail: "npm test", planText: "", always: true, questions: [], bypass: false, ...ASK_BASE, diff: "- a\n+ b", reason: "why", more: "(+2 more)" },
+        { requestId: "r2", tool: "ExitPlanMode", plan: true, question: false, title: "Its plan", description: "", detail: "", planText: "# Plan", always: false, questions: [], bypass: true, ...ASK_BASE },
+        { requestId: "r3", tool: "AskUserQuestion", plan: false, question: true, title: "It asks you", description: "", detail: "", planText: "", always: false, bypass: false, ...ASK_BASE, has0: true, has1: true, qt0: "Which?", qt1: "And?", ready: true, submit: "{}", questions: [{ question: "Which?", header: "H", idx: 0, multi: false, other: "", ready: true, answer: "A", options: [{ label: "A", description: "", on: true, mark: "● ", next: "{}" }] }] },
       ],
       permission: null,
       canReplyLive: true,
