@@ -1,0 +1,29 @@
+<col gap=3>
+<row gap=1 wrap=true align=center>
+<button action="state" state="feedfilter" value="all" label="{{ data.feed.labels.all }}" variant="{{ state.feedfilter == 'all' ? 'primary' : 'quiet' }}"/>
+<button action="state" state="feedfilter" value="closed" label="{{ data.feed.labels.closed }}" variant="{{ state.feedfilter == 'closed' ? 'primary' : 'quiet' }}"/>
+<button action="state" state="feedfilter" value="created" label="{{ data.feed.labels.created }}" variant="{{ state.feedfilter == 'created' ? 'primary' : 'quiet' }}"/>
+{{#if data.feed.unseenText}}<small><text tone=warn>{{ data.feed.unseenText }}</text></small>{{/if}}
+</row>
+{{#if not data.feed.days}}<muted>{{ data.feed.empty }}</muted>{{/if}}
+{{#each data.feed.days}}
+<col gap=1>
+<small><b>{{ label }}</b></small>
+{{#each items}}
+<box tone="{{ isNew ? 'warn' : 'plain' }}">
+<row gap=2 wrap=false align=start>
+<small><muted>{{ time }}</muted></small>
+<b>{{ icon }} {{ label }}</b>
+<col fill=true gap=1>
+<text>{{ text }}</text>
+<small><muted>{{ ref }} · {{ ticket }} · {{#if byHref}}<a href="{{ byHref }}" tip="{{ byTitle }}">{{ by }}</a>{{#else}}{{ by }}{{/if}}{{#if reopened}} · reopened{{/if}}</muted>
+{{#if run}} <button run="todos-ext.undo-run" with="run={{ run }}" into="undone" confirm="Dismiss the todos this run made that you haven't touched — those you worked on stay" emit="todos-changed" label="take back the run" variant=link/>{{/if}}</small>
+{{#if note}}<small><muted>{{ note }}</muted></small>{{/if}}
+</col>
+</row>
+</box>
+{{/each}}
+</col>
+{{/each}}
+{{#if data.undone.dismissed}}<small><text tone=good>{{ data.undone.dismissed }} dismissed, {{ data.undone.kept }} kept (you worked on them).</text></small>{{/if}}
+</col>

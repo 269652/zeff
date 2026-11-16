@@ -142,7 +142,7 @@ test("German words from the language pack, as the built-in says them", { skip },
 
 test("what a click does is a flow over the engine: tick off, open again, flag, set aside, a due day, add — each as the built-in's actions", { skip }, async () => {
   const { ids, store, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["todos-ext.add", "todos-ext.defer", "todos-ext.due", "todos-ext.flag", "todos-ext.note", "todos-ext.note-remove", "todos-ext.op-remove", "todos-ext.run", "todos-ext.status", "todos-ext.text", "todos-ext.time"]);
+  assert.deepEqual([...allowed].sort(), ["todos-ext.add", "todos-ext.board-run", "todos-ext.defer", "todos-ext.due", "todos-ext.flag", "todos-ext.follow", "todos-ext.note", "todos-ext.note-remove", "todos-ext.op-remove", "todos-ext.recap-start", "todos-ext.run", "todos-ext.seen", "todos-ext.status", "todos-ext.text", "todos-ext.ticket-action", "todos-ext.time", "todos-ext.undo-run"]);
   const engine = await import("@/plugins/workspace/flows/engine");
   const ok = async (name: string, input: Record<string, unknown>, dry = false) => {
     const r = await engine.runFlow(name, input, dry ? { dry: true } : undefined);
@@ -298,4 +298,119 @@ test("a todo's panel: its notes, actions in words, time — and what the panel d
     const drawn = JSON.stringify(r.nodes);
     for (const word of ["Zweiter Kommentar", "Suggested: Rico wartet", "Add time you spent on this todo"]) assert.ok(drawn.includes(word), word);
   }
+});
+
+test("Activity, the omnibar's chips, the briefing and its tickets, the recap, Today: the lambdas give what the built-in's pages show, and every part of the template draws", { skip }, async () => {
+  const { call, ids, otherId, store } = await world();
+  const { getDb, schema } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const runs = await import("@/lib/runs/store");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("todos-ext"), "views", "todos.html"), "utf8");
+  const drawn = (state: Record<string, string>, data: Record<string, unknown>) => {
+    const r = renderView(template, { rows: [], props: [], titleName: "Todos", state, app: {}, data, db: { id: 1, title: "Todos" } } as never);
+    assert.deepEqual(r.errors, [], JSON.stringify(state));
+    return JSON.stringify(r.nodes);
+  };
+
+  // Activity: what happened (made, done, dismissed — by you or not), by day; "new" is what is newer than what you have seen and not your own click.
+  type Feed = { days: { items: { id: number; label: string; text: string; isNew: boolean; by: string }[] }[]; max: number; unseen: number };
+  const feed = await call<Feed>("todos.feed", {});
+  const all = feed.days.flatMap((d) => d.items);
+  const built = (await import("@/lib/todos/activity")).todoActivity();
+  assert.equal(all.length, built.length);
+  assert.ok(all.some((e) => e.text === "Water the plants" && e.label === "done"));
+  assert.ok(all.some((e) => e.text === "Old idea" && e.label === "dismissed"));
+  assert.equal(feed.max, Math.max(...built.map((e) => e.id)));
+  const closed = await call<Feed>("todos.feed", { filter: "closed" });
+  assert.ok(closed.days.flatMap((d) => d.items).every((e) => e.label === "done" || e.label === "dismissed"));
+  // Never looked: nothing counts as new; once seen up to an event, the later ones from others do.
+  assert.equal(feed.unseen, 0);
+  assert.equal((await engine.runFlow("todos-ext.seen", { id: feed.max - 1 })).status, "done");
+  assert.equal((await engine.runFlow("todos-ext.seen", { id: 1 })).status, "done"); // (never lowered)
+  const after = await call<Feed>("todos.feed", {});
+  assert.equal(after.unseen, built.filter((e) => e.id > feed.max - 1 && !e.mine).length);
+  assert.ok(drawn({ part: "todos", scope: "activity" }, { feed: after, lage: await call("todos.lage", {}) }).includes("Water the plants"));
+
+  // The omnibar: hits with the todos they name; a pick is a chip that narrows the list to exactly those todos.
+  const hits = await call<{ hits: { key: string; title: string; first: boolean; label: string; pick: string }[] }>("todos.hits", { q: "garage" });
+  assert.ok(hits.hits.length >= 2);
+  assert.equal(hits.hits[0].label, "Everything with this");
+  const pick = hits.hits.find((h) => h.title.includes(`T-${ids.late}`))!;
+  assert.ok(pick, "the todo itself is a hit");
+  const chipped = await call<Screen & { chips: unknown[] }>("todos.screen", { scope: "open", chips: JSON.stringify([pick.pick]) });
+  assert.deepEqual(chipped.groups.flatMap((g) => g.items.map((x) => x.id)), [ids.late]);
+  assert.equal(chipped.chips.length, 1);
+  const none = await call<Screen>("todos.screen", { scope: "open", chips: JSON.stringify([pick.pick, "x␟999999"]) });
+  assert.equal(none.groups.length, 0);
+  assert.deepEqual((await call<{ hits: unknown[] }>("todos.hits", { q: "x" })).hits, []);
+  assert.ok(drawn({ part: "todos", scope: "open", omniq: "garage", chips: JSON.stringify([pick.pick]) }, { x: chipped, hits: await call("todos.hits", { q: "garage" }), lage: await call("todos.lage", {}) }).includes("Pay the garage"));
+
+  // The briefing and its tickets: a run with two tickets, one analysed (its todo, a suggested change), one only listed.
+  const run = runs.startRun("assignee = currentUser()", "test-model");
+  const ticket = (key: string, analyzed: boolean) => ({ key, summary: `Summary of ${key}`, url: `https://jira.example/browse/${key}`, status: "In Progress", statusCategory: "inprogress", issueType: "Task", priority: null, assignee: null, parent: null, updatedAt: "2026-11-01T10:00:00Z", comments: 0, analyzed });
+  runs.finishRun(run, {
+    status: "ok",
+    tickets: [ticket("WSX-12", true), ticket("OLD-1", false)] as never,
+    result: { lede: "Two things matter today.", tickets: [{ key: "WSX-12", attention: "feedback", lead: "A question is open.", summary: "Anna asked about the filter.", happened: [{ when: "2026-11-01", who: "Anna", what: "Asked" }], todos: [], resolved: [], flags: ["Overdue in Jira"], actions: [{ type: "comment", label: "Comment: answered", why: "She waits", comment: "Done." }] }], left: [] } as never,
+  });
+  type Lage = { running: boolean; asOf: string; lede: string; chips: { attention: string; n: number }[]; tickets: { key: string; attLabel: string; lead: string; todos: { text: string }[]; actions: { label: string; ok: boolean }[]; flags: { text: string }[] }[]; nListed: number; runId: number };
+  const lage = await call<Lage>("todos.lage", {});
+  assert.equal(lage.running, false);
+  assert.equal(lage.lede, "Two things matter today.");
+  assert.deepEqual(lage.chips.map((c) => [c.attention, c.n]), [["feedback", 1]]);
+  assert.deepEqual(lage.tickets.map((x) => [x.key, x.attLabel, x.lead]), [["WSX-12", "Open question", "A question is open."]]);
+  assert.deepEqual(lage.tickets[0].todos.map((x) => x.text), ["Order the new filter"]);
+  assert.equal(lage.tickets[0].actions[0].label, "Comment: answered");
+  assert.equal(lage.tickets[0].flags[0].text, "Overdue in Jira");
+  assert.equal(lage.nListed, 1);
+  assert.equal(lage.runId, run);
+  assert.equal((await call<Lage>("todos.lage", { att: "active" })).tickets.length, 0);
+  // The briefing now restricts the list to its tickets (and those without one), as the built-in page does.
+  const list = await call<Screen>("todos.screen", { scope: "open" });
+  assert.equal(list.briefing, true);
+  assert.equal(list.counts.open, store.boardTodos(["WSX-12", "OLD-1", ""]).filter((t) => t.status === "open" && t.owner === "me").length);
+  // Its buttons are flows that need todos + api; dry runs do nothing.
+  for (const [name, input] of [["todos-ext.board-run", { stop: "false" }], ["todos-ext.ticket-action", { run, ticket: "WSX-12", idx: 0 }], ["todos-ext.recap-start", { day: "2026-11-13" }], ["todos-ext.undo-run", { run: 999999 }]] as const) assert.equal((await engine.runFlow(name, input, { dry: true })).status, "done", name);
+  assert.equal((await engine.runFlow("todos-ext.follow", { key: "WSX-12", value: "1" })).status, "done");
+  const lageHtml = drawn({ part: "tickets", att: "" }, { lage, x: list });
+  for (const word of ["Two things matter today.", "Anna asked about the filter.", "Comment: answered", "Order the new filter", "Only listed"]) assert.ok(lageHtml.includes(word), word);
+  assert.ok(drawn({ part: "todos", scope: "open" }, { lage, x: list }).includes("Run now"));
+  assert.ok(drawn({ part: "todos", scope: "open" }, { lage: { ...lage, running: true, runningText: "0:12 · analyzing" }, x: list }).includes("Cancel"));
+
+  // The recap: a day's summary, per ticket what was done with its evidence, the work on no ticket.
+  const day = "2026-11-13";
+  getDb().insert(schema.dayRecaps).values({ day, status: "ok", model: "m", facts: JSON.stringify({ tickets: [{ key: "WSX-12", summary: "Filter", status: "Done", url: null, facts: [{ kind: "entry", at: "2026-11-13T09:00:00Z", text: "Booked on WSX-12", hours: 1.5 }, { kind: "commit", at: null, text: "fix filter" }] }], other: [{ kind: "todo", at: null, text: "Planning" }] }), result: JSON.stringify({ summary: "A calm day.", tickets: [{ key: "WSX-12", lead: "The filter is done.", done: ["Ordered it", "Tested it"] }], other: ["Planning"] }) }).run();
+  type Recap = { day: string; before: string; summary: string; booked: string; tickets: { key: string; lead: string; done: { text: string }[]; hours: string; facts: { kind: string }[] }[]; hasOther: boolean };
+  const recap = await call<Recap>("todos.day", { day });
+  assert.equal(recap.day, day);
+  assert.equal(recap.before, "2026-11-12");
+  assert.equal(recap.summary, "A calm day.");
+  assert.deepEqual(recap.tickets[0].done.map((x) => x.text), ["Ordered it", "Tested it"]);
+  assert.match(recap.tickets[0].hours, /1[.,]5 h booked/);
+  assert.match(recap.booked, /1[.,]5 h booked/);
+  assert.deepEqual(recap.tickets[0].facts.map((f) => f.kind), ["Entry", "Commit"]);
+  assert.equal(recap.hasOther, true);
+  assert.ok((await call<{ empty: string }>("todos.day", { day: "2026-10-01" })).empty.startsWith("No recap"));
+  const recapHtml = drawn({ part: "recap", recapday: day }, { day: recap, lage });
+  for (const word of ["A calm day.", "The filter is done.", "Ordered it", "Planning"]) assert.ok(recapHtml.includes(word), word);
+
+  // Today: yours due, what you wait on for days, what agents ask, what workers report.
+  getDb().update(schema.todos).set({ createdAt: new Date(Date.now() - 5 * 864e5).toISOString() }).where(eq(schema.todos.id, otherId)).run();
+  store.setTodoNeedsInput(ids.week, "Which train?");
+  store.markWorkerDone(ids.star, "W-9 · Copilot", "All green");
+  type Today = { due: { id: number; when: string; overdue: boolean }[]; waiting: { id: number; ago: string }[]; asking: { id: number; question: string }[]; reported: { id: number; by: string; note: string }[] };
+  const today = await call<Today>("todos.heute", {});
+  assert.deepEqual(today.due.map((x) => x.id), [ids.late, ids.today]);
+  assert.deepEqual(today.due.map((x) => [x.when, x.overdue]), [["overdue (3 days)", true], ["due today", false]]);
+  assert.deepEqual(today.waiting.map((x) => [x.id, x.ago]), [[otherId, "for 5 days"]]);
+  assert.deepEqual(today.asking.map((x) => [x.id, x.question]), [[ids.week, "Which train?"]]);
+  assert.deepEqual(today.reported.map((x) => [x.id, x.by, x.note]), [[ids.star, "W-9", "All green"]]);
+  const todayHtml = drawn({ part: "today" }, { today, lage });
+  for (const word of ["Pay the garage", "Reply from Anna", "Which train?", "All green"]) assert.ok(todayHtml.includes(word), word);
+  // Every lambda only reads: the kernel reads they name.
+  const lambdas = await import("@/plugins/workspace/lambdas/store");
+  assert.deepEqual(lambdas.getLambda("todos.lage")!.manifest.zeff, ["todos.board", "todos.rows"]);
+  assert.deepEqual(lambdas.getLambda("todos.hits")!.manifest.zeff, ["todos.omni"]);
 });

@@ -1,0 +1,75 @@
+<col gap=3>
+{{#if data.lage.none}}<muted>{{ data.lage.none }}</muted>{{/if}}
+{{#if data.lage.lede}}
+<box>
+<col gap=1>
+<small><b>Briefing</b></small>
+<text>{{ data.lage.lede }}</text>
+{{#if data.lage.gaps}}<small><text tone=warn>⚠ {{ data.lage.gaps }} {{#each data.lage.gapList}}<a href="{{ href }}">{{ label }}</a> ({{ state }}) {{/each}}</text></small>{{/if}}
+</col>
+</box>
+{{/if}}
+{{#if data.lage.chips}}
+<row gap=1 wrap=true align=center>
+<button action="state" state="att" value="" label="All · {{ data.lage.nAll }}" variant="{{ state.att == '' ? 'primary' : 'quiet' }}"/>
+{{#each data.lage.chips}}<button action="state" state="att" value="{{ on ? '' : attention }}" label="{{ label }} · {{ n }}" variant="{{ on ? 'primary' : 'quiet' }}"/>{{/each}}
+</row>
+{{/if}}
+{{#each data.lage.tickets}}
+<box>
+<col gap=2>
+<row gap=2 wrap=true align=baseline>
+<dot color="{{ attColor }}"/>
+{{#if url}}<a href="{{ url }}"><b>{{ key }}</b> ↗</a>{{#else}}<mono>{{ key }}</mono>{{/if}}
+<b>{{ summary }}</b>
+<chip>{{ status }}</chip>
+{{#if followed}}<small><muted>{{ followLabel }}: {{ followed }}</muted></small><button run="todos-ext.follow" with="key={{ key }}, value=-1" emit="todos-changed" label="✕" variant=quiet tip="No longer followed"/>{{/if}}
+{{#if analyzed}}<chip>{{ attLabel }}</chip>{{/if}}
+</row>
+{{#if analyzed}}<text><b>{{ lead }}</b> {{ text }}</text>{{#else}}<muted>Not analyzed in this run.</muted>{{/if}}
+{{#each questions}}<section title="{{ q }}" collapsible=true><text>{{ a }}</text></section>{{/each}}
+{{#each flags}}<small><text tone=warn>{{ text }}</text></small>{{/each}}
+{{#if happened}}
+<section title="What happened" collapsible=true>
+<col gap=1>{{#each happened}}<small><muted>{{ when }}{{#if who}} · {{ who }}{{/if}}</muted> {{ what }}</small>{{/each}}</col>
+</section>
+{{/if}}
+{{#each actions}}
+{{#if ok}}<box tone=good><b>✓ {{ label }}</b><small><muted>{{ detail }} · {{ doneAt }}</muted></small></box>
+{{#else}}<col gap=1>
+<button run="todos-ext.ticket-action" with="run={{ data.lage.runId }}, ticket={{ ticket }}, idx={{ idx }}" into="tact" confirm="{{ label }}?" emit="todos-changed" label="{{ icon }} {{ label }}" tip="{{ why }}"/>
+{{#if why}}<small><muted>{{ why }}</muted></small>{{/if}}
+{{#if failed}}<small><text tone=bad>{{ detail }}</text></small>{{/if}}
+</col>{{/if}}
+{{/each}}
+{{#if todos}}
+<col gap=1>
+{{#each todos}}
+ROW
+{{/each}}
+</col>
+{{/if}}
+</col>
+</box>
+{{/each}}
+{{#if data.lage.empty}}{{#if not data.lage.nTickets}}{{#if not data.lage.none}}<muted>{{ data.lage.empty }}</muted>{{/if}}{{/if}}{{/if}}
+{{#if data.tact.message}}<text tone=good>{{ data.tact.message }}</text>{{/if}}
+{{#if data.tact.error}}<text tone=bad>{{ data.tact.error }}</text>{{/if}}
+{{#if data.lage.left}}
+<section title="No longer on the list since the last run" collapsible=true open=true>
+<col gap=1>
+{{#each data.lage.left}}<small><mono>{{ key }}</mono> <muted>({{ status }})</muted> {{ note }} <button run="todos-ext.follow" with="key={{ key }}, value=1" emit="todos-changed" label="follow" variant=link/></small>{{/each}}
+</col>
+</section>
+{{/if}}
+{{#if data.lage.nListed}}
+<section title="Only listed" aside="{{ data.lage.nListed }}" collapsible=true>
+<datatable source="data.lage.listed">
+<column label="Ticket"><mono>{{ key }}</mono></column>
+<column label="Status"><small>{{ status }}</small></column>
+<column label="Updated"><small><muted>{{ day }}</muted></small></column>
+<column label="Summary"><small>{{ summary }}</small></column>
+</datatable>
+</section>
+{{/if}}
+</col>

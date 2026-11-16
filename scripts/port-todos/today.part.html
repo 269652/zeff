@@ -1,0 +1,40 @@
+<col gap=3>
+{{#if data.today.nothing}}<muted>{{ data.today.nothing }}</muted>{{/if}}
+{{#if data.today.due}}
+<section title="Due and overdue" aside="{{ data.today.due | len }}" open=true collapsible=true>
+<col gap=1>
+{{#each data.today.due}}
+<row gap=2 wrap=false align=baseline>
+<button run="todos-ext.status" with="id={{ id }}, status=done" into="st" emit="todos-changed" label="○" variant=quiet tip="done"/>
+<col fill=true><text>{{ text }}</text></col>
+<small><text tone="{{ overdue ? 'bad' : 'warn' }}">{{ when }}</text></small>
+<small><muted>{{ ref }}</muted></small>
+<button run="todos-ext.status" with="id={{ id }}, status=dismissed" into="st" emit="todos-changed" label="✕" variant=quiet tip="Dismiss — not to be done"/>
+</row>
+{{/each}}
+</col>
+</section>
+{{/if}}
+{{#if data.today.waiting}}
+<section title="Waiting" aside="{{ data.today.waiting | len }}" open=true collapsible=true>
+<col gap=1>{{#each data.today.waiting}}<row gap=2 wrap=false align=baseline><col fill=true><text>{{ text }}</text></col><small><muted>⏳ {{ ago }}</muted></small><small><muted>{{ ref }}</muted></small></row>{{/each}}</col>
+</section>
+{{/if}}
+{{#if data.today.asking}}
+<section title="Agents ask you" aside="{{ data.today.asking | len }}" open=true collapsible=true>
+<col gap=1>{{#each data.today.asking}}<row gap=2 wrap=false align=baseline><text tone=warn>❗</text><col fill=true><text>{{ text }}</text><small><muted>{{ question }}</muted></small></col><small><muted>{{ ref }}</muted></small></row>{{/each}}</col>
+</section>
+{{/if}}
+{{#if data.today.reported}}
+<section title="Reported done by workers" aside="{{ data.today.reported | len }}" open=true collapsible=true>
+<col gap=1>
+{{#each data.today.reported}}
+<row gap=2 wrap=false align=baseline>
+<button run="todos-ext.status" with="id={{ id }}, status=done" into="st" emit="todos-changed" label="○" variant=quiet tip="done"/>
+<text tone=good>✓</text><col fill=true><text>{{ text }}</text><small><muted>{{ by }}{{#if note}}: {{ note }}{{/if}}</muted></small></col><small><muted>{{ ref }}</muted></small>
+</row>
+{{/each}}
+</col>
+</section>
+{{/if}}
+</col>

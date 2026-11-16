@@ -341,6 +341,269 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "todos.activity",
+    group: "todos",
+    label: "What happened to the todos",
+    summary:
+      "What happened to the todos in the last days (default 14), newest first: each made, done, dismissed, reopened or merged — the todo's words then, its ticket, the note (why, or where it came from), who did it in words (you, the briefing, a worker, an agent, Jira …) with where to look, whether it was your own click, whether the todo is open now. Plus the ids of the events that are news (not your clicks), the newest event's id, and the newest one you have seen (null: never looked).",
+    input: [f("days", "number")],
+    output: "{ events: [{ id, todoId, ref, event, ticket, text, note, by: { label, href, title, run }, mine, openNow, at }], newsIds, max, seen }",
+    run: async (i) => {
+      const { todoActivity, activityNewsIds } = await import("@/lib/todos/activity");
+      const { getPref } = await import("@/lib/prefs");
+      const days = Math.max(1, Math.min(60, Number(i.days) || 14));
+      const events = todoActivity({ days }).map((e) => ({ ...e, ref: `T-${e.todoId}`, by: { label: e.by.label, href: e.by.href ?? "", title: e.by.title ?? "", run: e.by.run ?? 0 } }));
+      const seen = getPref<number | null>("todos:activity-seen", null);
+      return { events, newsIds: activityNewsIds(days), max: events.length ? Math.max(...events.map((e) => e.id)) : 0, seen: typeof seen === "number" ? seen : null };
+    },
+  },
+  {
+    name: "todos.activity-seen",
+    group: "todos",
+    label: "The activity you have looked at",
+    summary: "The newest event of the todos' activity you have seen is kept (never lowered): what is newer counts as new. Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (ctx.dryRun) return {};
+      const { getPref, setPref } = await import("@/lib/prefs");
+      const now = getPref<number | null>("todos:activity-seen", null);
+      const id = Number(i.id) || 0;
+      if (now === null || id > now) setPref("todos:activity-seen", id);
+      return {};
+    },
+  },
+  {
+    name: "todos.undo-run",
+    group: "todos",
+    label: "Take back a briefing run's todos",
+    summary: "The todos a briefing run made that you haven't touched are dismissed (those you worked on stay): { dismissed, kept, claims }. Needs the flow's todos permission.",
+    input: [f("run", "number", { required: true })],
+    output: "{ dismissed, kept, claims }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (ctx.dryRun) return { dismissed: 0, kept: 0, claims: 0 };
+      return (await import("@/lib/runs/run-undo")).undoLageRun(Number(i.run));
+    },
+  },
+  {
+    name: "todos.omni",
+    group: "todos",
+    label: "Search the todos and what they are made of",
+    summary:
+      "What a typed text names — tickets, kinds of todo, people, the todos' own words and notes, mails, messages, Jira and GitLab comments, notes, documents, facts — each with the todos it belongs to (never a hit nothing refers to); the first hit is everything with the words together. Closed todos count, dismissed ones don't.",
+    input: [f("q", "text", { required: true })],
+    output: "{ hits: [{ key, kind, title, sub, todoIds }] }",
+    run: async (i) => {
+      const q = String(i.q ?? "").slice(0, 200);
+      const { listTodos } = await import("@/lib/todos/store");
+      const { omniSearch } = await import("@/lib/todos/omnibar");
+      const { isInstalled } = await import("@/plugins/state");
+      const todos = listTodos({ status: "all" }).filter((todo) => todo.status !== "dismissed");
+      const people = isInstalled("people") ? (await import("@/plugins/people/store")).listPeople().map((p) => ({ id: p.id, name: p.name, aliases: p.aliases })) : [];
+      return { hits: await omniSearch(q, todos, { people }) };
+    },
+  },
+  {
+    name: "todos.board",
+    group: "todos",
+    label: "The briefing: its run and its tickets",
+    summary:
+      "The Ticket-Lage the Todos page rests on: whether a run goes on (its step, since when, the AI it uses), the run shown (when, model, duration, cost, how many tickets analyzed), the last failed run's error, the lede and the sources that weren't well, the followed tickets and — per ticket — Jira's facts (summary, status, link), what the run made of it (attention, lead, summary, what happened, flags, suggested ticket changes with what was done, questions), the tickets that left the list and those only listed; the count per attention; the steps run first.",
+    input: [],
+    output: "{ running, phase, since, provider, shown: { id, at, model, durationMs, costUsd, analyzed }, failed: { at, error }, lede, gaps, counts: [{ attention, n }], tickets: [{ key, summary, status, url, followed, analyzed, attention, lead, text, happened, flags, actions: [{ idx, type, label, why, comment, done }], questions }], left: [{ key, summary, status, note }], listed: [{ key, summary, status, updatedAt }], presync: [key] }",
+    run: async () => {
+      const { latestRun, lastGoodRun } = await import("@/lib/runs/store");
+      const { boardRunState } = await import("@/lib/runs/run");
+      const { actionsDone } = await import("@/lib/runs/actions");
+      const { aiChoice } = await import("@/lib/ai");
+      const { AI_PROVIDER_INFO } = await import("@/lib/ai/shared");
+      const { ATTENTIONS } = await import("@/lib/runs/shared");
+      const { getContextPrefs } = await import("@/lib/runs/context-prefs");
+      const { PRESYNC_ORDER } = await import("@/lib/runs/context-prefs-shared");
+      const { stepAvailable } = await import("@/plugins/state");
+      const latest = latestRun();
+      const live = boardRunState();
+      const running = !!live && (latest?.status === "running" || (["mailtodos", "mails", "notetodos", "notes", "calendarmatch", "calendartodos", "documents", "docrelations", "knowledge", "briefingdb", "autoactions"].includes(live.phase) && live.id === latest?.id));
+      const shown = latest?.status === "ok" ? latest : lastGoodRun();
+      const failed = latest?.status === "error" ? latest : null;
+      const ai = aiChoice();
+      const result = shown?.result ?? null;
+      const analysis = new Map((result?.tickets ?? []).map((x) => [x.key, x]));
+      const facts = new Map((shown?.tickets ?? []).map((x) => [x.key, x]));
+      const order = [...(result?.tickets ?? []).map((x) => x.key), ...(shown?.tickets ?? []).filter((x) => x.analyzed && !analysis.has(x.key)).map((x) => x.key)].filter((k) => facts.has(k));
+      const done = shown ? actionsDone(shown.id) : {};
+      const tickets = order.map((key) => {
+        const fct = facts.get(key)!;
+        const a = analysis.get(key);
+        return {
+          key,
+          summary: fct.summary,
+          status: fct.status,
+          url: fct.url ?? "",
+          followed: fct.followed ?? "",
+          analyzed: !!a,
+          attention: a?.attention ?? "ready",
+          lead: a?.lead ?? "",
+          text: a?.summary ?? "",
+          happened: a?.happened ?? [],
+          flags: a?.flags ?? [],
+          actions: (a?.actions ?? []).map((x, idx) => ({ idx, type: x.type, label: x.label, why: x.why, comment: x.comment ?? "", done: done[`${key}#${idx}`] ? { status: done[`${key}#${idx}`].status, detail: done[`${key}#${idx}`].detail, at: done[`${key}#${idx}`].at } : null })),
+          questions: (a?.questions ?? []).map((x) => ({ q: x.q, a: x.a ?? "" })),
+        };
+      });
+      const leftNote = new Map((result?.left ?? []).map((l) => [l.key, l.note]));
+      const pre = getContextPrefs().presync.sources;
+      return {
+        running,
+        phase: live?.phase ?? "",
+        since: live?.since ?? 0,
+        provider: live?.provider ?? `${AI_PROVIDER_INFO[ai.provider].label}${ai.model ? ` · ${ai.model}` : ""}`,
+        shown: shown ? { id: shown.id, at: shown.finishedAt ?? shown.startedAt, model: shown.model ?? "", durationMs: shown.durationMs ?? 0, costUsd: shown.costUsd ?? null, analyzed: shown.tickets.filter((x) => x.analyzed).length } : null,
+        failed: failed ? { at: failed.startedAt, error: failed.error ?? "" } : null,
+        lede: result?.lede ?? "",
+        gaps: result?.gaps ?? [],
+        counts: ATTENTIONS.map((attention) => ({ attention, n: tickets.filter((x) => x.attention === attention).length })).filter((x) => x.n > 0),
+        tickets,
+        left: (shown?.tickets ?? []).filter((x) => x.left).map((x) => ({ key: x.key, summary: x.summary, status: x.status, note: leftNote.get(x.key) ?? x.summary })),
+        listed: (shown?.tickets ?? []).filter((x) => !x.analyzed && !x.left).map((x) => ({ key: x.key, summary: x.summary, status: x.status, updatedAt: x.updatedAt ?? "" })),
+        presync: PRESYNC_ORDER.filter((k) => pre[k] && stepAvailable(k)),
+      };
+    },
+  },
+  {
+    name: "todos.board-run",
+    group: "todos",
+    label: "Run the briefing now — or stop it",
+    summary: "Starts the Ticket-Lage's run (Jira synced first, then the analysis; it runs in the background) or, with stop, stops the run that goes on. { ok, message }. Needs the flow's permissions todos and api.",
+    input: [f("stop", "boolean")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos || !ctx.perms.api) throw new Error("This flow may not run the briefing — grant it the permissions “todos” and “api”.");
+      if (ctx.dryRun) return { ok: true, message: "" };
+      const host = await import("@/lib/host/commands");
+      if (i.stop === true || i.stop === "true") return (await host.stopBoardRunAnywhere()) ? { ok: true, message: "The analysis is being stopped." } : { ok: false, message: "No analysis is running." };
+      const r = await host.startBoardRunAnywhere({ syncJira: true });
+      return { ok: r.ok, message: r.message };
+    },
+  },
+  {
+    name: "todos.ticket-action",
+    group: "todos",
+    label: "Do a change the briefing suggests on a ticket",
+    summary: "One of a briefing run's suggested ticket changes (a transition, an assignee, a comment) done in Jira through Zeff's Jira connection: { ok, message, error }. Needs the flow's permissions todos and api.",
+    input: [f("run", "number", { required: true }), f("ticket", "text", { required: true }), f("idx", "number", { required: true })],
+    output: "{ ok, message, error }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos || !ctx.perms.api) throw new Error("This flow may not change tickets — grant it the permissions “todos” and “api”.");
+      if (ctx.dryRun) return { ok: true, message: "", error: "" };
+      try {
+        const r = await (await import("@/lib/runs/actions")).runTicketAction(Number(i.run), String(i.ticket), Number(i.idx));
+        return { ok: true, message: `${i.ticket}: ${r.detail}.`, error: "" };
+      } catch (e) {
+        return { ok: false, message: "", error: e instanceof Error ? e.message : String(e) };
+      }
+    },
+  },
+  {
+    name: "todos.follow",
+    group: "todos",
+    label: "Follow a ticket — or stop following it",
+    summary: "A ticket followed from the next run (1), no longer followed (-1) or as it comes (0). Needs the flow's todos permission.",
+    input: [f("key", "text", { required: true }), f("value", "number", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      const v = Number(i.value);
+      if (!ctx.dryRun) (await import("@/lib/todos/followed")).setFollowed(String(i.key), v === 1 || v === -1 ? v : 0);
+      return {};
+    },
+  },
+  {
+    name: "todos.recap",
+    group: "todos",
+    label: "What you did on a day",
+    summary:
+      "The recap of a day (default: the last workday): whether it is being written (its step, since when), the newest that worked (when, model, duration, cost, the AI's summary, per ticket its lead and what was done with what was gathered — bookings, todos, workers, Jira, commits, GitLab —, the work on no ticket), the newest one's error when it failed, the days before and after.",
+    input: [f("day", "text")],
+    output: "{ day, before, after, today, running, phase, since, provider, shown, failed, summary, booked, tickets: [{ key, summary, status, url, lead, done, hours, facts: [{ kind, at, text, hours }] }], other: { done, hours, facts } }",
+    run: async (i) => {
+      const { recapsOf, recapState } = await import("@/lib/runs/recap");
+      const { previousWorkday, shiftWorkday, todayIso } = await import("@/lib/runs/recap-shared");
+      const { aiChoice } = await import("@/lib/ai");
+      const { AI_PROVIDER_INFO } = await import("@/lib/ai/shared");
+      const day = typeof i.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(i.day) ? i.day : previousWorkday();
+      const { latest, good } = recapsOf(day);
+      const live = recapState();
+      const running = !!live && live.day === day && latest?.status === "running";
+      const ai = aiChoice();
+      const hours = (facts: { hours?: number }[]) => facts.reduce((s, x) => s + (x.hours ?? 0), 0);
+      const written = new Map((good?.result?.tickets ?? []).map((x) => [x.key, x]));
+      const tickets = (good?.facts.tickets ?? []).map((tk) => ({ key: tk.key, summary: tk.summary, status: tk.status ?? "", url: tk.url ?? "", lead: written.get(tk.key)?.lead ?? "", done: written.get(tk.key)?.done ?? [], hours: hours(tk.facts), facts: tk.facts.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) }));
+      const other = good ? { done: good.result?.other ?? [], hours: hours(good.facts.other), facts: good.facts.other.map((x) => ({ kind: x.kind, at: x.at ?? "", text: x.text, hours: x.hours ?? 0 })) } : { done: [], hours: 0, facts: [] };
+      const later = shiftWorkday(day, 1);
+      return {
+        day,
+        before: shiftWorkday(day, -1),
+        after: later <= todayIso() ? later : "",
+        today: todayIso(),
+        running,
+        phase: running ? (live?.phase ?? "") : "",
+        since: running ? (live?.since ?? 0) : 0,
+        provider: `${AI_PROVIDER_INFO[ai.provider].label}${ai.model ? ` · ${ai.model}` : ""}`,
+        shown: good ? { at: good.finishedAt ?? good.startedAt, model: good.model ?? "", durationMs: good.durationMs ?? 0, costUsd: good.costUsd } : null,
+        failed: latest?.status === "error" ? { error: latest.error ?? "" } : null,
+        summary: good?.result?.summary ?? "",
+        booked: tickets.reduce((s, x) => s + x.hours, 0) + other.hours,
+        tickets,
+        other,
+      };
+    },
+  },
+  {
+    name: "todos.recap-start",
+    group: "todos",
+    label: "Write the recap of a day",
+    summary: "Gathers what you did that day (entries, todos, workers, Jira, commits, GitLab) and has the AI from the settings summarize it, in the background: { ok, message }. Needs the flow's permissions todos and api.",
+    input: [f("day", "text", { required: true })],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos || !ctx.perms.api) throw new Error("This flow may not write the recap — grant it the permissions “todos” and “api”.");
+      if (ctx.dryRun) return { ok: true, message: "" };
+      const r = await (await import("@/lib/host/commands")).startRecapAnywhere(String(i.day));
+      return { ok: r.ok, message: r.message };
+    },
+  },
+  {
+    name: "todos.today",
+    group: "todos",
+    label: "The todos' parts of Today",
+    summary: "What Today shows of the todos: yours due today or before (oldest first), what you wait on for three days or more (oldest first), what agents ask you, what workers and agents report done — each with ref, words, ticket, due day and days to it, how long it has been there.",
+    input: [],
+    output: "{ due: [{ id, ref, text, ticket, due, dueDays, ageDays }], waiting: [...], asking: [{ ..., question }], reported: [{ ..., by, note }] }",
+    run: async () => {
+      const { listTodos } = await import("@/lib/todos/store");
+      const { daysUntil } = await import("@/lib/todos/due-shared");
+      const now = Date.now();
+      const open = listTodos({ status: "open" });
+      const iso = (() => { const d = new Date(now); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+      const row = (x: (typeof open)[number]) => ({ id: x.id, ref: x.ref, text: x.text, ticket: x.ticket, due: x.due ? x.due.slice(0, 10) : "", dueDays: x.due ? daysUntil(x.due.slice(0, 10)) : null, ageDays: Math.floor((now - new Date(x.createdAt).getTime()) / 864e5) });
+      return {
+        due: open.filter((x) => x.owner === "me" && !x.byWorker && x.due && x.due.slice(0, 10) <= iso).sort((a, b) => a.due!.localeCompare(b.due!)).map(row),
+        waiting: open.filter((x) => x.owner === "other" && now - new Date(x.createdAt).getTime() >= 3 * 864e5).sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(row),
+        asking: open.filter((x) => x.needsInput).map((x) => ({ ...row(x), question: x.needsInput })),
+        reported: open.filter((x) => x.workerDone && !x.needsInput).map((x) => ({ ...row(x), by: x.workerDone!.by, note: x.workerDone!.note ?? "" })),
+      };
+    },
+  },
+  {
     name: "todos.sources",
     group: "todos",
     label: "Where the todos come from",

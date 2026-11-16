@@ -1,0 +1,61 @@
+<col gap=3>
+<row gap=2 wrap=true align=center>
+<button action="state" state="recapday" value="{{ data.day.before }}" label="←" tip="Day before"/>
+<heading level=3>{{ data.day.label }}</heading>
+{{#if data.day.after}}<button action="state" state="recapday" value="{{ data.day.after }}" label="→" tip="Day after"/>{{/if}}
+<input bind="recapday" type=date label="Day"/>
+</row>
+<row gap=2 wrap=true align=center>
+{{#if data.day.running}}<small><muted>● {{ data.day.runningText }}</muted></small>{{/if}}
+<button run="todos-ext.recap-start" with="day={{ data.day.day }}" into="rran" emit="todos-changed" label="{{ data.day.again ? 'Summarize again' : 'Summarize' }}" variant=primary disabled="{{ data.day.running }}" tip="Gathers what you did that day (entries, todos, workers, Jira, commits, GitLab) and has the AI from the settings summarize it"/>
+{{#each data.day.facts}}<chip>{{ text }}</chip>{{/each}}
+</row>
+{{#if data.rran.error}}<text tone=bad>{{ data.rran.message }}</text>{{/if}}
+{{#if data.day.failed}}<callout tone=bad><text>{{ data.day.failed }}</text></callout>{{/if}}
+{{#if data.day.empty}}<muted>{{ data.day.empty }}</muted>{{/if}}
+{{#if data.day.summary}}
+<box>
+<col gap=1>
+<small><b>Summary</b> <muted>{{#if data.day.booked}}· {{ data.day.booked }}{{/if}}</muted></small>
+<text>{{ data.day.summary }}</text>
+</col>
+</box>
+{{/if}}
+{{#each data.day.tickets}}
+<box>
+<col gap=2>
+<row gap=2 wrap=true align=baseline>
+{{#if url}}<a href="{{ url }}"><b>{{ key }}</b> ↗</a>{{#else}}<mono>{{ key }}</mono>{{/if}}
+<b>{{ summary }}</b>
+{{#if status}}<chip>{{ status }}</chip>{{/if}}
+<grow/>
+{{#if hours}}<small><muted>{{ hours }}</muted></small>{{/if}}
+</row>
+{{#if lead}}<b>{{ lead }}</b>{{/if}}
+{{#each done}}<text>• {{ text }}</text>{{/each}}
+{{#if nFacts}}
+<section title="Evidence" aside="{{ nFacts }}" collapsible=true>
+<col gap=1>
+{{#each facts}}<row gap=2 wrap=false align=baseline><small><muted>{{ time }}</muted></small><chip>{{ kind }}{{#if hours}} {{ hours }}{{/if}}</chip><small>{{ text }}</small></row>{{/each}}
+</col>
+</section>
+{{/if}}
+</col>
+</box>
+{{/each}}
+{{#if data.day.hasOther}}
+<box>
+<col gap=2>
+<small><b>No ticket</b> {{#if data.day.otherHours}}<muted>· {{ data.day.otherHours }}</muted>{{/if}}</small>
+{{#each data.day.otherDone}}<text>• {{ text }}</text>{{/each}}
+{{#if data.day.nOtherFacts}}
+<section title="Evidence" aside="{{ data.day.nOtherFacts }}" collapsible=true>
+<col gap=1>
+{{#each data.day.otherFacts}}<row gap=2 wrap=false align=baseline><small><muted>{{ time }}</muted></small><chip>{{ kind }}{{#if hours}} {{ hours }}{{/if}}</chip><small>{{ text }}</small></row>{{/each}}
+</col>
+</section>
+{{/if}}
+</col>
+</box>
+{{/if}}
+</col>

@@ -6,6 +6,11 @@
  */
 
 /** One todo's row — the same in every list. `scope`: whether the buttons of a closed todo differ. */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const part = (name: string): string => fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), `${name}.part.html`), "utf8");
 const row = (): string => `<row gap=2 wrap=false align=start>
 <button run="todos-ext.status" with="id={{ id }}, status={{ closed ? 'open' : 'done' }}" into="st" emit="todos-changed" label="{{ closed ? '●' : '○' }}" variant=quiet tip="{{ closed ? ref + ' open again' : ref + ' done' }}"/>
 <col fill=true gap=1>
@@ -44,22 +49,38 @@ const row = (): string => `<row gap=2 wrap=false align=start>
 
 export function todosViewTemplate(): string {
   const r = row();
-  return `<state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value=""/><state name="mins" value=""/><state name="timenote" value=""/>
-<data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}" debounce="300"/>
+  const [panel, activity, omni, runbar, recap, today] = ["panel", "activity", "omni", "runbar", "recap", "today"].map(part);
+  const tickets = part("tickets").replace("ROW", r);
+  return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value=""/><state name="mins" value=""/><state name="timenote" value=""/>
+<data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}, chips={{ state.chips }}" debounce="300" when="{{ state.part == 'todos' and state.scope != 'activity' }}"/>
+<data name="hits" lambda="todos.hits" with="q={{ state.omniq }}" debounce="150" when="{{ state.omniq }}"/>
+<data name="feed" lambda="todos.feed" with="filter={{ state.feedfilter }}" when="{{ state.part == 'todos' and state.scope == 'activity' }}"/>
+<data name="seen" flow="todos-ext.seen" with="id={{ data.feed.max }}" when="{{ state.scope == 'activity' and data.feed.max }}"/>
+<data name="lage" lambda="todos.lage" with="att={{ state.att }}" every="5" when="{{ state.part == 'todos' or state.part == 'tickets' }}"/>
+<data name="day" lambda="todos.day" with="day={{ state.recapday }}" every="5" when="{{ state.part == 'recap' }}"/>
+<data name="today" lambda="todos.heute" when="{{ state.part == 'today' }}"/>
 <data name="p" lambda="todos.panel" with="id={{ state.panel }}" when="{{ state.panel }}"/>
 <on event="todos-changed" action="reload"/>
-{{#if not data.x}}<muted>Loading …</muted>{{#else}}
+{{#if state.part == 'todos' and state.scope != 'activity' and not data.x}}<muted>Loading …</muted>{{#else}}
 <col gap=3>
-<heading level=2>Todos</heading>
+<row gap=1 wrap=true align=center>
+<button action="state" state="part" value="todos" label="Briefing" variant="{{ state.part == 'todos' ? 'primary' : 'quiet' }}"/>
+<button action="state" state="part" value="tickets" label="Tickets" variant="{{ state.part == 'tickets' ? 'primary' : 'quiet' }}"/>
+<button action="state" state="part" value="recap" label="Recap" variant="{{ state.part == 'recap' ? 'primary' : 'quiet' }}"/>
+<button action="state" state="part" value="today" label="Today" variant="{{ state.part == 'today' ? 'primary' : 'quiet' }}"/>
+</row>
+{{#if state.part == 'todos'}}
+${runbar}
 <row gap=1 wrap=true align=center>
 <button action="state" state="scope" value="open" label="Your todos · {{ data.x.counts.open }}" variant="{{ state.scope == 'open' ? 'primary' : 'quiet' }}"/>
 <button action="state" state="scope" value="done" label="Done · {{ data.x.counts.done }}" variant="{{ state.scope == 'done' ? 'primary' : 'quiet' }}"/>
 <button action="state" state="scope" value="worker" label="Worker · {{ data.x.counts.worker }}" variant="{{ state.scope == 'worker' ? 'primary' : 'quiet' }}"/>
+<button action="state" state="scope" value="activity" label="Activity" variant="{{ state.scope == 'activity' ? 'primary' : 'quiet' }}"/>
 </row>
-<row gap=2 wrap=true align=center>
-<col fill=true><input bind="filter" placeholder="Filter todos"/></col>
-{{#if state.filter}}<button action="state" state="filter" value="" label="Clear the filter" variant=link/>{{/if}}
-</row>
+{{#if state.scope == 'activity'}}
+${activity}
+{{#else}}
+${omni}
 <box>
 <row gap=2 wrap=true align=end>
 <col fill=true><input bind="newtext" placeholder="What's to be done?" enter="todo-add"/></col>
@@ -114,6 +135,18 @@ ${r}
 {{#else}}
 <muted>{{ data.x.empty }}</muted>
 {{/if}}
+{{/if}}
+{{/if}}
+{{/if}}
+{{#if state.part == 'tickets'}}
+${runbar}
+${tickets}
+{{/if}}
+{{#if state.part == 'recap'}}
+${recap}
+{{/if}}
+{{#if state.part == 'today'}}
+${today}
 {{/if}}
 </col>
 <dialog bind="dueedit" title="Due date">
