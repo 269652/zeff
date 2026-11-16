@@ -1,6 +1,7 @@
 import { extensionPoint } from "@/lib/plugin-kit/extension-point";
 import type { FlowAction } from "../workspace/flows/actions";
 import type { FieldSpec } from "../workspace/flows/types";
+import { PANEL_ACTIONS } from "./panel-actions";
 
 /**
  * The kernel's reads and writes of the todos for plugins' lambdas and flows (docs/zeff-kernel.md): the open todos with what an AI step needs
@@ -20,6 +21,7 @@ const sourceRef = (s: { source: string } & Record<string, never>): string => {
 };
 
 export const TODO_FLOW_ACTIONS: FlowAction[] = [
+  ...PANEL_ACTIONS,
   {
     name: "todos.open",
     group: "todos",
@@ -99,7 +101,16 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const down = (t: { flaggedAt: string | null; workerDone: unknown; status: string; id: number }) => (t.flaggedAt ? -2 : t.workerDone && t.status === "open" ? -1 : deferred[t.id]?.deferred ? 1 : 0);
       const sorted = scope === "open" ? [...list].sort((x, y) => down(x) - down(y) || (rank.get(x.ticket) ?? 99) - (rank.get(y.ticket) ?? 99) || x.id - y.id) : list;
       const shown = sorted.slice(0, limit);
-      const rows = shown.map((t) => {
+      // What the row shows beside its words: the time reported, the worker on it, who is away, where it came from.
+      const { withAlternatives } = await import("@/lib/todos/alternatives");
+      const { workingRuns } = await import("@/lib/work/live-driver");
+      const rich = new Map(withAlternatives(shown).map((x) => [x.id, x]));
+      const busy = workingRuns();
+      const seenAt = (await import("@/lib/prefs")).getPref<string | null>("todos:seen-at", null);
+      const rows = shown.map((t0) => {
+        const t = rich.get(t0.id) ?? t0;
+        const msgs = t.refs.filter((r) => r.startsWith("mail:"));
+        const origin = !t.ticket ? (t.refs.some((r) => r.startsWith("event:")) ? "Calendar" : msgs.length ? "Mail" : "") : "";
         const d = deferred[t.id];
         const isDeferred = !!d?.deferred;
         return {
@@ -129,6 +140,13 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           byWorker: t.byWorker,
           createdAt: t.createdAt,
           doneAt: t.doneAt ?? "",
+          origin,
+          away: (t.away ?? []).map((a) => ({ name: a.name, until: a.until })),
+          workRun: busy[t.id] ?? 0,
+          timeMinutes: (t.time ?? []).reduce((a, r) => a + r.minutes, 0),
+          mrs: (t.links?.mrs ?? []).map((m) => ({ ref: m.ref, url: m.url, title: m.title, state: m.state ?? "" })),
+          merged: !!t.mergedAt && !!seenAt && t.mergedAt > seenAt,
+          isNew: t.status === "open" && !t.byWorker && !!seenAt && Math.max(Date.parse(t.createdAt), t.mergedAt ? Date.parse(t.mergedAt) : 0) > Date.parse(seenAt),
         };
       });
       const cards = getTicketCards(shown.map((t) => t.ticket).concat(shown.flatMap((t) => t.alsoTickets)));
@@ -240,7 +258,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     run: async (i) => {
       const store = await import("@/lib/todos/store");
       const { withAlternatives } = await import("@/lib/todos/alternatives");
-      const { TODO_KIND_LABELS, opTitle, opNote, sourcesOf } = await import("@/lib/todos/shared");
+      const { TODO_KIND_LABELS, opTitle, opNote, sourcesOf, noteSyncState } = await import("@/lib/todos/shared");
       const { translator } = await import("@/lib/i18n/shared");
       const { actionHref } = await import("@/plugins/actions/catalog");
       const base = store.getTodo(Number(i.id));
@@ -264,12 +282,24 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
         due: t.due ? t.due.slice(0, 10) : "",
         source: t.source ?? "",
         note: t.note ?? "",
-        notes: [...(t.relatedNotes ?? []), ...t.userNotes].map((n) => ({ at: n.at, by: n.by ?? "", text: n.text, url: n.url ?? "", urlLabel: n.urlLabel ?? "", instruction: n.kind === "instruction", own: !n.by && n.kind !== "instruction" && n.from === undefined, from: n.from ?? 0 })),
+        notes: [...(t.relatedNotes ?? []), ...t.userNotes].map((n) => ({ at: n.at, by: n.by ?? "", text: n.text, url: n.url ?? "", urlLabel: n.urlLabel ?? "", instruction: n.kind === "instruction", own: !n.by && n.kind !== "instruction" && n.from === undefined, from: n.from ?? 0, jira: noteSyncState(n) })),
         ops: t.ops.map((op, index) => {
           const note = opNote(op, en);
-          return { index, type: op.type, title: opTitle(op, en), heading: note.heading, detail: note.detail ?? "", body: note.body ?? "", runnable: !actionHref(op) };
+          const href = actionHref(op);
+          const o = op as unknown as Record<string, unknown>;
+          return { index, type: op.type, title: opTitle(op, en), heading: note.heading, detail: note.detail ?? "", body: note.body ?? "", runnable: !href, href: href ?? "", hasText: "body" in op, transfer: op.type === "bank-transfer" ? { name: String(o.name ?? ""), iban: String(o.iban ?? ""), bic: String(o.bic ?? ""), amount: String(o.amount ?? ""), purpose: String(o.purpose ?? "") } : null };
         }),
         opsWhy: t.autoOpsWhy ?? "",
+        alternatives: t.alternatives ?? [],
+        payment: await (async () => {
+          const people = (await import("@/plugins/state")).isInstalled("people") ? (await import("@/plugins/people/details")).payees() : [];
+          const p = (await import("@/lib/girocode-todo")).paymentForTodo(t, people);
+          return p ? { name: p.name, iban: p.iban, bic: p.bic ?? "", amount: p.amount ?? 0, purpose: p.purpose, via: p.via } : null;
+        })(),
+        knowledge: t.knowledge ? { pages: t.knowledge.pages.map((x) => ({ title: x.title, url: x.url, snippet: (x.summary ?? x.snippet ?? "").slice(0, 300) })), entities: t.knowledge.entities.map((x) => ({ name: x.name, type: x.type, summary: x.summary.slice(0, 300) })), links: t.knowledge.links ?? [], repo: t.knowledge.repo ?? null } : null,
+        draft: t.draft ?? "",
+        recurrence: t.recurrence ? t.recurrence.freq : "",
+        away: (t.away ?? []).map((a) => ({ name: a.name, until: a.until })),
         blockedBy: t.blockedBy ?? "",
         time: (t.time ?? []).map((r) => ({ id: r.id, ref: r.ref, minutes: r.minutes, note: r.note, by: r.by, at: r.at })),
         totalMinutes: (t.time ?? []).reduce((a, r) => a + r.minutes, 0),

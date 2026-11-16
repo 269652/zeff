@@ -28,6 +28,62 @@
 <button run="todos-ext.status" with="id={{ data.p.id }}, status=dismissed" into="st" then="panel=" emit="todos-changed" label="Dismiss — doesn't apply"/>
 {{/if}}
 </row>
+{{#if not data.p.closed}}
+<row gap=2 wrap=true>
+<button run="todos-ext.draft" with="id={{ data.p.id }}" into="draft" label="Draft a reply" tip="Draft a reply — the AI writes it from the history, you send it"/>
+<button run="todos-ext.suggest" with="id={{ data.p.id }}" into="sugg" emit="todos-changed" label="Suggest actions" tip="The AI now makes ready-made actions for this todo (message, comment, mail, meeting…)"/>
+<button run="todos-ext.worked-on" with="id={{ data.p.id }}" into="wk" label="Worked on it" tip="A booking suggestion for the todo (its ticket, its recorded time)"/>
+</row>
+{{#if data.sugg.message}}<small><text tone="{{ data.sugg.ok ? 'good' : 'bad' }}">{{ data.sugg.message }}{{ data.sugg.error }}</text></small>{{/if}}
+{{#if data.wk.message}}<small><text tone=good>{{ data.wk.message }}</text></small>{{/if}}
+{{#if data.draft.ok}}
+<box>
+<col gap=2>
+<small><muted>To {{ data.draft.to }} · {{ data.draft.channel }}</muted></small>
+<text pre=true>{{ data.draft.text }}</text>
+<small><muted>Nothing is sent — you copy it and send it.</muted></small>
+<row gap=2 wrap=true>
+<copy text="{{ data.draft.text }}" label="Copy"/>
+{{#if data.draft.openUrl}}<button run="todos-ext.open-reply" with="url={{ data.draft.openUrl }}" into="opened" label="Open {{ data.draft.channel }}" tip="Bring {{ data.draft.channel }} to the front in the automation Chrome"/>{{/if}}
+<button run="todos-ext.draft" with="id={{ data.p.id }}" into="draft" label="Draft again" tip="Draft again (the current text is replaced)"/>
+</row>
+{{#if data.opened.message}}<small><text tone=good>{{ data.opened.message }}</text></small>{{/if}}
+{{#if data.opened.error}}<small><text tone=bad>{{ data.opened.error }}</text></small>{{/if}}
+</col>
+</box>
+{{/if}}
+{{#if data.draft.error}}<small><text tone=bad>{{ data.draft.error }}</text></small>{{/if}}
+<section title="Instruction to Copilot" collapsible=true>
+<col gap=2>
+<input bind="instr" rows=3 placeholder="What should Copilot do on {{ data.p.ref }}? (e.g. “Check whether this is already done on the branch”)"/>
+<row gap=2 wrap=true>
+<button run="todos-ext.instruct" with="id={{ data.p.id }}, text={{ state.instr }}" into="instd" then="instr=" emit="todos-changed" label="To Copilot" disabled="{{ not state.instr }}" tip="Copilot CLI gets the todo with all its context; the result shows on the Code tab."/>
+<button action="state" state="instr" value="Instruction: look in the repo and the context and report" label="Research" variant=quiet/>
+<button action="state" state="instr" value="Instruction: where it stands and the next step" label="Summarize" variant=quiet/>
+<button action="state" state="instr" value="Instruction: draft the reply or message it is about" label="Reply" variant=quiet/>
+</row>
+{{#if data.instd.message}}<small><text tone="{{ data.instd.ok ? 'good' : 'bad' }}">{{ data.instd.message }}{{ data.instd.error }}</text></small>{{/if}}
+</col>
+</section>
+{{/if}}
+{{#if data.p.payment}}
+<section title="Pay with GiroCode" collapsible=true>
+<col gap=2>
+<girocode name="{{ data.p.payment.name }}" iban="{{ data.p.payment.iban }}" bic="{{ data.p.payment.bic }}" amount="{{ data.p.payment.amount }}" purpose="{{ data.p.payment.purpose }}"/>
+<small><muted>{{ data.p.payment.title }}</muted></small>
+<small><muted>{{ data.p.payment.line }}</muted></small>
+</col>
+</section>
+{{/if}}
+{{#if data.p.nAlternatives}}{{#if not data.p.closed}}
+<section title="Other ways" aside="{{ data.p.nAlternatives }}" collapsible=true open=true>
+<col gap=1>
+{{#each data.p.alternatives}}<button run="todos-ext.alternative" with="id={{ data.p.id }}, label={{ label }}" into="alt" confirm="{{ title }}?" emit="todos-changed" label="{{ label }}" tip="{{ title }}"/>{{/each}}
+{{#if data.alt.message}}<small><text tone=good>{{ data.alt.message }}</text></small>{{/if}}
+{{#if data.alt.error}}<small><text tone=bad>{{ data.alt.error }}</text></small>{{/if}}
+</col>
+</section>
+{{/if}}{{/if}}
 {{#if data.p.nOps}}
 <section title="Actions" aside="{{ data.p.nOps }}" open=true collapsible=true>
 <col gap=2>
@@ -39,7 +95,26 @@
 <col fill=true gap=1>
 <b>⚡ {{ heading }}</b>
 {{#if detail}}<small><muted>{{ detail }}</muted></small>{{/if}}
-{{#if body}}<text pre=true>{{ body }}</text>{{/if}}
+{{#if editBody}}
+{{#if state.opedit == only}}
+<input bind="optext" rows=5 value="{{ body }}"/>
+<row gap=2><button run="todos-ext.op-text" with="id={{ data.p.id }}, index={{ index }}, text={{ state.optext }}" into="opsave" then="opedit=" emit="todos-changed" label="Save" variant=primary disabled="{{ not state.optext }}"/><button action="state" state="opedit" value="" label="Cancel"/></row>
+{{#else}}
+<text pre=true>{{ body }}</text>
+<button action="state" state="opedit" value="{{ only }}" then="optext={{ body }}" label="✎" variant=quiet tip="Change the text before it is sent"/>
+{{/if}}
+{{#else}}{{#if body}}<text pre=true>{{ body }}</text>{{/if}}{{/if}}
+{{#if transfer}}{{#if not data.p.closed}}
+<section title="Transfer" collapsible=true>
+<col gap=1>
+<input bind="tf_name" label="Name" value="{{ transfer.name }}"/>
+<input bind="tf_iban" label="IBAN" value="{{ transfer.iban }}"/>
+<grid cols=3 gap=2 min=120><input bind="tf_bic" label="BIC" value="{{ transfer.bic }}"/><input bind="tf_amount" label="Amount" value="{{ transfer.amount }}"/><input bind="tf_purpose" label="Purpose" value="{{ transfer.purpose }}"/></grid>
+<button run="todos-ext.transfer" with="id={{ data.p.id }}, index={{ index }}, name={{ state.tf_name }}, iban={{ state.tf_iban }}, bic={{ state.tf_bic }}, amount={{ state.tf_amount }}, purpose={{ state.tf_purpose }}" into="opsave" emit="todos-changed" label="Save" variant=primary/>
+</col>
+</section>
+{{/if}}{{/if}}
+{{#if href}}<small><a href="{{ href }}">Open ↗</a></small>{{/if}}
 </col>
 {{#if not data.p.closed}}
 {{#if runnable}}<button run="todos-ext.run" with="id={{ data.p.id }}, only={{ only }}" into="ran" confirm="Zeff does it itself, no AI" emit="todos-changed" label="Run" variant=primary/>{{/if}}
@@ -50,6 +125,8 @@
 {{/each}}
 {{#if data.p.manyRunnable}}{{#if not data.p.closed}}<button run="todos-ext.run" with="id={{ data.p.id }}" into="ran" emit="todos-changed" label="Run all" variant=primary/>{{/if}}{{/if}}
 {{#if data.ran.message}}<text tone=good>{{ data.ran.message }}</text>{{/if}}
+{{#if data.opsave.message}}<small><text tone=good>{{ data.opsave.message }}</text></small>{{/if}}
+{{#if data.opsave.error}}<small><text tone=bad>{{ data.opsave.error }}</text></small>{{/if}}
 </col>
 </section>
 {{/if}}
@@ -60,9 +137,17 @@
 <row gap=2 wrap=false align=start>
 <col fill=true gap=1>
 <small><muted>{{#if by}}{{ by }} · {{/if}}{{ when }}</muted></small>
+{{#if state.noteedit == at}}
+<input bind="notetext" rows=4 value="{{ text }}"/>
+<row gap=2><button run="todos-ext.note-edit" with="id={{ data.p.id }}, at={{ at }}, text={{ state.notetext }}" then="noteedit=" emit="todos-changed" label="Save" variant=primary disabled="{{ not state.notetext }}"/><button action="state" state="noteedit" value="" label="Cancel"/></row>
+{{#else}}
 <text pre=true>{{ text }}</text>
+{{/if}}
 {{#if url}}<small><a href="{{ url }}">{{ urlLabel }} ↗</a></small>{{/if}}
+{{#if sync}}<small><muted>{{ sync }}</muted></small>{{/if}}
 </col>
+{{#if mine}}<button action="state" state="noteedit" value="{{ at }}" then="notetext={{ text }}" label="✎" variant=quiet tip="Change the note"/>
+{{#if data.p.ticket}}<button run="todos-ext.note-sync" with="id={{ data.p.id }}, at={{ at }}" into="jira" confirm="Put this note on {{ data.p.ticket }} in Jira as a comment?" emit="todos-changed" label="Jira" variant=quiet tip="Put the note on the ticket in Jira as a comment"/>{{/if}}{{/if}}
 {{#if mine}}<button run="todos-ext.note-remove" with="id={{ data.p.id }}, at={{ at }}" emit="todos-changed" label="✕" variant=quiet tip="Remove this note"/>{{/if}}
 </row>
 </box>
@@ -71,13 +156,15 @@
 <row gap=2>
 <button run="todos-ext.note" with="id={{ data.p.id }}, text={{ state.newnote }}" into="noted" then="newnote=" emit="todos-changed" label="Save note" variant=primary disabled="{{ not state.newnote }}"/>
 </row>
+{{#if data.jira.message}}<small><text tone=good>{{ data.jira.message }}</text></small>{{/if}}
+{{#if data.jira.error}}<small><text tone=bad>{{ data.jira.error }}</text></small>{{/if}}
 {{#if data.noted.message}}<small><text tone=good>{{ data.noted.message }}</text></small>{{/if}}
 </col>
 </section>
 <section title="Time" aside="{{ data.p.totalTime }}" collapsible=true open=true>
 <col gap=2>
 {{#each data.p.time}}
-<row gap=2 wrap=false align=baseline><b>{{ length }}</b><col fill=true><small>{{ note }}</small><small><muted>{{ by }} · {{ when }}</muted></small></col></row>
+<row gap=2 wrap=false align=baseline><b>{{ length }}</b><col fill=true><small>{{ note }}</small><small><muted>{{ by }} · {{ when }}</muted></small></col>{{#if mine}}<button run="todos-ext.time-delete" with="id={{ id }}" emit="todos-changed" label="✕" variant=quiet tip="Remove this record"/>{{/if}}</row>
 {{/each}}
 <row gap=2 wrap=true align=end>
 <input bind="mins" type=number placeholder="Add time you spent on this todo"/>
@@ -96,6 +183,16 @@
 <col gap=1>{{#each data.p.planned}}{{#if path}}<small><b>{{ path }}</b></small>{{/if}}{{#each steps}}<small>→ {{ text }} <muted>({{ kind }})</muted></small>{{/each}}{{/each}}</col>
 </section>
 {{/if}}
+{{#if data.p.nKnowledge}}
+<section title="Knowledge" aside="{{ data.p.nKnowledge }}" collapsible=true>
+<col gap=1>
+{{#if data.p.knowledge.repo}}<box><b>{{ data.p.knowledge.repo.name }}</b><markdown value="{{ data.p.knowledge.repo.summary }}"/></box>{{/if}}
+{{#each data.p.knowledge.pages}}<small><a href="{{ url }}">{{ title }} ↗</a> <muted>{{ snippet }}</muted></small>{{/each}}
+{{#each data.p.knowledge.entities}}<small><b>{{ name }}</b> <muted>{{ type }} — {{ summary }}</muted></small>{{/each}}
+{{#each data.p.knowledge.links}}<small><a href="{{ url }}">{{ label }} ↗</a></small>{{/each}}
+</col>
+</section>
+{{/if}}
 {{#if data.p.nSources}}
 <section title="Context" aside="{{ data.p.nSources }}" collapsible=true open=true>
 <col gap=2>
@@ -104,6 +201,7 @@
 <small><muted>{{ label }}{{#if author}} · {{ author }}{{/if}}{{#if when}} · {{ when }}{{/if}}</muted></small>
 {{#if headline}}<b>{{ headline }}</b>{{/if}}
 {{#if text}}<text pre=true>{{ text }}</text>{{/if}}
+{{#if not data.p.closed}}<button run="todos-ext.context-dismiss" with="id={{ data.p.id }}, ref={{ ref }}" emit="todos-changed" label="✕" variant=quiet tip="Not about this todo"/>{{/if}}
 </box>
 {{/each}}
 </col>

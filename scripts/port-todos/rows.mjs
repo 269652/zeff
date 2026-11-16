@@ -10,6 +10,8 @@ export function rowTools(t, lang) {
   const FREQ = { daily: t("every day"), weekly: t("every week"), monthly: t("every month"), yearly: t("every year") };
   const dueText = (d, due) => (d < 0 ? (d === -1 ? t("overdue (1 day)") : t("overdue ({n} days)", { n: -d })) : d === 0 ? t("due today") : d === 1 ? t("due tomorrow") : t("due {date}", { date: day(due) }));
 
+  const minutes = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`);
+  const ORIGIN = { Calendar: t("From an appointment — no ticket"), Mail: t("From a mail — no ticket") };
   const view = (r, data) => {
     const links = (keys) => keys.map((k) => ({ key: k, url: data.tickets?.[k]?.url ?? "", title: data.tickets?.[k]?.summary ?? "" }));
     const closed = r.status !== "open";
@@ -52,6 +54,20 @@ export function rowTools(t, lang) {
       doneAt: r.doneAt ? day(r.doneAt.slice(0, 10), true) : "",
       opsCount: r.opsCount,
       notesCount: r.notesCount,
+      origin: r.origin ? (ORIGIN[r.origin] ?? "") : "",
+      away: closed ? [] : (r.away ?? []).map((a) => ({ text: t("{name} is away until {date}", { name: a.name, date: new Date(a.until).toLocaleDateString(locale) }) })),
+      workRun: r.workRun ? `/work?run=${r.workRun}` : "",
+      workRef: r.workRun ? t("{ref} working ↗", { ref: `W-${r.workRun}` }) : "",
+      time: r.timeMinutes ? `⏱ ${minutes(r.timeMinutes)}` : "",
+      timeTip: r.timeMinutes ? t("{n} time record(s) — click for them", { n: "…" }) : "",
+      mrs: (r.mrs ?? []).map((m) => ({ ...m, label: `MR ${m.ref} ↗`, tip: `${m.title}${m.state ? ` (${m.state})` : ""}`, tag: m.state && /merged/i.test(m.state) ? t("merged") : m.state && /closed/i.test(m.state) ? t("closed") : m.state && /approved/i.test(m.state) ? t("approved") : "" })),
+      merged: !closed && r.merged ? t("⇄ merged") : "",
+      mergedTip: t("A duplicate of this todo was merged into it — the Activity tab has the details"),
+      isNew: !!r.isNew && !closed && !asking,
+      copyTip: t("Copy “{text}” — for Copilot / Claude Code", { text: r.ref }),
+      doneTip: closed ? t("{ref} open again", { ref: r.ref }) : t("{ref} done", { ref: r.ref }),
+      dismissTip: t("Dismiss {ref}", { ref: r.ref }),
+      recurring: !!r.repeats,
     };
   };
   return { view, day, locale, dueText };

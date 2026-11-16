@@ -12,9 +12,10 @@ import { fileURLToPath } from "node:url";
 
 const part = (name: string): string => fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), `${name}.part.html`), "utf8");
 const row = (): string => `<row gap=2 wrap=false align=start>
-<button run="todos-ext.status" with="id={{ id }}, status={{ closed ? 'open' : 'done' }}" into="st" emit="todos-changed" label="{{ closed ? '●' : '○' }}" variant=quiet tip="{{ closed ? ref + ' open again' : ref + ' done' }}"/>
+<button run="todos-ext.status" with="id={{ id }}, status={{ closed ? 'open' : 'done' }}" into="st" emit="todos-changed" label="{{ closed ? '●' : '○' }}" variant=quiet tip="{{ doneTip }}"/>
 <col fill=true gap=1>
 <row gap=1 wrap=true align=baseline>
+{{#if isNew}}<dot color="#f59e0b"/>{{/if}}
 {{#if flagged}}<text tone=bad tip="important">⚑</text>{{/if}}
 {{#if asking}}<text tone=warn tip="{{ askingTip }}">❗</text>{{/if}}
 {{#if waiting}}{{#if not closed}}<text tip="Waiting for others">⏳</text>{{/if}}{{/if}}
@@ -23,15 +24,38 @@ const row = (): string => `<row gap=2 wrap=false align=start>
 </row>
 <row gap=1 wrap=true align=center>
 <copy text="{{ ref }}" label="{{ ref }}"/>
+{{#if workRun}}<small><muted>·</muted> <a href="{{ workRun }}" tip="Open the run working on it on the Code tab">{{ workRef }}</a></small>{{/if}}
+{{#if origin}}<small><muted>· {{ origin }}</muted></small>{{/if}}
 {{#if ticket}}<small><muted>·</muted> {{#if ticketUrl}}<a href="{{ ticketUrl }}" tip="{{ ticketTitle }}">{{ ticket }} ↗</a>{{#else}}<mono>{{ ticket }}</mono>{{/if}}</small>{{/if}}
-{{#each also}}<small><muted>+</muted> {{#if url}}<a href="{{ url }}" tip="{{ title }}">{{ key }} ↗</a>{{#else}}<mono>{{ key }}</mono>{{/if}}</small>{{/each}}
+{{#each also}}<small><muted>+</muted> {{#if url}}<a href="{{ url }}" tip="Linked ticket — it's about the same thing">{{ key }} ↗</a>{{#else}}<mono>{{ key }}</mono>{{/if}}</small>{{/each}}
+{{#each mrs}}<small><muted>·</muted> <a href="{{ url }}" tip="{{ tip }}">{{ label }}</a>{{#if tag}} <muted>({{ tag }})</muted>{{/if}}</small>{{/each}}
 <small><muted>· {{ kind }}</muted></small>
-{{#if due}}<button action="state" state="dueedit" value="{{ id }}" label="{{ dueLabel }}" variant="{{ dueTone == 'bad' ? 'danger' : 'quiet' }}"/>{{#else}}{{#if not closed}}<button action="state" state="dueedit" value="{{ id }}" label="+ {{ dueLabel }}" variant=quiet/>{{/if}}{{/if}}
-{{#if repeat}}<small><muted>↻ {{ repeat }}</muted></small>{{/if}}
+{{#if due}}<box tone="{{ dueTone }}" action="state" state="dueedit" value="{{ id }}"><small>{{ dueLabel }}</small></box>{{#else}}{{#if not closed}}<button action="state" state="dueedit" value="{{ id }}" label="+ {{ dueLabel }}" variant=quiet/>{{/if}}{{/if}}
+{{#if repeat}}
+<menu label="↻ {{ repeat }}" tip="Comes back — change">
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=" emit="todos-changed" label="does not repeat" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=daily" emit="todos-changed" label="every day" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=weekly" emit="todos-changed" label="every week" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=monthly" emit="todos-changed" label="every month" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=yearly" emit="todos-changed" label="every year" variant=quiet/>
+{{#if not closed}}<button run="todos-ext.regenerate" with="id={{ id }}" into="regen" emit="todos-changed" label="make again" variant=quiet tip="Make the calendar appointments and the actions again"/>{{/if}}
+</menu>
+{{#if due}}<a href="/api/todos/{{ id }}/calendar" tip="Show it in the calendar">📅</a>{{/if}}
+{{#else}}{{#if not closed}}
+<menu label="repeat" tip="Make it come back">
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=daily" emit="todos-changed" label="every day" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=weekly" emit="todos-changed" label="every week" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=monthly" emit="todos-changed" label="every month" variant=quiet/>
+<button run="todos-ext.recurrence" with="id={{ id }}, freq=yearly" emit="todos-changed" label="every year" variant=quiet/>
+</menu>
+{{/if}}{{/if}}
+{{#if merged}}<small><text tone=warn tip="{{ mergedTip }}">· {{ merged }}</text></small>{{/if}}
+{{#if time}}<button action="state" state="panel" value="{{ id }}" label="{{ time }}" variant=quiet/>{{/if}}
 {{#if reported}}<small><text tone=good tip="{{ reportedTip }}">· ✓ {{ reported }}</text></small>{{/if}}
 {{#if suggested}}<small><muted tip="{{ suggestedTip }}">· ✓ {{ suggested }}</muted></small>{{/if}}
 {{#if deferred}}<small><muted>· deferred</muted></small>{{/if}}
-{{#if backUp}}<small><text tone=warn>· {{ backUp }}</text></small>{{/if}}
+{{#if backUp}}<small><text tone=warn tip="You had moved it down — it's back on top">· {{ backUp }}</text></small>{{/if}}
+{{#each away}}<small><text tone=warn tip="Read from their messages — a question to them waits until they are back">· 🏖 {{ text }}</text></small>{{/each}}
 </row>
 {{#if note}}<small><muted>{{ note }}</muted></small>{{#else}}{{#if source}}<small><muted>{{ source }}</muted></small>{{/if}}{{/if}}
 {{#if asking}}<small><text tone=warn><b>Waiting for you:</b> {{ asking }}</text></small>{{/if}}
@@ -42,7 +66,7 @@ const row = (): string => `<row gap=2 wrap=false align=start>
 {{#if not closed}}
 <button run="todos-ext.flag" with="id={{ id }}, flagged={{ flagged ? 'false' : 'true' }}" emit="todos-changed" label="⚑" variant="{{ flagged ? 'danger' : 'quiet' }}" tip="{{ flagged ? 'Not important' : 'Important' }}"/>
 {{#if deferred}}<button run="todos-ext.defer" with="id={{ id }}, deferred=false" emit="todos-changed" label="↑" variant=quiet tip="Bring back to the top"/>{{#else}}<button run="todos-ext.defer" with="id={{ id }}, deferred=true" emit="todos-changed" label="↓" variant=quiet tip="Move down — set aside for now (comes back up when something happens, in 3 days at the latest)"/>{{/if}}
-<button run="todos-ext.status" with="id={{ id }}, status=dismissed" into="st" emit="todos-changed" label="✕" variant=quiet tip="Dismiss — doesn't apply"/>
+<button run="todos-ext.status" with="id={{ id }}, status=dismissed" into="st" emit="todos-changed" label="✕" variant=quiet tip="{{ dismissTip }}"/>
 {{/if}}
 </row>
 </row>`;
@@ -51,7 +75,7 @@ export function todosViewTemplate(): string {
   const r = row();
   const [panel, activity, omni, runbar, recap, today] = ["panel", "activity", "omni", "runbar", "recap", "today"].map(part);
   const tickets = part("tickets").replace("ROW", r);
-  return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value=""/><state name="mins" value=""/><state name="timenote" value=""/>
+  return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="instr" value=""/><state name="opedit" value=""/><state name="optext" value=""/><state name="noteedit" value=""/><state name="notetext" value=""/><state name="tf_name" value=""/><state name="tf_iban" value=""/><state name="tf_bic" value=""/><state name="tf_amount" value=""/><state name="tf_purpose" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value=""/><state name="mins" value=""/><state name="timenote" value=""/>
 <data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}, chips={{ state.chips }}" debounce="300" when="{{ state.part == 'todos' and state.scope != 'activity' }}"/>
 <data name="hits" lambda="todos.hits" with="q={{ state.omniq }}" debounce="150" when="{{ state.omniq }}"/>
 <data name="feed" lambda="todos.feed" with="filter={{ state.feedfilter }}" when="{{ state.part == 'todos' and state.scope == 'activity' }}"/>
@@ -63,6 +87,7 @@ export function todosViewTemplate(): string {
 <state name="aq" value=""/><state name="abusy" value=""/>
 <data name="pick" lambda="documents.attach-list" with="q={{ state.aq }}" when="{{ state.panel }}" debounce="250"/>
 <on event="attached" action="reload"/>
+<data name="listseen" flow="todos-ext.list-seen" when="{{ state.part == 'todos' and state.scope == 'open' and data.x }}"/>
 <on event="todos-changed" action="reload"/>
 {{#if state.part == 'todos' and state.scope != 'activity' and not data.x}}<muted>Loading …</muted>{{#else}}
 <col gap=3>
@@ -161,139 +186,6 @@ ${today}
 </row>
 </col>
 </dialog>
-<dialog bind="panel" title="{{ data.p.ref }}" side=right wide=true>
-{{#if data.p.found}}
-<col gap=3>
-{{#if state.textedit == data.p.id}}
-<col gap=2>
-<input bind="edittext" rows=3 value="{{ data.p.text }}"/>
-<row gap=2>
-<button run="todos-ext.text" with="id={{ data.p.id }}, text={{ state.edittext }}" then="textedit=" done="Saved." emit="todos-changed" label="Save" variant=primary disabled="{{ not state.edittext }}"/>
-<button action="state" state="textedit" value="" label="Cancel"/>
-</row>
-</col>
-{{#else}}
-<row gap=2 wrap=false align=start>
-<col fill=true><heading level=3>{{ data.p.text }}</heading></col>
-{{#if not data.p.closed}}<button action="state" state="textedit" value="{{ data.p.id }}" then="edittext={{ data.p.text }}" label="✎" variant=quiet tip="Change the words"/>{{/if}}
-</row>
-{{/if}}
-<row gap=2 wrap=true align=center>
-<small><muted>{{ data.p.kind }}</muted></small>
-{{#if data.p.ticket}}<small><mono>{{ data.p.ticket }}</mono></small>{{/if}}
-{{#if data.p.due}}<small><muted>{{ data.p.due }}</muted></small>{{/if}}
-{{#if data.p.waiting}}<small><muted>⏳ Waiting for others</muted></small>{{/if}}
-</row>
-{{#if data.p.note}}<small><muted>{{ data.p.note }}</muted></small>{{#else}}{{#if data.p.source}}<small><muted>{{ data.p.source }}</muted></small>{{/if}}{{/if}}
-<row gap=2 wrap=true>
-{{#if data.p.closed}}<button run="todos-ext.status" with="id={{ data.p.id }}, status=open" into="st" emit="todos-changed" label="Open again"/>{{#else}}
-<button run="todos-ext.status" with="id={{ data.p.id }}, status=done" into="st" then="panel=" emit="todos-changed" label="Done" variant=primary/>
-<button run="todos-ext.status" with="id={{ data.p.id }}, status=dismissed" into="st" then="panel=" emit="todos-changed" label="Dismiss — doesn't apply"/>
-{{/if}}
-</row>
-{{#if data.p.nOps}}
-<section title="Actions" aside="{{ data.p.nOps }}" open=true collapsible=true>
-<col gap=2>
-{{#if data.p.opsWhy}}<small><text tone=muted>{{ data.p.opsWhy }}</text></small>{{/if}}
-{{#if data.p.blockedBy}}<small><text tone=warn>{{ data.p.blockedBy }}</text></small>{{/if}}
-{{#each data.p.ops}}
-<box>
-<row gap=2 wrap=false align=start>
-<col fill=true gap=1>
-<b>⚡ {{ heading }}</b>
-{{#if detail}}<small><muted>{{ detail }}</muted></small>{{/if}}
-{{#if body}}<text pre=true>{{ body }}</text>{{/if}}
-</col>
-{{#if not data.p.closed}}
-{{#if runnable}}<button run="todos-ext.run" with="id={{ data.p.id }}, only={{ only }}" into="ran" confirm="Zeff does it itself, no AI" emit="todos-changed" label="Run" variant=primary/>{{/if}}
-<button run="todos-ext.op-remove" with="id={{ data.p.id }}, index={{ index }}" emit="todos-changed" label="✕" variant=quiet tip="Remove this action"/>
-{{/if}}
-</row>
-</box>
-{{/each}}
-{{#if data.p.manyRunnable}}{{#if not data.p.closed}}<button run="todos-ext.run" with="id={{ data.p.id }}" into="ran" emit="todos-changed" label="Run all" variant=primary/>{{/if}}{{/if}}
-{{#if data.ran.message}}<text tone=good>{{ data.ran.message }}</text>{{/if}}
-</col>
-</section>
-{{/if}}
-<section title="Notes" aside="{{ data.p.nNotes }}" open=true collapsible=true>
-<col gap=2>
-{{#each data.p.notes}}
-<box>
-<row gap=2 wrap=false align=start>
-<col fill=true gap=1>
-<small><muted>{{#if by}}{{ by }} · {{/if}}{{ when }}</muted></small>
-<text pre=true>{{ text }}</text>
-{{#if url}}<small><a href="{{ url }}">{{ urlLabel }} ↗</a></small>{{/if}}
-</col>
-{{#if mine}}<button run="todos-ext.note-remove" with="id={{ data.p.id }}, at={{ at }}" emit="todos-changed" label="✕" variant=quiet tip="Remove this note"/>{{/if}}
-</row>
-</box>
-{{/each}}
-<input bind="newnote" rows=3 placeholder="Add a note — context for the briefing, workers and agents"/>
-<row gap=2>
-<button run="todos-ext.note" with="id={{ data.p.id }}, text={{ state.newnote }}" into="noted" then="newnote=" emit="todos-changed" label="Save note" variant=primary disabled="{{ not state.newnote }}"/>
-</row>
-{{#if data.noted.message}}<small><text tone=good>{{ data.noted.message }}</text></small>{{/if}}
-</col>
-</section>
-<section title="Time" aside="{{ data.p.totalTime }}" collapsible=true open=true>
-<col gap=2>
-{{#each data.p.time}}
-<row gap=2 wrap=false align=baseline><b>{{ length }}</b><col fill=true><small>{{ note }}</small><small><muted>{{ by }} · {{ when }}</muted></small></col></row>
-{{/each}}
-<row gap=2 wrap=true align=end>
-<input bind="mins" type=number placeholder="Add time you spent on this todo"/>
-<col fill=true><input bind="timenote" placeholder="What was done"/></col>
-<button run="todos-ext.time" with="id={{ data.p.id }}, minutes={{ state.mins }}, note={{ state.timenote }}" then="mins=" emit="todos-changed" label="Add time" disabled="{{ not state.mins }}"/>
-</row>
-</col>
-</section>
-{{#if data.p.mrs}}
-<section title="Merge requests" collapsible=true open=true>
-<col gap=1>{{#each data.p.mrs}}<small><a href="{{ url }}">MR {{ ref }} ↗</a> <muted>{{ title }}{{#if state}} ({{ state }}){{/if}}</muted></small>{{/each}}</col>
-</section>
-{{/if}}
-{{#if data.p.nPlanned}}
-<section title="Path" collapsible=true>
-<col gap=1>{{#each data.p.planned}}{{#if path}}<small><b>{{ path }}</b></small>{{/if}}{{#each steps}}<small>→ {{ text }} <muted>({{ kind }})</muted></small>{{/each}}{{/each}}</col>
-</section>
-{{/if}}
-<section title="Attach a document" collapsible=true>
-<col gap=2>
-<row gap=2 align=center>
-<col fill=true><search bind="aq" placeholder="Search the documents …"/></col>
-<upload bind="abusy" run="documents.add" with="todo={{ state.panel }}" multiple=true label="Upload new …" done="Attached — being read …" emit="attached"/>
-</row>
-<small><muted>An attached document is context for this todo.</muted></small>
-{{#each data.pick.items}}
-<row gap=2 align=start wrap=false>
-<text>{{ icon }}</text>
-<col fill=true><b>{{ title }}</b> <small><muted>{{ sizeText }}</muted></small><small><muted>{{ text }}</muted></small></col>
-<button run="documents.attach" with="todo={{ state.panel }}, doc={{ id }}" done="Attached." emit="attached" label="Attach"/>
-</row>
-{{/each}}
-{{#if data.pick.items}}{{#else}}<small><muted>{{ data.pick.count ? 'Nothing matches.' : 'No documents yet — upload one.' }}</muted></small>{{/if}}
-</col>
-</section>
-{{#if data.p.nSources}}
-<section title="Context" aside="{{ data.p.nSources }}" collapsible=true open=true>
-<col gap=2>
-{{#each data.p.sources}}
-<box>
-<small><muted>{{ label }}{{#if author}} · {{ author }}{{/if}}{{#if when}} · {{ when }}{{/if}}</muted></small>
-{{#if headline}}<b>{{ headline }}</b>{{/if}}
-{{#if text}}<text pre=true>{{ text }}</text>{{/if}}
-</box>
-{{/each}}
-</col>
-</section>
-{{/if}}
-</col>
-{{#else}}
-<muted>Loading …</muted>
-{{/if}}
-</dialog>
-{{/if}}
+${panel}{{/if}}
 `;
 }

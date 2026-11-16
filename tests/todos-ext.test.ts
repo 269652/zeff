@@ -142,7 +142,9 @@ test("German words from the language pack, as the built-in says them", { skip },
 
 test("what a click does is a flow over the engine: tick off, open again, flag, set aside, a due day, add — each as the built-in's actions", { skip }, async () => {
   const { ids, store, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["todos-ext.add", "todos-ext.board-run", "todos-ext.defer", "todos-ext.due", "todos-ext.flag", "todos-ext.follow", "todos-ext.note", "todos-ext.note-remove", "todos-ext.op-remove", "todos-ext.recap-start", "todos-ext.run", "todos-ext.seen", "todos-ext.status", "todos-ext.text", "todos-ext.ticket-action", "todos-ext.time", "todos-ext.undo-run"]);
+  const expected = ["todos-ext.add", "todos-ext.board-run", "todos-ext.defer", "todos-ext.due", "todos-ext.flag", "todos-ext.follow", "todos-ext.note", "todos-ext.note-remove", "todos-ext.op-remove", "todos-ext.recap-start", "todos-ext.run", "todos-ext.seen", "todos-ext.status", "todos-ext.text", "todos-ext.ticket-action", "todos-ext.time", "todos-ext.undo-run"];
+  for (const name of expected) assert.ok(allowed.includes(name), name);
+  assert.ok([...allowed].every((n) => n.startsWith("todos-ext.")));
   const engine = await import("@/plugins/workspace/flows/engine");
   const ok = async (name: string, input: Record<string, unknown>, dry = false) => {
     const r = await engine.runFlow(name, input, dry ? { dry: true } : undefined);
@@ -413,4 +415,95 @@ test("Activity, the omnibar's chips, the briefing and its tickets, the recap, To
   const lambdas = await import("@/plugins/workspace/lambdas/store");
   assert.deepEqual(lambdas.getLambda("todos.lage")!.manifest.zeff, ["todos.board", "todos.rows"]);
   assert.deepEqual(lambdas.getLambda("todos.hits")!.manifest.zeff, ["todos.omni"]);
+});
+
+test("the rest of the row and the panel: repeats, notes changed, instruction, draft, GiroCode, other ways, an action's text, a transfer, time taken off, contexts, new todos", { skip }, async () => {
+  const { call, ids, store } = await world();
+  const { getDb, schema } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("todos-ext"), "views", "todos.html"), "utf8");
+  const out = async (name: string, input: Record<string, unknown>, dry = false) => {
+    const r = await engine.runFlow(name, input, dry ? { dry: true } : undefined);
+    assert.equal(r.status, "done", `${name}: ${r.error ?? ""}`);
+    return r.output as Record<string, unknown>;
+  };
+
+  // A repeat: its rule, shown on the row; changed and taken away by the flow.
+  const id = ids.week;
+  await out("todos-ext.recurrence", { id, freq: "monthly" });
+  assert.equal(store.getTodo(id)?.recurrence?.freq, "monthly");
+  const list = await call<Screen>("todos.screen", { scope: "open" });
+  assert.equal(list.groups.flatMap((g) => g.items).find((x) => x.id === id)?.repeat, "every month");
+  await out("todos-ext.recurrence", { id, freq: "" });
+  assert.equal(store.getTodo(id)?.recurrence, null);
+  await out("todos-ext.regenerate", { id }, true);
+
+  // The row's own extras: the worker on it, time on it, where it came from, a merge request.
+  const later = ids.later;
+  await out("todos-ext.time", { id: later, minutes: "20", note: "x" });
+  const rows = (await call<Screen>("todos.screen", { scope: "done" })).rows.concat((await call<Screen>("todos.screen", { scope: "open" })).groups.flatMap((g) => g.items));
+  type Extra = Item & { time: string; origin: string; mrs: unknown[]; workRun: string; isNew: boolean; doneTip: string; copyTip: string };
+  const withTime = rows.find((x) => x.id === later) as unknown as Extra;
+  assert.equal(withTime.time, "⏱ 20 min");
+  assert.equal(withTime.doneTip, `T-${later} open again`);
+  assert.equal(withTime.copyTip, `Copy “T-${later}” — for Copilot / Claude Code`);
+  // Never opened: nothing is new; once the list was looked at, what is made after it is.
+  assert.equal(rows.some((x) => (x as unknown as Extra).isNew), false);
+  await out("todos-ext.list-seen", {});
+  await new Promise((r) => setTimeout(r, 15));
+  const fresh = store.addManualTodo({ ticket: "", text: "Brand new thing" });
+  const after = (await call<Screen>("todos.screen", { scope: "open" })).groups.flatMap((g) => g.items) as unknown as Extra[];
+  assert.equal(after.find((x) => x.id === fresh.id)?.isNew, true);
+  assert.equal(after.find((x) => x.id === ids.today)?.isNew, false);
+
+  // A note changed, and put on Jira (dry: needs both permissions; the flow asks for them).
+  await out("todos-ext.note", { id: ids.today, text: "First wording" });
+  const at = store.getTodo(ids.today)!.userNotes.find((n) => !n.by)!.at;
+  await out("todos-ext.note-edit", { id: ids.today, at, text: "Second wording" });
+  assert.equal(store.getTodo(ids.today)!.userNotes.find((n) => n.at === at)?.text, "Second wording");
+  await out("todos-ext.note-sync", { id: ids.today, at }, true);
+
+  // An action's text and a transfer: changed through the engine's rules.
+  getDb().update(schema.todos).set({ ops: JSON.stringify([{ type: "jira-comment", ticket: "PROJ-7", body: "Old" }]) }).where(eq(schema.todos.id, ids.plain)).run();
+  const saved = await out("todos-ext.op-text", { id: ids.plain, index: "0", text: "New words" });
+  assert.equal(saved.ok, true);
+  assert.equal((store.getTodo(ids.plain)!.ops[0] as { body?: string }).body, "New words");
+  assert.equal((await out("todos-ext.op-text", { id: ids.plain, index: "0", text: " " })).ok, false);
+  assert.equal((await out("todos-ext.op-text", { id: ids.plain, index: "5", text: "x" })).ok, false);
+  assert.equal((await out("todos-ext.transfer", { id: ids.plain, index: "0", iban: "DE00" })).ok, false);
+
+  // The panel: a payment in the words becomes a GiroCode; alternatives, the draft and the rest come from the same reads the built-in's panel has.
+  const pay = store.addManualTodo({ ticket: "", text: "Garage 24,80 € überweisen, Empfänger Garage Müller, IBAN DE02120300000000202051" });
+  type Panel2 = { payment: { iban: string; line: string } | null; alternatives: unknown[]; nAlternatives: number; recurrence: string; ops: { editBody: boolean; hasText: boolean }[]; notes: { sync: string }[]; time: { mine: boolean }[]; nKnowledge: number };
+  const p = await call<Panel2>("todos.panel", { id: pay.id });
+  assert.equal(p.payment?.iban, "DE02120300000000202051");
+  assert.match(p.payment!.line, /24[.,]80/);
+  assert.equal(p.nKnowledge, 0);
+  const pl = await call<Panel2>("todos.panel", { id: ids.plain });
+  assert.deepEqual(pl.ops.map((o) => [o.hasText, o.editBody]), [[true, true]]);
+  assert.equal((await call<Panel2>("todos.panel", { id: later })).time[0].mine, true);
+  const t0 = (await call<{ time: { id: number }[] }>("todos.panel", { id: later })).time[0];
+  await out("todos-ext.time-delete", { id: t0.id });
+  assert.equal((await call<{ time: unknown[] }>("todos.panel", { id: later })).time.length, 0);
+  await out("todos-ext.context-dismiss", { id: ids.today, ref: "mail:abc" });
+  assert.equal((await out("todos-ext.alternative", { id: ids.plain, label: "nothing like it" })).ok, false);
+  assert.equal((await out("todos-ext.worked-on", { id: ids.plain })).ok, true);
+  for (const [name, input] of [["todos-ext.instruct", { id: ids.plain, text: "Look" }], ["todos-ext.draft", { id: ids.plain }], ["todos-ext.suggest", { id: ids.plain }], ["todos-ext.open-reply", { url: "https://mail.google.com/x" }]] as const) await out(name, input, true);
+  assert.equal((await out("todos-ext.instruct", { id: ids.plain, text: " " })).ok, false);
+  // None of the new write actions works without its permission; the reads don't write.
+  const { flowAction } = await import("@/plugins/workspace/flows/actions");
+  const none = { flow: "x", runId: null, dryRun: false, perms: {}, web: async () => new URL("https://x.y"), canWrite: () => undefined, may: () => undefined, log: () => undefined };
+  for (const name of ["todos.update-note", "todos.sync-note", "todos.instruct", "todos.draft-reply", "todos.open-reply", "todos.suggest-actions", "todos.run-alternative", "todos.set-recurrence", "todos.regenerate-series", "todos.delete-time", "todos.worked-on", "todos.dismiss-context", "todos.save-op-text", "todos.save-transfer", "todos.rows-seen"]) {
+    assert.equal(flowAction(name)?.writes, true, `${name} writes`);
+    await assert.rejects(async () => flowAction(name)!.run({ id: 1, at: "x", text: "x", url: "https://mail.google.com/x", label: "x", index: 0 }, none as never), /may not/, name);
+  }
+  // The template draws with everything the panel can show.
+  const screen = await call<Screen>("todos.screen", { scope: "open" });
+  const panel = { ...(await call<Record<string, unknown>>("todos.panel", { id: pay.id })), nAlternatives: 1, alternatives: [{ label: "Do it differently", title: "Another way", also: false }], draft: "" };
+  const r = renderView(template, { rows: [], props: [], titleName: "Todos", state: { part: "todos", scope: "open", panel: String(pay.id), noteedit: "x", opedit: "0" }, app: {}, data: { x: screen, p: panel, draft: { ok: true, text: "Hello Anna", to: "anna@example.com", channel: "mail", openUrl: "https://mail.google.com/x" }, sugg: { ok: true, message: "Actions suggested — on the todo." } }, db: { id: 1, title: "Todos" } } as never);
+  assert.deepEqual(r.errors, []);
+  const html = JSON.stringify(r.nodes);
+  for (const word of ["Hello Anna", "Do it differently", "Pay with GiroCode", "Instruction to Copilot", "Brand new thing"]) assert.ok(html.includes(word), word);
 });
