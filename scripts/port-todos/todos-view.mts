@@ -32,19 +32,21 @@ const row = (): string => `<row gap=2 wrap=false align=start>
 {{#if asking}}<small><text tone=warn><b>Waiting for you:</b> {{ asking }}</text></small>{{/if}}
 {{#if lastError}}<small><text tone=bad>{{ lastError }}</text></small>{{/if}}
 </col>
-{{#if not closed}}
 <row gap=1 wrap=false align=center>
+<button action="state" state="panel" value="{{ id }}" label="⋯" variant=quiet tip="Open the todo"/>
+{{#if not closed}}
 <button run="todos-ext.flag" with="id={{ id }}, flagged={{ flagged ? 'false' : 'true' }}" emit="todos-changed" label="⚑" variant="{{ flagged ? 'danger' : 'quiet' }}" tip="{{ flagged ? 'Not important' : 'Important' }}"/>
 {{#if deferred}}<button run="todos-ext.defer" with="id={{ id }}, deferred=false" emit="todos-changed" label="↑" variant=quiet tip="Bring back to the top"/>{{#else}}<button run="todos-ext.defer" with="id={{ id }}, deferred=true" emit="todos-changed" label="↓" variant=quiet tip="Move down — set aside for now (comes back up when something happens, in 3 days at the latest)"/>{{/if}}
 <button run="todos-ext.status" with="id={{ id }}, status=dismissed" into="st" emit="todos-changed" label="✕" variant=quiet tip="Dismiss — doesn't apply"/>
-</row>
 {{/if}}
+</row>
 </row>`;
 
 export function todosViewTemplate(): string {
   const r = row();
-  return `<state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/>
+  return `<state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value=""/><state name="mins" value=""/><state name="timenote" value=""/>
 <data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}" debounce="300"/>
+<data name="p" lambda="todos.panel" with="id={{ state.panel }}" when="{{ state.panel }}"/>
 <on event="todos-changed" action="reload"/>
 {{#if not data.x}}<muted>Loading …</muted>{{#else}}
 <col gap=3>
@@ -122,6 +124,122 @@ ${r}
 <button run="todos-ext.due" with="id={{ state.dueedit }}, due=" then="dueedit=" emit="todos-changed" label="no due date"/>
 </row>
 </col>
+</dialog>
+<dialog bind="panel" title="{{ data.p.ref }}" side=right wide=true>
+{{#if data.p.found}}
+<col gap=3>
+{{#if state.textedit == data.p.id}}
+<col gap=2>
+<input bind="edittext" rows=3 value="{{ data.p.text }}"/>
+<row gap=2>
+<button run="todos-ext.text" with="id={{ data.p.id }}, text={{ state.edittext }}" then="textedit=" done="Saved." emit="todos-changed" label="Save" variant=primary disabled="{{ not state.edittext }}"/>
+<button action="state" state="textedit" value="" label="Cancel"/>
+</row>
+</col>
+{{#else}}
+<row gap=2 wrap=false align=start>
+<col fill=true><heading level=3>{{ data.p.text }}</heading></col>
+{{#if not data.p.closed}}<button action="state" state="textedit" value="{{ data.p.id }}" then="edittext={{ data.p.text }}" label="✎" variant=quiet tip="Change the words"/>{{/if}}
+</row>
+{{/if}}
+<row gap=2 wrap=true align=center>
+<small><muted>{{ data.p.kind }}</muted></small>
+{{#if data.p.ticket}}<small><mono>{{ data.p.ticket }}</mono></small>{{/if}}
+{{#if data.p.due}}<small><muted>{{ data.p.due }}</muted></small>{{/if}}
+{{#if data.p.waiting}}<small><muted>⏳ Waiting for others</muted></small>{{/if}}
+</row>
+{{#if data.p.note}}<small><muted>{{ data.p.note }}</muted></small>{{#else}}{{#if data.p.source}}<small><muted>{{ data.p.source }}</muted></small>{{/if}}{{/if}}
+<row gap=2 wrap=true>
+{{#if data.p.closed}}<button run="todos-ext.status" with="id={{ data.p.id }}, status=open" into="st" emit="todos-changed" label="Open again"/>{{#else}}
+<button run="todos-ext.status" with="id={{ data.p.id }}, status=done" into="st" then="panel=" emit="todos-changed" label="Done" variant=primary/>
+<button run="todos-ext.status" with="id={{ data.p.id }}, status=dismissed" into="st" then="panel=" emit="todos-changed" label="Dismiss — doesn't apply"/>
+{{/if}}
+</row>
+{{#if data.p.nOps}}
+<section title="Actions" aside="{{ data.p.nOps }}" open=true collapsible=true>
+<col gap=2>
+{{#if data.p.opsWhy}}<small><text tone=muted>{{ data.p.opsWhy }}</text></small>{{/if}}
+{{#if data.p.blockedBy}}<small><text tone=warn>{{ data.p.blockedBy }}</text></small>{{/if}}
+{{#each data.p.ops}}
+<box>
+<row gap=2 wrap=false align=start>
+<col fill=true gap=1>
+<b>⚡ {{ heading }}</b>
+{{#if detail}}<small><muted>{{ detail }}</muted></small>{{/if}}
+{{#if body}}<text pre=true>{{ body }}</text>{{/if}}
+</col>
+{{#if not data.p.closed}}
+{{#if runnable}}<button run="todos-ext.run" with="id={{ data.p.id }}, only={{ only }}" into="ran" confirm="Zeff does it itself, no AI" emit="todos-changed" label="Run" variant=primary/>{{/if}}
+<button run="todos-ext.op-remove" with="id={{ data.p.id }}, index={{ index }}" emit="todos-changed" label="✕" variant=quiet tip="Remove this action"/>
+{{/if}}
+</row>
+</box>
+{{/each}}
+{{#if data.p.manyRunnable}}{{#if not data.p.closed}}<button run="todos-ext.run" with="id={{ data.p.id }}" into="ran" emit="todos-changed" label="Run all" variant=primary/>{{/if}}{{/if}}
+{{#if data.ran.message}}<text tone=good>{{ data.ran.message }}</text>{{/if}}
+</col>
+</section>
+{{/if}}
+<section title="Notes" aside="{{ data.p.nNotes }}" open=true collapsible=true>
+<col gap=2>
+{{#each data.p.notes}}
+<box>
+<row gap=2 wrap=false align=start>
+<col fill=true gap=1>
+<small><muted>{{#if by}}{{ by }} · {{/if}}{{ when }}</muted></small>
+<text pre=true>{{ text }}</text>
+{{#if url}}<small><a href="{{ url }}">{{ urlLabel }} ↗</a></small>{{/if}}
+</col>
+{{#if mine}}<button run="todos-ext.note-remove" with="id={{ data.p.id }}, at={{ at }}" emit="todos-changed" label="✕" variant=quiet tip="Remove this note"/>{{/if}}
+</row>
+</box>
+{{/each}}
+<input bind="newnote" rows=3 placeholder="Add a note — context for the briefing, workers and agents"/>
+<row gap=2>
+<button run="todos-ext.note" with="id={{ data.p.id }}, text={{ state.newnote }}" into="noted" then="newnote=" emit="todos-changed" label="Save note" variant=primary disabled="{{ not state.newnote }}"/>
+</row>
+{{#if data.noted.message}}<small><text tone=good>{{ data.noted.message }}</text></small>{{/if}}
+</col>
+</section>
+<section title="Time" aside="{{ data.p.totalTime }}" collapsible=true open=true>
+<col gap=2>
+{{#each data.p.time}}
+<row gap=2 wrap=false align=baseline><b>{{ length }}</b><col fill=true><small>{{ note }}</small><small><muted>{{ by }} · {{ when }}</muted></small></col></row>
+{{/each}}
+<row gap=2 wrap=true align=end>
+<input bind="mins" type=number placeholder="Add time you spent on this todo"/>
+<col fill=true><input bind="timenote" placeholder="What was done"/></col>
+<button run="todos-ext.time" with="id={{ data.p.id }}, minutes={{ state.mins }}, note={{ state.timenote }}" then="mins=" emit="todos-changed" label="Add time" disabled="{{ not state.mins }}"/>
+</row>
+</col>
+</section>
+{{#if data.p.mrs}}
+<section title="Merge requests" collapsible=true open=true>
+<col gap=1>{{#each data.p.mrs}}<small><a href="{{ url }}">MR {{ ref }} ↗</a> <muted>{{ title }}{{#if state}} ({{ state }}){{/if}}</muted></small>{{/each}}</col>
+</section>
+{{/if}}
+{{#if data.p.nPlanned}}
+<section title="Path" collapsible=true>
+<col gap=1>{{#each data.p.planned}}{{#if path}}<small><b>{{ path }}</b></small>{{/if}}{{#each steps}}<small>→ {{ text }} <muted>({{ kind }})</muted></small>{{/each}}{{/each}}</col>
+</section>
+{{/if}}
+{{#if data.p.nSources}}
+<section title="Context" aside="{{ data.p.nSources }}" collapsible=true open=true>
+<col gap=2>
+{{#each data.p.sources}}
+<box>
+<small><muted>{{ label }}{{#if author}} · {{ author }}{{/if}}{{#if when}} · {{ when }}{{/if}}</muted></small>
+{{#if headline}}<b>{{ headline }}</b>{{/if}}
+{{#if text}}<text pre=true>{{ text }}</text>{{/if}}
+</box>
+{{/each}}
+</col>
+</section>
+{{/if}}
+</col>
+{{#else}}
+<muted>Loading …</muted>
+{{/if}}
 </dialog>
 {{/if}}
 `;

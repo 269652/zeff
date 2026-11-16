@@ -1,0 +1,58 @@
+import { tFor } from "./lib.mjs";
+
+/**
+ * What a todo's panel shows (views/todos.html reads it as data.p): the todo whole — its words, kind, ticket, due day, where it came from and its note; your notes and
+ * the runs' reports; its actions in words (what each does, the text it would send) with whether Zeff can run it here; the time reported on it; its merge requests; the
+ * steps planned after it; and the comments, messages and mails it comes from. The kernel's read `todos.detail` does the looking (the built-in panel's own data); this puts the
+ * words of the page on it. event: { id }.
+ */
+export async function handler(event, context) {
+  const t = tFor(context.language);
+  const lang = context.language === "de" || context.language === "es" ? context.language : "en";
+  const locale = { de: "de-DE", es: "es-ES", en: "en-GB" }[lang];
+  const id = Number(event?.id);
+  if (!Number.isInteger(id) || id <= 0) return { found: false };
+  const d = await context.zeff.call("todos.detail", { id });
+  if (!d.found) return { found: false, error: t("Unknown todo.") };
+
+  const stamp = (at) => {
+    if (!at) return "";
+    const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(at) ? `${at}T00:00:00` : at.includes("T") ? at : `${at.replace(" ", "T")}Z`);
+    if (Number.isNaN(date.getTime())) return String(at);
+    return `${date.toLocaleDateString(locale, { day: "numeric", month: "short" })}, ${date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`;
+  };
+  const minutes = (m) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}`);
+  const KINDS = { reply: t("Reply"), comment: t("Comment"), update: t("Update ticket"), implement: t("Implement"), fix: t("Fix"), test: t("Test"), review: t("Review"), clarify: t("Clarify"), document: t("Docs"), deploy: t("Deploy"), merge: t("Deliver"), other: t("Other") };
+
+  const runnable = d.ops.filter((o) => o.runnable);
+  return {
+    found: true,
+    id: d.id,
+    ref: d.ref,
+    text: d.text,
+    kind: KINDS[d.kind] ?? d.kindLabel,
+    closed: d.status !== "open",
+    status: d.status,
+    waiting: d.owner === "other",
+    ticket: d.ticket,
+    due: d.due,
+    source: d.source ? t("Source: {source}", { source: d.source }) : "",
+    note: d.note,
+    notes: d.notes.map((n) => ({ ...n, when: stamp(n.at), by: n.by ? String(n.by) : "", mine: n.own })),
+    nNotes: d.notes.length,
+    ops: d.ops.map((o) => ({ ...o, only: String(o.index) })),
+    nOps: d.ops.length,
+    nRunnable: runnable.length,
+    manyRunnable: runnable.length > 1,
+    opsWhy: d.opsWhy ? t("Suggested: {why}", { why: d.opsWhy }) : "",
+    blockedBy: d.blockedBy ? t("Waiting: {what} — the GitLab sync notices once it's ready", { what: d.blockedBy }) : "",
+    time: d.time.map((r) => ({ ...r, when: stamp(r.at), length: minutes(r.minutes) })),
+    nTime: d.time.length,
+    totalTime: d.totalMinutes ? minutes(d.totalMinutes) : "",
+    mrs: d.mrs,
+    planned: d.planned,
+    nPlanned: d.planned.reduce((n, p) => n + p.steps.length, 0),
+    sources: d.sources.map((s) => ({ ...s, when: stamp(s.at) })),
+    nSources: d.sources.length,
+  };
+}

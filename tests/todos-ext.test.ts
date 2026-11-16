@@ -142,7 +142,7 @@ test("German words from the language pack, as the built-in says them", { skip },
 
 test("what a click does is a flow over the engine: tick off, open again, flag, set aside, a due day, add — each as the built-in's actions", { skip }, async () => {
   const { ids, store, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["todos-ext.add", "todos-ext.defer", "todos-ext.due", "todos-ext.flag", "todos-ext.status"]);
+  assert.deepEqual([...allowed].sort(), ["todos-ext.add", "todos-ext.defer", "todos-ext.due", "todos-ext.flag", "todos-ext.note", "todos-ext.note-remove", "todos-ext.op-remove", "todos-ext.run", "todos-ext.status", "todos-ext.text", "todos-ext.time"]);
   const engine = await import("@/plugins/workspace/flows/engine");
   const ok = async (name: string, input: Record<string, unknown>, dry = false) => {
     const r = await engine.runFlow(name, input, dry ? { dry: true } : undefined);
@@ -235,4 +235,67 @@ test("the screen's template draws without an error: each list, a filter, a due d
   // The same template is the view of the package's database.
   const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("todos-ext"), "todos.package.json"), "utf8")) as { items: { schema?: { views: { template: string }[] } }[] };
   assert.equal(pkg.items.find((i) => i.schema)?.schema?.views[0].template, template);
+});
+
+type Panel = { found: boolean; id: number; ref: string; text: string; kind: string; closed: boolean; notes: { at: string; by: string; text: string; mine: boolean; when: string }[]; ops: { index: number; title: string; heading: string; body: string; runnable: boolean; only: string }[]; nOps: number; opsWhy: string; time: { minutes: number; length: string; note: string }[]; totalTime: string; sources: unknown[]; error?: string };
+
+test("a todo's panel: its notes, actions in words, time — and what the panel does is the engine's: note, time, remove an action, run is held back without api", { skip }, async () => {
+  const { call, ids, store } = await world();
+  const { getDb, schema } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const id = ids.soon;
+  getDb().update(schema.todos).set({ ops: JSON.stringify([{ type: "jira-comment", ticket: "PROJ-7", body: "Rico, kannst du bitte approven?" }, { type: "jira-comment", ticket: "PROJ-8", body: "Zweiter Kommentar" }]), autoOpsWhy: "Rico wartet auf eine Erinnerung" }).where(eq(schema.todos.id, id)).run();
+  const p0 = await call<Panel>("todos.panel", { id });
+  assert.equal(p0.found, true);
+  assert.equal(p0.ref, `T-${id}`);
+  assert.equal(p0.text, "Send the form");
+  assert.equal(p0.nOps, 2);
+  assert.equal(p0.ops[0].runnable, true);
+  assert.match(p0.ops[0].body, /approven/);
+  assert.equal(p0.opsWhy, "Suggested: Rico wartet auf eine Erinnerung");
+  assert.equal((await call<Panel>("todos.panel", { id: 999999 })).found, false);
+  assert.equal((await engine.runFlow("todos-ext.text", { id, text: "Send the form to Anna" })).status, "done");
+  assert.equal(store.getTodo(id)?.text, "Send the form to Anna");
+  // An action taken off (its place), a place that isn't there said so.
+  const removed = await engine.runFlow("todos-ext.op-remove", { id, index: "0" });
+  assert.equal(removed.status, "done", removed.error ?? "");
+  assert.equal(store.getTodo(id)?.ops.length, 1);
+  assert.equal((store.getTodo(id)?.ops[0] as { ticket?: string }).ticket, "PROJ-8");
+  assert.equal(((await engine.runFlow("todos-ext.op-remove", { id, index: "7" })).output as { ok: boolean }).ok, false);
+  // A note (saved as yours: it can be taken away), time by hand.
+  const noted = await engine.runFlow("todos-ext.note", { id, text: "Ask Rico first" });
+  assert.equal(noted.status, "done", noted.error ?? "");
+  assert.equal(((await engine.runFlow("todos-ext.note", { id, text: "  " })).output as { ok: boolean }).ok, false);
+  const timed = await engine.runFlow("todos-ext.time", { id, minutes: "75", note: "Read the form" });
+  assert.equal(timed.status, "done", timed.error ?? "");
+  const p1 = await call<Panel>("todos.panel", { id });
+  assert.deepEqual(p1.notes.filter((n) => n.mine).map((n) => [n.text, n.mine]), [["Ask Rico first", true]]);
+  assert.deepEqual(p1.time.map((r) => [r.minutes, r.length, r.note]), [[75, "1 h 15 min", "Read the form"]]);
+  assert.equal(p1.totalTime, "1 h 15 min");
+  const own = () => store.getTodo(id)!.userNotes.filter((n) => !n.by && n.kind !== "instruction");
+  assert.equal(own().length, 1);
+  // The note taken away again.
+  const at = own()[0].at;
+  assert.equal((await engine.runFlow("todos-ext.note-remove", { id, at })).status, "done");
+  assert.equal(own().length, 0);
+  // Running them: dry run touches nothing; a flow without "api" is refused (the package's flow asks for both).
+  assert.equal((await engine.runFlow("todos-ext.run", { id, only: "" }, { dry: true })).status, "done");
+  const { flowAction } = await import("@/plugins/workspace/flows/actions");
+  const todosOnly = { flow: "x", runId: null, dryRun: false, perms: { todos: true }, web: async () => new URL("https://x.y"), canWrite: () => undefined, may: () => undefined, log: () => undefined };
+  await assert.rejects(async () => flowAction("todos.run-ops")!.run({ id }, todosOnly as never), /permissions “todos” and “api”/);
+  assert.equal(flowAction("todos.run-ops")?.writes, true);
+  assert.ok(!flowAction("todos.detail")?.writes);
+  assert.deepEqual((await import("@/plugins/workspace/lambdas/store")).getLambda("todos.panel")!.manifest.zeff, ["todos.detail"]);
+  // The panel draws.
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("todos-ext"), "views", "todos.html"), "utf8");
+  const x = await call<Screen>("todos.screen", { scope: "open" });
+  const p2 = await call<Panel>("todos.panel", { id });
+  for (const state of [{ scope: "open", panel: String(id) }, { scope: "open", panel: String(id), textedit: String(id), edittext: "x" }]) {
+    const r = renderView(template, { rows: [], props: [], titleName: "Todos", state, app: {}, data: { x, p: p2, ran: { message: "done" }, noted: { message: "Note saved" } }, db: { id: 1, title: "Todos" } } as never);
+    assert.deepEqual(r.errors, []);
+    const drawn = JSON.stringify(r.nodes);
+    for (const word of ["Zweiter Kommentar", "Suggested: Rico wartet", "Add time you spent on this todo"]) assert.ok(drawn.includes(word), word);
+  }
 });

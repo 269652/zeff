@@ -219,14 +219,124 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     name: "todos.add-note",
     group: "todos",
     label: "A note on a todo",
-    summary: "Your note on a todo (context for the briefing, workers and agents). Needs the flow's todos permission.",
+    summary: "Your note on a todo (context for the briefing, workers and agents): saved, its pictures made the todo's files, the todo brought up to date with it in the background. Needs the flow's todos permission.",
     input: [f("id", "number", { required: true }), f("text", "text", { required: true })],
+    output: "{ ok, message?, error? }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (ctx.dryRun) return { ok: true };
+      return (await import("./engine")).addNoteAsYou(Number(i.id), String(i.text ?? "").trim());
+    },
+  },
+  {
+    name: "todos.detail",
+    group: "todos",
+    label: "One todo whole, for its panel",
+    summary:
+      "One todo with what its panel shows: its words, kind, owner, ticket, due day, source and note; your notes and the runs' reports (each with its author and link); its actions (each in words — the title, what exactly, the text it would send — and whether Zeff can run it here or it only links somewhere) and why they were proposed; the time reported on it; its merge requests; the steps planned after it; where it comes from (the comments, messages and mails it cites).",
+    input: [f("id", "number", { required: true })],
+    output: "{ found, id, ref, text, kind, kindLabel, owner, status, ticket, due, source, note, notes: [{ at, by, text, url, urlLabel, instruction, own }], ops: [{ index, type, title, heading, detail, body, runnable }], opsWhy, blockedBy, time: [{ id, ref, minutes, note, by, at }], totalMinutes, mrs: [{ ref, url, title, state }], planned: [{ path, steps: [{ text, kind, owner }] }], sources: [{ ref, label, at, author, headline, text, convId, subject }] }",
+    run: async (i) => {
+      const store = await import("@/lib/todos/store");
+      const { withAlternatives } = await import("@/lib/todos/alternatives");
+      const { TODO_KIND_LABELS, opTitle, opNote, sourcesOf } = await import("@/lib/todos/shared");
+      const { translator } = await import("@/lib/i18n/shared");
+      const { actionHref } = await import("@/plugins/actions/catalog");
+      const base = store.getTodo(Number(i.id));
+      if (!base) return { found: false };
+      const t = withAlternatives([base])[0];
+      const en = translator("en");
+      const { todoSources } = await import("@/lib/todos/sources");
+      const { lastGoodRun } = await import("@/lib/runs/store");
+      const { entityHeadline, entitySourceLabel, entityText, entityWhoWhen } = await import("@/lib/entities-shared");
+      const cited = sourcesOf(t.refs, todoSources([t], lastGoodRun()?.tickets ?? []));
+      return {
+        found: true,
+        id: t.id,
+        ref: t.ref,
+        text: t.text,
+        kind: t.kind,
+        kindLabel: TODO_KIND_LABELS[t.kind],
+        owner: t.owner,
+        status: t.status,
+        ticket: t.ticket,
+        due: t.due ? t.due.slice(0, 10) : "",
+        source: t.source ?? "",
+        note: t.note ?? "",
+        notes: [...(t.relatedNotes ?? []), ...t.userNotes].map((n) => ({ at: n.at, by: n.by ?? "", text: n.text, url: n.url ?? "", urlLabel: n.urlLabel ?? "", instruction: n.kind === "instruction", own: !n.by && n.kind !== "instruction" && n.from === undefined, from: n.from ?? 0 })),
+        ops: t.ops.map((op, index) => {
+          const note = opNote(op, en);
+          return { index, type: op.type, title: opTitle(op, en), heading: note.heading, detail: note.detail ?? "", body: note.body ?? "", runnable: !actionHref(op) };
+        }),
+        opsWhy: t.autoOpsWhy ?? "",
+        blockedBy: t.blockedBy ?? "",
+        time: (t.time ?? []).map((r) => ({ id: r.id, ref: r.ref, minutes: r.minutes, note: r.note, by: r.by, at: r.at })),
+        totalMinutes: (t.time ?? []).reduce((a, r) => a + r.minutes, 0),
+        mrs: t.links?.mrs ?? [],
+        planned: t.planned.map((p) => ({ path: p.path ?? "", steps: p.steps.map((s) => ({ text: s.text, kind: TODO_KIND_LABELS[s.kind], owner: s.owner })) })),
+        sources: cited.map((s) => {
+          const w = entityWhoWhen(s);
+          const mail = s.source === "mail" ? (s as unknown as { mail: { convId: string; subject: string } }).mail : null;
+          return { ref: sourceRef(s as never), label: entitySourceLabel(s), at: w.at ?? "", author: w.author ?? "", headline: entityHeadline(s), text: entityText(s).slice(0, 1500), convId: mail?.convId ?? "", subject: mail?.subject ?? "" };
+        }),
+      };
+    },
+  },
+  {
+    name: "todos.run-ops",
+    group: "todos",
+    label: "Run a todo's actions now",
+    summary: "A todo's actions run by you, right now, no worker and no AI (a Jira change, a reply, a push …) — all of them, or just these (only: their places). What was done is said in { message }. Needs the flow's permissions todos and api.",
+    input: [f("id", "number", { required: true }), f("only", "list")],
+    output: "{ message }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos || !ctx.perms.api) throw new Error("This flow may not run a todo's actions — grant it the permissions “todos” and “api”.");
+      if (ctx.dryRun) return { message: "" };
+      return (await import("./engine")).runOpsAsYou(Number(i.id), i.only === undefined || i.only === "" ? undefined : nums(i.only, 50));
+    },
+  },
+  {
+    name: "todos.remove-op",
+    group: "todos",
+    label: "Take an action off a todo",
+    summary: "One of a todo's actions taken off it (its place in the list). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("index", "number", { required: true })],
+    output: "{ ok, message?, error? }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (ctx.dryRun) return { ok: true };
+      return (await import("./engine")).removeOpAsYou(Number(i.id), Number(i.index));
+    },
+  },
+  {
+    name: "todos.add-time",
+    group: "todos",
+    label: "Time spent on a todo",
+    summary: "Time you spent on a todo, by hand: minutes and one line — a record like the agents' (an agent's records show beside it). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("minutes", "number", { required: true }), f("note", "text")],
+    output: "{ id }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      if (ctx.dryRun) return { id: null };
+      const { addTodoTime } = await import("@/lib/work/todo-time");
+      return { id: addTodoTime({ todoId: Number(i.id), minutes: Number(i.minutes), note: String(i.note ?? ""), by: "Du", source: "hand" }).id };
+    },
+  },
+  {
+    name: "todos.remove-note",
+    group: "todos",
+    label: "Take a note off a todo",
+    summary: "Your note on a todo taken away (by its time). Needs the flow's todos permission.",
+    input: [f("id", "number", { required: true }), f("at", "text", { required: true })],
     output: "{}",
     writes: true,
     run: async (i, ctx) => {
       if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
-      if (!String(i.text ?? "").trim()) throw new Error("The note is empty.");
-      if (!ctx.dryRun) (await import("@/lib/todos/store")).addTodoUserNote(Number(i.id), String(i.text).trim());
+      if (!ctx.dryRun) (await import("@/lib/todos/store")).removeTodoUserNote(Number(i.id), String(i.at));
       return {};
     },
   },

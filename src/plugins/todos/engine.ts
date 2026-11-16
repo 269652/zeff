@@ -43,3 +43,59 @@ export async function setDueAsYou(id: number, due: string | null): Promise<void>
   setTodoDue(Number(id), due ? String(due) : null);
   (await import("@/lib/todos/settle")).pushTodoDue(Number(id));
 }
+
+/**
+ * Your note on a todo (context for whoever works on it): saved, its pictures made the todo's files, the todo brought up to date with it in the background
+ * (or its actions proposed again). `message` says which.
+ */
+export async function addNoteAsYou(id: number, text: string): Promise<{ ok: boolean; error?: string; message?: string }> {
+  if (!String(text ?? "").trim()) return { ok: false, error: t("The note is empty.") };
+  const { addTodoUserNote } = await import("@/lib/todos/store");
+  const todo = addTodoUserNote(Number(id), String(text));
+  // Pictures the note shows inline are the todo's files (the AI that works on it gets them as attachments).
+  if (todo) await (await import("@/plugins/documents/attachments")).linkNoteImages(todo.id, String(text)).catch(() => 0);
+  // The todo brought up to date with the note at once (its text, kind, done …, then its actions) — in the background, just this todo: no whole run needed.
+  const { canRefreshTodo, refreshTodoSoon } = await import("@/lib/todos/refresh");
+  if (todo && canRefreshTodo(todo)) {
+    refreshTodoSoon(todo.id);
+    return { ok: true, message: t("Note saved — the todo is being updated with it.") };
+  }
+  // (Can't now — a run under way: its actions proposed by the auto-actions, proposed again with the note.)
+  if (todo?.autoOpsWhy && todo.ops.length && (await import("@/plugins/state")).isInstalled("auto-actions")) {
+    const { reviewTodosForActions } = await import("@/plugins/auto-actions/review");
+    void reviewTodosForActions({ ids: [todo.id] }).catch(() => {}).finally(async () => (await import("@/lib/events")).emitChange("todos"));
+    return { ok: true, message: t("Note saved — the actions are proposed again with it.") };
+  }
+  return { ok: true };
+}
+
+/** A todo's operations run by you now (all, or just those at `only`): what was done; throws what went wrong. The auto-actions' proposal run by you is a verdict for the ledger. */
+export async function runOpsAsYou(todoId: number, only?: number[]): Promise<{ message: string }> {
+  const { runTodoOpsNow } = await import("@/lib/ops");
+  const { getTodo } = await import("@/lib/todos/store");
+  const proposed = getTodo(Number(todoId));
+  const r = await runTodoOpsNow(Number(todoId), { only: Array.isArray(only) ? only.map(Number).filter(Number.isInteger) : undefined });
+  if (proposed?.autoOpsWhy) {
+    const { recordFeedback } = await import("@/lib/learning/ledger");
+    const { autoActionsFeedback } = await import("@/lib/learning/sources");
+    recordFeedback(autoActionsFeedback(proposed, "accepted"));
+  }
+  return { message: `${r.done.join(" · ")}${r.settled ? ` — ${t("done.")}` : ""}` };
+}
+
+/** One of a todo's actions taken off it (an action you don't want): its place in the list. */
+export async function removeOpAsYou(todoId: number, index: number): Promise<{ ok: boolean; error?: string; message?: string }> {
+  const { getTodo } = await import("@/lib/todos/store");
+  const { getDb, schema } = await import("@/db");
+  const { eq } = await import("drizzle-orm");
+  const todo = getTodo(Number(todoId));
+  const op = todo?.ops[Number(index)];
+  if (!todo || !op) return { ok: false, error: t("That action isn't on the todo (any more).") };
+  const left = todo.ops.filter((_, i) => i !== Number(index));
+  getDb()
+    .update(schema.todos)
+    .set({ ops: JSON.stringify(left), actionsReviewedAt: new Date().toISOString(), ...(left.length ? {} : { autoOpsWhy: null }) })
+    .where(eq(schema.todos.id, todo.id))
+    .run();
+  return { ok: true, message: t("Action removed.") };
+}

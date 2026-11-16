@@ -86,18 +86,9 @@ export async function searchTodosAction(q: string): Promise<import("@/lib/todos/
 /** A todo's operations, run now by Zeff itself (a WhatsApp message, a note, a comment) — not through Work. */
 export async function runTodoOpsAction(todoId: number, only?: number[]): Promise<ActionState> {
   try {
-    const { runTodoOpsNow } = await import("@/lib/ops");
-    const { getTodo } = await import("@/lib/todos/store");
-    const proposed = getTodo(Number(todoId));
-    const r = await runTodoOpsNow(Number(todoId), { only: Array.isArray(only) ? only.map(Number).filter(Number.isInteger) : undefined });
-    // The auto-actions' proposal, run by you: a verdict for the ledger.
-    if (proposed?.autoOpsWhy) {
-      const { recordFeedback } = await import("@/lib/learning/ledger");
-      const { autoActionsFeedback } = await import("@/lib/learning/sources");
-      recordFeedback(autoActionsFeedback(proposed, "accepted"));
-    }
+    const r = await (await import("./engine")).runOpsAsYou(todoId, only);
     revalidateAll();
-    return { ok: true, message: `${r.done.join(" · ")}${r.settled ? ` — ${t("done.")}` : ""}` };
+    return { ok: true, message: r.message };
   } catch (err) {
     revalidateAll();
     return { ok: false, error: errorMessage(err) };
@@ -234,26 +225,9 @@ export async function deferTodoAction(todoId: number, deferred: boolean): Promis
 /** Your note on a todo (context for whoever works on it) — added, or taken away by its time. */
 export async function addTodoNoteAction(todoId: number, text: string): Promise<ActionState> {
   try {
-    if (!String(text ?? "").trim()) return { ok: false, error: t("The note is empty.") };
-    const { addTodoUserNote } = await import("@/lib/todos/store");
-    const todo = addTodoUserNote(Number(todoId), String(text));
-    // Pictures the note shows inline are the todo's files (the AI that works on it gets them as attachments).
-    if (todo) await (await import("@/plugins/documents/attachments")).linkNoteImages(todo.id, String(text)).catch(() => 0);
+    const r = await (await import("./engine")).addNoteAsYou(todoId, text);
     revalidateAll();
-    // The todo brought up to date with the note at once (its text, kind, done …, then its actions) —
-    // in the background, just this todo: no whole run needed. While a run is under way, it reads the note itself.
-    const { canRefreshTodo, refreshTodoSoon } = await import("@/lib/todos/refresh");
-    if (todo && canRefreshTodo(todo)) {
-      refreshTodoSoon(todo.id);
-      return { ok: true, message: t("Note saved — the todo is being updated with it.") };
-    }
-    // (Can't now — a run under way: its actions proposed by the auto-actions, proposed again with the note.)
-    if (todo?.autoOpsWhy && todo.ops.length && (await import("@/plugins/state")).isInstalled("auto-actions")) {
-      const { reviewTodosForActions } = await import("@/plugins/auto-actions/review");
-      void reviewTodosForActions({ ids: [todo.id] }).catch(() => {}).finally(async () => (await import("@/lib/events")).emitChange("todos"));
-      return { ok: true, message: t("Note saved — the actions are proposed again with it.") };
-    }
-    return { ok: true };
+    return r;
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
@@ -565,20 +539,9 @@ export async function suggestTodoActionsAction(todoId: number): Promise<ActionSt
 /** An action taken off a todo, without a trace (not wanted) — the auto-actions don't propose it again till the todo changes. */
 export async function removeTodoOpAction(todoId: number, index: number): Promise<ActionState> {
   try {
-    const { getTodo } = await import("@/lib/todos/store");
-    const { getDb, schema } = await import("@/db");
-    const { eq } = await import("drizzle-orm");
-    const todo = getTodo(Number(todoId));
-    const op = todo?.ops[Number(index)];
-    if (!todo || !op) return { ok: false, error: t("That action isn't on the todo (any more).") };
-    const left = todo.ops.filter((_, i) => i !== Number(index));
-    getDb()
-      .update(schema.todos)
-      .set({ ops: JSON.stringify(left), actionsReviewedAt: new Date().toISOString(), ...(left.length ? {} : { autoOpsWhy: null }) })
-      .where(eq(schema.todos.id, todo.id))
-      .run();
-    revalidateAll();
-    return { ok: true, message: t("Action removed.") };
+    const r = await (await import("./engine")).removeOpAsYou(todoId, index);
+    if (r.ok) revalidateAll();
+    return r;
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
