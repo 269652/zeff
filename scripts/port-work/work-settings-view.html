@@ -121,6 +121,8 @@
 <button action="state" state="repoedit" value="{{ id }}" label="✎ Edit" variant=quiet/>
 <button run="work.repo-delete" with="id={{ id }}" confirm="Remove this repo from the list? Its folder is not touched." into="result" emit="settings-changed" label="Remove" variant=danger/>
 </row>
+<small><b>Systems (from the knowledge)</b></small>
+{{#if systems}}<markdown value="{{ systems }}"/>{{#else}}<small><muted>{{ systemsNote }}</muted></small>{{/if}}
 {{#if state.repoedit == id}}
 <col gap=2>
 <input bind="rname" value="{{ name }}" placeholder="Name"/>
@@ -137,6 +139,7 @@
 {{/if}}
 </box>
 {{/each}}
+<button run="work.repo-systems" into="result" emit="settings-changed" label="Read the systems from the knowledge now"/>
 <b>Add a repo</b>
 <small><muted>Jira boards: {{#each data.s.boardChoices}}{{ name }}; {{/each}}</muted></small>
 <input bind="nname" placeholder="Name"/>

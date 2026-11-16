@@ -7,6 +7,7 @@ import { TimelineList } from "@/plugins/timeline/ui/TimelineList";
 import { SourcesBlock } from "./sources-block";
 import { SuggestedActions } from "./suggested";
 import { KnowPanel } from "@/plugins/know/ui/KnowPanel";
+import { ExtFrame } from "@/components/ext/ExtFrame";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useLang, useT } from "@/components/I18nProvider";
@@ -579,6 +580,16 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         if (a.kind === "audio") return <audio key={key} src={a.src} controls className="w-full" aria-label={a.label || undefined} />;
         if (a.kind === "video") return <video key={key} src={a.src} controls className="w-full rounded-md bg-black" style={{ maxHeight: h }} aria-label={a.label || undefined} />;
         return <iframe key={key} src={a.src} title={a.label || "PDF"} className="w-full rounded-md border-0" style={{ height: h }} />;
+      }
+      case "frame": {
+        const h = Math.min(1600, Number(a.h) || 560);
+        if (a.plugin)
+          return (
+            <div key={key} style={{ height: h }}>
+              <ExtFrame plugin={a.plugin} entry={a.entry} title={a.title} context={{ runId: Number(a.run) || undefined, ticket: a.ticket || undefined, todoId: Number(a.todo) || undefined }} />
+            </div>
+          );
+        return <iframe key={key} src={a.src} title={a.title || "Preview"} sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals" className="w-full rounded-md border border-zinc-200 bg-white dark:border-zinc-800" style={{ height: h }} />;
       }
       case "qr":
         return <QrCode key={key} value={a.value} size={Number(a.size) || 160} label={a.label} />;

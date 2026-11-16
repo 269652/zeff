@@ -1,11 +1,12 @@
-<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
-<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}, branches={{ state.branchopen }}" every=2 debounce="300"/>
+<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value="" keep=true/><state name="all" value="false"/><state name="qpick" value=""/><state name="note" value=""/><state name="qo0" value=""/><state name="qo1" value=""/><state name="qo2" value=""/><state name="qo3" value=""/><state name="preview" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
+<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}, branches={{ state.branchopen }}, all={{ state.all }}, msg={{ state.msg }}, qpick={{ state.qpick }}, qo0={{ state.qo0 }}, qo1={{ state.qo1 }}, qo2={{ state.qo2 }}, qo3={{ state.qo3 }}" every=2 debounce="300"/>
 <data name="panes" lambda="work.panes" with="run={{ data.x.session.runId }}" when="{{ data.x.session.runId }}" every=5/>
 <on event="work-changed" action="reload"/>
 <on event="work-started" action="state" state="sel" value="run:{{ data.started.runId }}"/>
 <on event="work-gone" action="state" state="sel" value=""/>
-<on event="send-live" run="work.live" with="run={{ data.x.session.runId }}, do=send, text={{ state.msg }}" then="msg=" emit="work-changed"/>
-<on event="send-msg" run="work.send" with="run={{ data.x.session.runId }}, text={{ state.msg }}" then="msg=" emit="work-changed"/>
+<on event="send-live" run="work.live" with="run={{ data.x.session.runId }}, do=send, text={{ state.msg }}, attach={{ data.x.session.attachScope }}" then="msg=" emit="work-changed"/>
+<on event="send-shell" run="work.live" with="run={{ data.x.session.runId }}, do=shell, cmd={{ data.x.session.shellCmd }}" into="shellout" then="msg=" emit="work-changed"/>
+<on event="send-msg" run="work.send" with="run={{ data.x.session.runId }}, text={{ state.msg }}, attach={{ data.x.session.attachScope }}" then="msg=" emit="work-changed"/>
 {{#if not data.x}}<muted>Loading …</muted>{{#else}}
 <row gap=3 wrap=false align=start>
 <col width=300 gap=2>
@@ -33,6 +34,8 @@
 </section>
 {{/each}}
 {{#if not data.x.total}}<small><muted>{{ data.x.labels.nothing }}</muted></small>{{/if}}
+{{#if data.x.hidden}}<button action="state" state="all" value="true" label="{{ data.x.labels.showMore }}" variant=quiet/>{{/if}}
+{{#each data.x.tabs}}<row gap=2><a href="{{ href }}">{{ title }}</a><small><muted>{{ plugin }}</muted></small></row>{{/each}}
 </col>
 <row gap=2 align=center>
 <a href="/settings/time#work">Code settings</a>
@@ -41,6 +44,7 @@
 </row>
 </col>
 <col fill=true gap=3>
+{{#if data.x.gitMissing}}<text tone=bad>{{ data.x.gitMissing }}</text>{{/if}}
 {{#if data.x.dangling.n}}
 <box tone=warn>
 <text>{{ data.x.dangling.text }}</text>
@@ -54,6 +58,8 @@
 <muted>{{ data.x.labels.newHint }}</muted>
 <input bind="newticket" placeholder="Ticket (optional, like ABC-123)"/>
 <input bind="newmsg" rows=4 placeholder="What should the worker do?"/>
+{{#each data.x.composer.files}}<row gap=2 align=center><small>📎 {{ name }} · {{ size }}</small><button run="work.attach-remove" with="scope=new, ref={{ ref }}" emit="work-changed" label="✕" variant=quiet/></row>{{/each}}
+<upload bind="busyup2" run="work.attach" with="scope=new" multiple=true zone=view label="📎 Attach files or pictures" emit="work-changed"/>
 <section title="{{ data.x.composer.labels.options }}" collapsible=true open=false>
 <col gap=2>
 <row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.provider }}</muted></small>{{#each data.x.composer.providers}}<button action="state" state="cprov" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
@@ -68,7 +74,7 @@
 <input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/>
 </col>
 </section>
-<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ state.newticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ state.newticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}, attach=new" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
 </col>
 {{/if}}
 {{#if data.x.mode == 'ticket'}}
@@ -101,7 +107,7 @@
 <input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/>
 </col>
 </section>
-<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ data.x.ticketPage.ticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ data.x.ticketPage.ticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}, attach=new" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
 </col>
 {{/if}}
 {{#if data.x.mode == 'session'}}
@@ -136,7 +142,8 @@
 <a href="/api/work/{{ data.x.session.runId }}/prompt">Prompt</a>
 {{#if data.x.session.active}}<button run="work.stop" with="run={{ data.x.session.runId }}" emit="work-changed" label="⏹ Stop" variant=danger/>{{/if}}
 </row>
-<tabs bind="pane" options="chat:Conversation, changes:Changes, preview:Preview"/>
+<tabs bind="pane" options="chat:Conversation, changes:Changes, preview:Preview{{ data.x.session.paneOptions }}"/>
+{{#each data.x.session.panels}}{{#if state.pane == key}}<frame plugin="{{ plugin }}" entry="{{ entry }}" title="{{ title }}" run="{{ data.x.session.runId }}" ticket="{{ data.x.session.ticket }}" todo="{{ data.x.session.todoId }}" h=640/>{{/if}}{{/each}}
 {{#if state.pane == 'changes'}}
 <col gap=2>
 {{#if data.panes.found}}
@@ -173,6 +180,8 @@
 <grow/>
 {{#if running}}<button run="work.git" with="run={{ data.x.session.runId }}, do=proc-stop, name={{ name }}" emit="work-changed" label="Stop"/>{{#else}}<button run="work.git" with="run={{ data.x.session.runId }}, do=proc-start, name={{ name }}" emit="work-changed" label="Start" variant=primary/>{{/if}}
 </row>
+{{#if showUrl}}<button action="state" state="preview" value="{{ state.preview == name ? '' : name }}" label="{{ state.preview == name ? 'Hide preview' : 'Show preview' }}"/>{{/if}}
+{{#if state.preview == name}}<frame src="{{ url }}" title="{{ name }}" h=640/>{{/if}}
 {{#if log}}<section title="Output" collapsible=true open=false><small><text pre=true>{{ log }}</text></small></section>{{/if}}
 </box>
 {{/each}}
@@ -200,57 +209,96 @@
 {{#if data.x.session.error}}<text tone=bad>{{ data.x.session.error }}</text>{{/if}}
 </col>
 {{#each data.x.session.asks}}
+{{#if question}}
+<box tone=accent title="{{ title }}">
+{{#each questions}}
+<b>{{ header ? '[' + header + '] ' : '' }}{{ question }}</b>
+<row gap=2 wrap=true>{{#each options}}<button action="state" state="qpick" value="{{ next }}" label="{{ mark }}{{ label }}" tip="{{ description }}" variant="{{ on ? 'primary' : 'plain' }}"/>{{/each}}</row>
+{{/each}}
+{{#if has0}}<input bind="qo0" placeholder="Or your own answer: {{ qt0 }}"/>{{/if}}
+{{#if has1}}<input bind="qo1" placeholder="Or your own answer: {{ qt1 }}"/>{{/if}}
+{{#if has2}}<input bind="qo2" placeholder="Or your own answer: {{ qt2 }}"/>{{/if}}
+{{#if has3}}<input bind="qo3" placeholder="Or your own answer: {{ qt3 }}"/>{{/if}}
+<row gap=2 wrap=true align=center>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, answers={{ submit }}" then="qpick=" emit="work-changed" label="Answer" variant=primary disabled="{{ not ready }}"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, message=The user didn't answer — decide yourself, or ask in plain words." then="qpick=" emit="work-changed" label="Skip"/>
+{{#if more}}<small><muted>{{ more }}</muted></small>{{/if}}
+</row>
+</box>
+{{#else}}
 <box tone=warn title="{{ title }}">
-{{#if description}}<text>{{ description }}</text>{{/if}}
+{{#if description}}<small><muted>{{ description }}</muted></small>{{/if}}
 {{#if detail}}<text pre=true>{{ detail }}</text>{{/if}}
+{{#if diff}}<text pre=true tone=muted>{{ diff }}</text>{{/if}}
+{{#if reason}}<small><muted>{{ reason }}</muted></small>{{/if}}
 {{#if plan}}
 <markdown value="{{ planText }}"/>
+<input bind="note" placeholder="Feedback if it should keep planning"/>
 <row gap=2 wrap=true>
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=acceptEdits" emit="work-changed" label="Yes, and accept its edits" variant=primary/>
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=auto" emit="work-changed" label="Yes, auto mode"/>
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=default" emit="work-changed" label="Yes, ask for each step"/>
-{{#if bypass}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=bypassPermissions" emit="work-changed" label="Yes, without any checks" variant=danger/>{{/if}}
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, message=Not like this — keep planning." emit="work-changed" label="No, keep planning"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=acceptEdits" emit="work-changed" label="Yes — accept its edits" variant=primary/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=auto" emit="work-changed" label="Yes — in Auto"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=default" emit="work-changed" label="Yes — ask me for each step"/>
+{{#if bypass}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=bypassPermissions" emit="work-changed" label="Yes — bypass" variant=danger/>{{/if}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, message=Keep planning: {{ state.note }}" then="note=" emit="work-changed" label="No — keep planning"/>
 </row>
-{{/if}}
-{{#if question}}
-{{#each questions}}
-<b>{{ question }}</b>
-<row gap=2 wrap=true>{{#each options}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, answers={{ json }}" emit="work-changed" label="{{ label }}" tip="{{ description }}"/>{{/each}}</row>
-{{/each}}
-{{#if not oneQuestion}}<small><muted>Several questions at once: answer them in the built-in Code tab.</muted></small>{{/if}}
-{{/if}}
-{{#if not plan}}{{#if not question}}
+{{#else}}
+<input bind="note" placeholder="What should it do instead? (it reads this)"/>
 <row gap=2 wrap=true>
 <button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow" emit="work-changed" label="Allow" variant=primary/>
-{{#if always}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, always=true" emit="work-changed" label="Allow always"/>{{/if}}
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny" emit="work-changed" label="Deny"/>
-<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, interrupt=true" emit="work-changed" label="Deny and stop"/>
+{{#if always}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, always=true" emit="work-changed" label="{{ alwaysLabel }}" tip="{{ alwaysTip }}"/>{{/if}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, message={{ state.note }}" then="note=" emit="work-changed" label="Deny"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, interrupt=true, message={{ state.note }}" then="note=" emit="work-changed" label="Deny & stop" tip="Deny and stop its turn"/>
 </row>
-{{/if}}{{/if}}
+{{/if}}
+{{#if more}}<small><muted>{{ more }}</muted></small>{{/if}}
 </box>
+{{/if}}
 {{/each}}
 {{#if data.x.session.permission}}
-<box tone=warn title="{{ data.x.session.permission.title }}">
+<box tone=warn title="Copilot wants to: {{ data.x.session.permission.title }}">
 {{#if data.x.session.permission.detail}}<text pre=true>{{ data.x.session.permission.detail }}</text>{{/if}}
-<row gap=2 wrap=true>{{#each data.x.session.permission.options}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer-option, option={{ id }}" emit="work-changed" label="{{ name }}"/>{{/each}}</row>
+<row gap=2 wrap=true>{{#each data.x.session.permission.options}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer-option, option={{ id }}" emit="work-changed" label="{{ name }}" variant="{{ kind == 'allow_once' ? 'primary' : 'plain' }}"/>{{/each}}</row>
 </box>
 {{/if}}
-{{#if data.x.session.modes}}
+{{#if data.x.session.copilot}}
 <row gap=2 wrap=true align=center>
 <small><muted>Mode</muted></small>
-{{#each data.x.session.modes}}<button run="work.live" with="run={{ data.x.session.runId }}, do=mode, mode={{ id }}" emit="work-changed" label="{{ label }}" tip="{{ hint }}" variant=quiet/>{{/each}}
+{{#each data.x.session.copilot.modes}}<button run="work.live" with="run={{ data.x.session.runId }}, do=mode, mode={{ id }}" emit="work-changed" label="{{ name }}" tip="{{ hint }}" variant="{{ sel ? 'primary' : 'plain' }}" disabled="{{ sel }}"/>{{/each}}
+<small><muted>{{ data.x.session.copilot.status }}</muted></small>
 </row>
+{{#if data.x.session.copilot.idle}}{{#if data.x.session.copilot.waiting}}<markdown value="{{ data.x.session.copilot.waiting }}"/>{{/if}}{{/if}}
 {{/if}}
 {{#if data.x.session.queuedLabel}}<small><muted>{{ data.x.session.queuedLabel }}</muted></small>{{/if}}
+{{#if data.shellout.out}}<text pre=true tone="{{ data.shellout.code == '0' ? 'muted' : 'bad' }}">{{ data.shellout.out }}</text>{{/if}}
 <col dock=bottom gap=1>
-<input bind="msg" rows=3 placeholder="{{ data.x.session.placeholder }}" enter="{{ data.x.session.canReplyLive ? 'send-live' : 'send-msg' }}"/>
-<row gap=2 align=center>
-{{#if data.x.session.canReplyLive}}
-<button run="work.live" with="run={{ data.x.session.runId }}, do=send, text={{ state.msg }}" then="msg=" emit="work-changed" label="Send" variant=primary disabled="{{ not state.msg }}"/>
-{{#if data.x.session.busy}}<button run="work.live" with="run={{ data.x.session.runId }}, do=interrupt" emit="work-changed" label="Interrupt"/>{{/if}}
+{{#if data.x.session.menu}}
+<box>
+<row gap=1 wrap=true>{{#each data.x.session.menu}}<button action="state" state="msg" value="{{ next }}" label="{{ label }}" tip="{{ hint }}" variant=quiet/>{{/each}}</row>
+</box>
+{{/if}}
+{{#each data.x.session.files}}<row gap=2 align=center><small>📎 {{ name }} · {{ size }}</small><button run="work.attach-remove" with="scope={{ data.x.session.attachScope }}, ref={{ ref }}" emit="work-changed" label="✕" variant=quiet/></row>{{/each}}
+<input bind="msg" rows=3 placeholder="{{ data.x.session.placeholder }}" enter="{{ data.x.session.isShell ? 'send-shell' : (data.x.session.canReplyLive ? 'send-live' : 'send-msg') }}"/>
+<row gap=2 wrap=true align=center>
+{{#if data.x.session.isShell}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=shell, cmd={{ data.x.session.shellCmd }}" into="shellout" then="msg=" emit="work-changed" label="Run in its folder" variant=primary disabled="{{ not data.x.session.shellCmd }}"/>
 {{#else}}
-<button run="work.send" with="run={{ data.x.session.runId }}, text={{ state.msg }}" then="msg=" emit="work-changed" label="Send" variant=primary disabled="{{ not state.msg }}"/>
+{{#if data.x.session.canReplyLive}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=send, text={{ state.msg }}, attach={{ data.x.session.attachScope }}" then="msg=" emit="work-changed" label="Send" variant=primary disabled="{{ not state.msg }}"/>
+{{#else}}
+<button run="work.send" with="run={{ data.x.session.runId }}, text={{ state.msg }}, attach={{ data.x.session.attachScope }}" then="msg=" emit="work-changed" label="Send" variant=primary disabled="{{ not state.msg }}"/>
+{{/if}}
+{{/if}}
+<upload bind="busyup" run="work.attach" with="scope={{ data.x.session.attachScope }}" multiple=true zone=view label="📎" accept="{{ data.x.session.kind == 'session' ? 'image/png,image/jpeg,image/gif,image/webp' : '' }}" emit="work-changed"/>
+{{#if data.x.session.busy}}<button run="work.live" with="run={{ data.x.session.runId }}, do=interrupt" emit="work-changed" label="Interrupt"/>{{/if}}
+{{#each data.x.session.modes}}<button run="work.live" with="run={{ data.x.session.runId }}, do=mode, mode={{ id }}" emit="work-changed" label="{{ label }}" tip="{{ hint }}" variant="{{ sel ? 'primary' : 'quiet' }}"/>{{/each}}
+{{#each data.x.session.models}}<button run="work.live" with="run={{ data.x.session.runId }}, do=model, model={{ value }}" emit="work-changed" label="{{ label }}" variant="{{ sel ? 'primary' : 'quiet' }}"/>{{/each}}
+{{#each data.x.session.efforts}}<button run="work.live" with="run={{ data.x.session.runId }}, do=effort, effort={{ value }}" emit="work-changed" label="{{ label }}" variant="{{ sel ? 'primary' : 'quiet' }}" disabled="{{ data.x.session.busy }}"/>{{/each}}
+<grow/>
+{{#if data.x.session.hostText}}<small><muted>{{ data.x.session.hostText }}</muted></small>{{/if}}
+{{#if data.x.session.shellPendingLabel}}<small><muted>{{ data.x.session.shellPendingLabel }}</muted></small>{{/if}}
+{{#if data.x.session.kind}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=wrap-up" emit="work-changed" label="Finish" tip="It sums up and gives its result — that ends the session: its todo ticked off, its time booked" disabled="{{ data.x.session.busy }}"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=close" confirm="Close the session without a result? (Nothing is ticked off or booked.)" emit="work-changed" label="Close" tip="End it without a result" variant=quiet/>
 {{/if}}
 </row>
 </col>
