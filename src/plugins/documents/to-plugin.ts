@@ -9,7 +9,7 @@ const PORT = "documents-ext";
  * built-in off: it stands in through its port (state.ts PROVIDED_BY — its screen, uploads, settings page and the knowledge server's abstracts go on reading the same
  * tables). Needs the plugin in the plugins folder. Server only.
  */
-export async function switchDocumentsToPlugin(): Promise<{ flows: string[] }> {
+export async function switchDocumentsToPlugin(): Promise<{ flows: string[]; views: number }> {
   const reg = await import("@/lib/ext/registry");
   if (!reg.scanPlugins(true).plugins.some((x) => x.id === PORT)) throw new Error(`The Documents plugin (${PORT}) isn't in the plugins folder — install it from its repository first (Plugins → Sources).`);
   // (the built-in makes these on first use)

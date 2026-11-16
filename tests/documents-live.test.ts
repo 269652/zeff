@@ -83,7 +83,7 @@ test("the installed Documents screens draw with the real data: no template error
   const settings = await lambda("documents.settings");
   const browse = { path: "C:\\", parent: null, dirs: [{ name: "A", path: "C:\\A" }] };
   for (const tpl of views)
-    for (const state of [{}, { browsing: "1" }, { t_auto: "false", t_cmd: "x" }])
+    for (const state of [{}, { browsing: "1" }, { t_auto: "false", t_cmd: "x" }] as Record<string, string>[])
       for (const data of [{ s: settings }, { s: settings, browse }, {}]) assert.deepEqual(draw(tpl, state, data).errors, [], JSON.stringify(state));
 
   // The installed package (1.0.0, before the screens) is offered the update and takes it: the screens' flows and the settings page are there after.
