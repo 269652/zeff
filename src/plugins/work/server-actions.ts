@@ -121,30 +121,6 @@ export async function switchSessionBranchAction(runId: number, branch: string): 
   }
 }
 
-/** A session (a todo's conversation) archived — out of the sidebar — or back. */
-export async function archiveSessionAction(todoId: number, archived: boolean): Promise<ActionState> {
-  try {
-    const { setSessionArchived } = await import("@/lib/work/session-admin");
-    setSessionArchived(Number(todoId), !!archived);
-    refreshWork();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-/** A session deleted: its runs and logs (not while it works) — its todo stays. */
-export async function deleteSessionAction(todoId: number): Promise<ActionState> {
-  try {
-    const { deleteSession } = await import("@/lib/work/session-admin");
-    deleteSession(Number(todoId));
-    refreshWork();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 /** The composer's session choices, checked (a page can send anything). */
 async function checkSession(raw: unknown): Promise<import("@/lib/work/shared").SessionOptions | undefined> {
   if (!raw || typeof raw !== "object") return undefined;
@@ -288,17 +264,6 @@ export async function readRepoSystemsAction(): Promise<ActionState> {
     const r = await relateRepoSystems(true);
     revalidateAll();
     return r.failed && !r.read ? { ok: false, error: t("The AI didn't answer.") } : { ok: true, message: t("Read the systems of {n} repos from the knowledge.", { n: r.read }) };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
-export async function deleteRepoAction(id: number): Promise<ActionState> {
-  try {
-    const { deleteRepo } = await import("@/lib/repos");
-    deleteRepo(Number(id));
-    revalidateAll();
-    return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
