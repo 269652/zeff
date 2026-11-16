@@ -16,7 +16,7 @@ import { PORTS, portOf } from "@/plugins/ports";
 import { extensionStates } from "@/plugins/extension-state";
 import { catalogText } from "@/plugins/catalog-text";
 import { extensionOrigin } from "@/plugins/extensions";
-import { chosenPlugins, installedPlugins } from "@/plugins/state";
+import { chosenPlugins, installedPlugins, onlyThroughPort } from "@/plugins/state";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: t("Plugins") };
@@ -98,7 +98,7 @@ export default async function PluginsPage() {
                   </div>
                   {p.beta && <BetaWarning warning={p.beta} />}
                   {p.experimental && <ExperimentalWarning warning={p.experimental} />}
-                  {installed && ported.has(p.id) && <SwitchToPort builtin={p.id} />}
+                  {installed && ported.has(p.id) && <SwitchToPort builtin={p.id} switched={onlyThroughPort(p.id)} />}
                   {p.dependsOn?.length ? (
                     <p className="text-xs text-zinc-500">
                       {t("Builds on: {names}", { names: p.dependsOn.map((d) => catalogText(t, pluginById(d).name)).join(", ") })}
