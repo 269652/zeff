@@ -281,6 +281,20 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "time.entry-op",
+    group: "time",
+    label: "Edit an entry, its group or a day's break",
+    summary:
+      "One edit, as the weekly report's own actions do it. op: update (id, date, bookOn, hours, description, ticket, type, tags, comment, start, isGroup), copy (id, date), link (id, spanId), unlink (id), collect (id of a collecting entry), start (id, start), span-mode (spanId, mode), ungroup (spanId), parallel (ids, mode combine|divide|sequential) or pauses (dates comma separated, text: the break, \"none\" for no break, empty to remove). Output { ok, message }; a refusal is an error.",
+    input: [f("op", "text", { required: true }), f("id", "number"), f("date", "text"), f("bookOn", "text"), f("hours", "text"), f("description", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("spanId", "text"), f("mode", "text"), f("ids", "text"), f("dates", "text"), f("text", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { entryOp } = await import("./entry-ops");
+      return { ok: true, ...entryOp(i) };
+    },
+  },
+  {
     name: "time.entry-add",
     group: "time",
     label: "Book time",

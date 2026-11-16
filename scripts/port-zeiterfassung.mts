@@ -72,6 +72,7 @@ const flow = (id: string, name: string, title: string, description: string, acti
 });
 const i = (...names: string[]) => Object.fromEntries(names.map((n) => [n, `{{ input.${n} }}`]));
 const FLOWS = [
+  flow("f14", "zeiterfassung.entry-op", "Edit an entry, its group or a day's break", "One edit of the weekly report (input op update|copy|link|unlink|collect|start|span-mode|ungroup|parallel|pauses and its fields). Run by the report.", "time.entry-op", i("op", "id", "date", "bookOn", "hours", "description", "ticket", "type", "tags", "comment", "start", "isGroup", "spanId", "mode", "ids", "dates", "text")),
   flow("f13", "zeiterfassung.rule-op", "Change a list of rules", "One change of a list of rules or of the entry types (input what types|report|meetings|exclude|entry-type, op add|remove|up|down|default|update|none, index, apply, and the rule's fields). Run by the Settings tab.", "time.rule-op", i("what", "op", "index", "apply", "jobNumber", "description", "type", "f1", "v1", "f2", "v2", "f3", "v3", "template", "tags", "match", "group", "value", "label", "color", "key")),
   flow("f11", "zeiterfassung.day-book", "Book the day", "The day's lines booked as you took them over (input date, state: the view's state as JSON). Run by the End of day tab.", "time.day-book", i("date", "state")),
   flow("f12", "zeiterfassung.day-undo", "Take the day's booking back", "Takes back what a booking of the day created, as far as it is still as booked (input created). Run by the End of day tab.", "time.day-undo", i("created")),

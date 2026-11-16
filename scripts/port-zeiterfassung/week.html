@@ -56,7 +56,7 @@
       {{#each data.w.table.foot.target}}<small><muted>{{ text }}</muted></small>{{/each}}
       <small><muted>{{ data.w.table.foot.targetTotal }}</muted></small>
       <small><muted>Pause</muted></small>
-      {{#each data.w.table.foot.pause}}<small><muted>{{ text }}</muted></small>{{/each}}
+      {{#each data.w.table.foot.pause}}<button action="state" state="pauseday" value="{{ iso }}" label="{{ text }}" tip="{{ label }}" variant=quiet/>{{/each}}
       <text></text>
     </grid>
     {{#else}}<text tone=muted>{{ data.w.table.empty }}</text>{{/if}}
@@ -146,6 +146,38 @@
   </section>
   {{/if}}
 
+  <dialog bind="pauseday" title="Pause">
+    {{#each data.w.table.foot.pause | where('iso', state.pauseday)}}
+    <col gap=2>
+      <text>{{ label }}</text>
+      <input bind="pz_text" label="Break" value="{{ current }}" placeholder="12:00-12:30"/>
+      <row gap=2 wrap=true>
+        <button run="zeiterfassung.entry-op" with="op=pauses, dates={{ iso }}, text={{ state.pz_text | default(current) }}" emit="time-changed" then="pauseday=" label="Save" variant=primary/>
+        {{#if suggest}}<button run="zeiterfassung.entry-op" with="op=pauses, dates={{ iso }}, text={{ suggest }}" emit="time-changed" then="pauseday=" label="Use {{ suggest }}" variant=plain/>{{/if}}
+        <button run="zeiterfassung.entry-op" with="op=pauses, dates={{ iso }}, text=none" emit="time-changed" then="pauseday=" label="No break" variant=plain/>
+        <button run="zeiterfassung.entry-op" with="op=pauses, dates={{ iso }}, text=" emit="time-changed" then="pauseday=" label="Remove" variant=plain/>
+      </row>
+    </col>
+    {{/each}}
+  </dialog>
+
+  {{#if data.w.parallel.sets}}
+  <section title="{{ data.w.parallel.head }}" aside="{{ data.w.parallel.sets | count }}">
+    <small><muted>{{ data.w.parallel.hint }}</muted></small>
+    {{#each data.w.parallel.sets}}
+    <box tone=warn>
+      <row gap=3 wrap=true align=baseline><b>{{ label }}</b><small><muted>{{ when }}</muted></small><small>{{ cost }}</small></row>
+      {{#each lines}}<small>{{ this }}</small>{{/each}}
+      <row gap=2 wrap=true>
+        <button run="zeiterfassung.entry-op" with="op=parallel, mode=combine, ids={{ ids }}" emit="time-changed" done="Combined into one spanning entry." label="Book all on group ({{ span }} h)" variant=plain/>
+        <button run="zeiterfassung.entry-op" with="op=parallel, mode=divide, ids={{ ids }}" emit="time-changed" done="The stretch's hours are divided between the entries." label="Divide time on subtasks ({{ span }} h)" variant=plain/>
+        <button run="zeiterfassung.entry-op" with="op=parallel, mode=sequential, ids={{ ids }}" emit="time-changed" done="Booked one after the other." label="Book sequential" variant=plain/>
+      </row>
+    </box>
+    {{/each}}
+  </section>
+  {{/if}}
+
   <section title="{{ data.w.report.head }}" aside="grouped per day · configure on Schedule">
     {{#if data.w.report.days}}
     <row justify=end><copy text="{{ data.w.report.text }}" label="Copy"/></row>
@@ -171,8 +203,16 @@
       <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>
       <column label="Description">{{ description }}{{#if ticket}} <small><muted>{{ ticket }}</muted></small>{{/if}}</column>
       <column label="Type"><dot color="{{ color }}"/> {{ type }}</column>
-      <column label="Hours" align=right><button action="state" state="hoursedit" value="{{ id }}" label="{{ hoursText }}" variant=link/></column>
-      <column label=""><button run="zeiterfassung.delete-entry" with="id={{ id }}" confirm="Delete this entry?" emit="time-changed" done="Deleted." label="✕" variant=quiet/></column>
+      <column label="Group"><small>{{ groupText }}</small>{{#if books}}<small><muted>{{ books }}</muted></small>{{/if}}{{#if start}}<small><muted>{{ start }}</muted></small>{{/if}}</column>
+      <column label="Hours" align=right><button action="state" state="hoursedit" value="{{ id }}" label="{{ hoursText }}" variant=link/>{{#if worked}}<small><muted>{{ worked }}</muted></small>{{/if}}</column>
+      <column label="">
+        <row gap=1 justify=end>
+          <button action="state" state="entryedit" value="{{ id }}" label="✎" tip="Edit this entry" variant=quiet/>
+          <button action="state" state="groupedit" value="{{ id }}" label="⛓" tip="Group" variant=quiet/>
+          <button action="state" state="entrycopy" value="{{ id }}" label="⧉" tip="Copy to another day" variant=quiet/>
+          <button run="zeiterfassung.delete-entry" with="id={{ id }}" confirm="Delete this entry?" emit="time-changed" done="Deleted." label="✕" variant=quiet/>
+        </row>
+      </column>
     </datatable>
   </section>
   <dialog bind="hoursedit" title="Hours">
@@ -183,6 +223,64 @@
       <row gap=2>
         <button run="zeiterfassung.entry-hours" with="id={{ id }}, hours={{ state.e_hours | default(hours) }}" emit="time-changed" then="hoursedit=" done="Saved." label="Save" variant=primary/>
       </row>
+    </col>
+    {{/each}}
+  </dialog>
+  <dialog bind="entryedit" title="Edit this entry" wide=true>
+    {{#each data.w.entryList | where('id', state.entryedit)}}
+    <let name="grp" value="state | get('ee_group') | default(groupFlag)"/>
+    <col gap=2>
+      <grid cols=3 gap=2 min=170>
+        <input bind="ee_date" type=date label="Date" value="{{ date }}"/>
+        <select bind="ee_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>
+        <input bind="ee_hours" type=number label="Hours" value="{{ hours }}"/>
+        <select bind="ee_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>
+        <input bind="ee_ticket" label="Ticket" value="{{ ticket }}"/>
+        <input bind="ee_start" label="Start" value="{{ start }}" placeholder="09:30"/>
+      </grid>
+      <input bind="ee_description" label="Description" value="{{ description }}"/>
+      <grid cols=2 gap=2 min=200>
+        <input bind="ee_tags" label="Tags" value="{{ tagsText }}"/>
+        <input bind="ee_comment" label="Comment" value="{{ comment }}"/>
+      </grid>
+      <button action="state" state="ee_group" value="{{ grp == 'true' ? 'false' : 'true' }}" label="{{ grp == 'true' ? '☑' : '☐' }} Group entry" variant=quiet/>
+      <row gap=2>
+        <button run="zeiterfassung.entry-op" with="op=update, id={{ id }}, date={{ state.ee_date | default(date) }}, bookOn={{ state.ee_bookon | default(bookOn) }}, hours={{ state.ee_hours | default(hours) }}, type={{ state.ee_type | default(typeKey) }}, ticket={{ state.ee_ticket | default(ticket) }}, start={{ state.ee_start | default(start) }}, description={{ state.ee_description | default(description) }}, tags={{ state.ee_tags | default(tagsText) }}, comment={{ state.ee_comment | default(comment) }}, isGroup={{ grp }}" emit="time-changed" then="entryedit=" done="Saved." label="Save" variant=primary/>
+      </row>
+    </col>
+    {{/each}}
+  </dialog>
+  <dialog bind="entrycopy" title="Copy to another day">
+    {{#each data.w.entryList | where('id', state.entrycopy)}}
+    <col gap=2>
+      <text>{{ description }} · {{ hoursText }} h</text>
+      <input bind="ec_date" type=date label="Day" value="{{ date }}"/>
+      <row gap=2><button run="zeiterfassung.entry-op" with="op=copy, id={{ id }}, date={{ state.ec_date | default(date) }}" emit="time-changed" then="entrycopy=" done="Copied." label="Copy" variant=primary/></row>
+    </col>
+    {{/each}}
+  </dialog>
+  <dialog bind="groupedit" title="Group">
+    {{#each data.w.entryList | where('id', state.groupedit)}}
+    <col gap=2>
+      <text>{{ description }} · {{ hoursText }} h</text>
+      {{#if groupText}}<small><muted>{{ groupText }} {{ books }}</muted></small>{{/if}}
+      <input bind="gs_start" label="Start" value="{{ start }}" placeholder="09:30"/>
+      <row gap=2><button run="zeiterfassung.entry-op" with="op=start, id={{ id }}, start={{ state.gs_start | default(start) }}" emit="time-changed" done="Saved." label="Set the start" variant=plain/></row>
+      {{#if not isGroup}}
+      <select bind="gs_span" options="{{ groupOptions | tojson }}" label="Group"/>
+      <row gap=2>
+        <button run="zeiterfassung.entry-op" with="op=link, id={{ id }}, spanId={{ state.gs_span }}" emit="time-changed" then="groupedit=" label="Join this group" variant=primary/>
+        {{#if member}}<button run="zeiterfassung.entry-op" with="op=unlink, id={{ id }}" emit="time-changed" then="groupedit=" label="Separate entry" variant=plain/>{{/if}}
+      </row>
+      {{/if}}
+      {{#if spanId}}
+      <select bind="gs_mode" options="{{ modeOptions | tojson }}" label="How the group books"/>
+      <row gap=2>
+        <button run="zeiterfassung.entry-op" with="op=span-mode, spanId={{ spanId }}, mode={{ state.gs_mode }}" emit="time-changed" then="groupedit=" done="Saved." label="Save the way" variant=plain/>
+        <button run="zeiterfassung.entry-op" with="op=ungroup, spanId={{ spanId }}" confirm="Take this group apart?" emit="time-changed" then="groupedit=" label="Ungroup" variant=danger/>
+      </row>
+      {{/if}}
+      {{#if candidates}}<button run="zeiterfassung.entry-op" with="op=collect, id={{ id }}" emit="time-changed" then="groupedit=" label="Group {{ candidates }} parallel entries under it" variant=plain/>{{/if}}
     </col>
     {{/each}}
   </dialog>

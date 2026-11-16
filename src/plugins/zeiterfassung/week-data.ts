@@ -10,7 +10,10 @@ import { getPastWeeksDue } from "@/lib/monthly";
 import { formatPauses } from "@/lib/pauses-shared";
 import { getDefaultPauses, getFlexTime, getWeekTargets } from "@/lib/schedule";
 import { getJobByNumber } from "@/lib/jobs";
-import { listPausesByDate } from "@/lib/pauses";
+import { latestPausesBefore, listPausesByDate } from "@/lib/pauses";
+import { collectCandidates, detectParallel, groupOptionsOn } from "@/lib/entry-parallel";
+import { getSpan, membersOf, spanOfHead } from "@/lib/entry-spans";
+import { stretchOf } from "@/lib/entry-timeline";
 import { listProjectOptions } from "@/lib/projects";
 import { NO_JOB_NUMBER } from "@/lib/projects-shared";
 import { getRewrittenReport, reportToText } from "@/lib/report";
@@ -133,10 +136,15 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   const pauses = listPausesByDate(week.startIso, week.endIso);
   const defaultPauses = getDefaultPauses();
   const isWorkday = (i: number) => targets.targets[i] > 0;
+  const before = formatPauses(latestPausesBefore(week.startIso));
   const pauseRow = isoDays.map((iso, i) => {
-    if (pauses[iso]?.length) return { text: formatPauses(pauses[iso]), tone: "plain" };
-    if (pauses[iso] !== undefined) return { text: t("none"), tone: "muted" };
-    return { text: isWorkday(i) || report.dayTotals[i] > 0 ? formatPauses(defaultPauses) : "", tone: "muted" };
+    // (A day without a break is offered the latest earlier one: this week's, else the one before the week.)
+    let suggest = before;
+    for (let j = i - 1; j >= 0; j--) if (pauses[isoDays[j]]?.length) { suggest = formatPauses(pauses[isoDays[j]]); break; }
+    const base = { iso, label: formatDay(week.days[i], "EEE d MMM"), current: pauses[iso]?.length ? formatPauses(pauses[iso]) : "", suggest, none: pauses[iso] !== undefined && !pauses[iso].length };
+    if (pauses[iso]?.length) return { ...base, text: formatPauses(pauses[iso]), tone: "plain" };
+    if (pauses[iso] !== undefined) return { ...base, text: t("none"), tone: "muted" };
+    return { ...base, text: isWorkday(i) || report.dayTotals[i] > 0 ? formatPauses(defaultPauses) || "＋" : "＋", tone: "muted" };
   });
   const flex = getFlexTime();
   const flexJob = flex.jobNumber ? getJobByNumber(flex.jobNumber) : undefined;
@@ -263,7 +271,41 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     done,
     report: { head: t("Report · week {n}", { n: week.week }), days, text: reportText, empty: t("No entries.") },
     entriesHead: t("Entries in week {n}", { n: week.week }),
-    entryList: report.entries.map((e) => ({
+    parallel: {
+      head: t("Parallel work"),
+      hint: t("These were done at the same time, but are booked on top of each other. Book the stretch once — in the way that fits."),
+      sets: detectParallel(week.startIso, week.endIso).map((p) => ({
+        ids: JSON.stringify(p.ids),
+        label: p.label,
+        when: `${p.date} · ${p.from}–${p.to}`,
+        cost: t("{sum} h booked, but the stretch is {span} h", { sum: h(p.sumHours), span: h(p.spanHours) }),
+        span: h(p.spanHours),
+        lines: p.entries.map((e) => `${e.start} · ${h(e.hours)} h${e.ticket ? ` · ${e.ticket}` : ""} · ${e.description}`),
+      })),
+    },
+    entryList: report.entries.map((e) => {
+      const span = e.spanId ? getSpan(e.spanId) : e.isGroup ? spanOfHead(e.id) : undefined;
+      const groups = groupOptionsOn(e.date);
+      const modeLabel = span ? ({ collect: t("Collecting entry"), combine: t("Combined parallel work"), divide: t("Divided parallel work"), sequential: t("Parallel work, one after the other"), remainder: t("Collecting entry") } as Record<string, string>)[span.mode] : "";
+      const members = span ? membersOf(span.id) : [];
+      const stretch = span ? stretchOf(members.map((m) => ({ start: m.start, hours: m.workedHours ?? m.hours })), pauses[span.date] ?? []) : null;
+      return {
+      bookOn: e.projectId ? `p:${e.projectId}` : `j:${e.job.number}`,
+      tagsText: e.tags.map((x) => x.name).join(", "),
+      comment: e.comment ?? "",
+      start: e.start ?? "",
+      isGroup: e.isGroup,
+      groupFlag: e.isGroup ? "true" : "false",
+      reportedBy: e.reportedBy,
+      typeKey: e.type,
+      member: !!e.spanId,
+      spanId: span?.id ?? "",
+      groupText: span ? `${modeLabel}${stretch?.from && stretch?.to ? ` ${stretch.from}–${stretch.to}` : ""}` : "",
+      books: span ? t("books {h} h", { h: h(e.hours) }) : "",
+      worked: e.workedHours != null ? h(e.workedHours) : "",
+      candidates: e.isGroup && span?.mode === "collect" ? collectCandidates(e.id).length : 0,
+      groupOptions: [["", t("Separate entry")], ...groups.map((g) => [g.spanId, `${g.label} (${g.kind === "collect" ? t("Collecting entry") : t("Parallel work")})`])] as [string, string][],
+      modeOptions: [["combine", t("Book all on group")], ["divide", t("Divide time on subtasks")], ["sequential", t("Book sequential")], ["remainder", t("Book subentries sequential and remaining time on group")], ["collect", t("Book all on group")]].filter(([m]) => (span?.mode === "collect" || span?.mode === "remainder" ? ["collect", "remainder"] : ["combine", "divide", "sequential"]).includes(m)) as [string, string][],
       id: e.id,
       date: e.date,
       dateText: formatDate(e.date),
@@ -276,7 +318,8 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       hours: e.hours,
       hoursText: h(e.hours),
       by: e.reportedBy,
-    })),
+      };
+    }),
     figures: { total: report.total, target: targets.weekTarget, dayTotals: report.dayTotals, missing: missingTotal, due: due.missing, close: close.done },
   };
 }

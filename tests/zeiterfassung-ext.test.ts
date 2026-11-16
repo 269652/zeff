@@ -375,3 +375,65 @@ test("the rules: type rules, report rules, meeting rules and entry types are lis
     assert.deepEqual(d.errors, [], JSON.stringify(state));
   }
 });
+
+test("week editing: a day's break, a whole entry, a copy, a start, parallel work and a group — as the built-in's actions do them", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { listEntries, createEntry } = await import("@/lib/entries");
+  const { listPausesByDate } = await import("@/lib/pauses");
+  const op = (input: Record<string, unknown>) => runFlow("zeiterfassung.entry-op", input);
+  // the break of a day (and one a day gets offered from the day before)
+  assert.equal((await op({ op: "pauses", dates: "2026-10-05", text: "12:00-12:30" })).status, "done");
+  assert.deepEqual(listPausesByDate("2026-10-05", "2026-10-05")["2026-10-05"], [{ start: "12:00", end: "12:30" }]);
+  const w = await run("zeiterfassung.week", { week: "2026-W41" });
+  assert.equal(w.table.foot.pause[0].current, "12:00-12:30");
+  assert.equal(w.table.foot.pause[1].suggest, "12:00-12:30", "the next day is offered the earlier break");
+  assert.equal((await op({ op: "pauses", dates: "2026-10-06", text: "none" })).status, "done");
+  assert.equal((await op({ op: "pauses", dates: "2026-10-06", text: "kaffee" })).status, "failed", "an unreadable break is refused");
+  // a whole entry changed
+  const e = listEntries({ from: "2026-10-07", to: "2026-10-07" })[0];
+  const upd = await op({ op: "update", id: e.id, date: "2026-10-07", bookOn: "j:100001", hours: "0,5", type: "meeting", ticket: "", start: "09:30", description: "Abstimmung neu", tags: "x, #y", comment: "Notiz", isGroup: "false" });
+  assert.equal(upd.status, "done", JSON.stringify(upd));
+  const after = listEntries({ from: "2026-10-07", to: "2026-10-07" }).find((x) => x.id === e.id)!;
+  assert.equal(after.description, "Abstimmung neu");
+  assert.equal(after.hours, 0.5);
+  assert.equal(after.job.number, "100001");
+  assert.equal(after.start, "09:30");
+  assert.equal(after.comment, "Notiz");
+  assert.deepEqual(after.tags.map((x) => x.name).sort(), ["x", "y"]);
+  // a copy on another day
+  assert.equal((await op({ op: "copy", id: e.id, date: "2026-10-08" })).status, "done");
+  assert.equal(listEntries({ from: "2026-10-08", to: "2026-10-08" }).some((x) => x.description === "Abstimmung neu"), true);
+  assert.equal((await op({ op: "copy", id: e.id, date: "" })).status, "failed");
+  // parallel work: two tasks of one job at the same time, found and booked divided
+  const a = createEntry({ jobNumber: "100002", date: "2026-10-12", hours: 2, description: "Parallel A", start: "09:00" }, "web");
+  const b = createEntry({ jobNumber: "100002", date: "2026-10-12", hours: 2, description: "Parallel B", start: "09:00" }, "web");
+  void a;
+  let pw = await run("zeiterfassung.week", { week: "2026-W42" });
+  const set = pw.parallel.sets.find((x: any) => x.lines.some((l: string) => l.includes("Parallel B")));
+  assert.ok(set, "the parallel work is found");
+  assert.equal((await op({ op: "parallel", mode: "divide", ids: set.ids })).status, "done");
+  pw = await run("zeiterfassung.week", { week: "2026-W42" });
+  const mine = pw.entryList.find((x: any) => x.id === b.id);
+  assert.ok(mine.member && mine.spanId, "it is a task of a group now");
+  assert.match(mine.groupText, /Divided parallel work/);
+  assert.match(mine.books, /books 1 h/);
+  assert.equal(pw.parallel.sets.find((x: any) => x.lines.some((l: string) => l.includes("Parallel B"))), undefined, "no longer open");
+  // its group mode changed, then taken apart
+  assert.equal((await op({ op: "span-mode", spanId: mine.spanId, mode: "sequential" })).status, "done");
+  assert.equal((await op({ op: "unlink", id: b.id })).status, "done");
+  assert.equal((await op({ op: "ungroup", spanId: mine.spanId })).status, "done");
+  assert.equal((await run("zeiterfassung.week", { week: "2026-W42" })).entryList.some((x: any) => x.member), false);
+  assert.equal((await op({ op: "start", id: b.id, start: "9h" })).status, "failed", "a start like 09:30");
+  // the view draws with every dialog
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const wk = await run("zeiterfassung.week", { week: "2026-W42" });
+  for (const state of [{ pauseday: "2026-10-12" }, { entryedit: String(b.id) }, { entrycopy: String(b.id) }, { groupedit: String(b.id) }, { entryedit: String(b.id), ee_group: "true" }]) {
+    const d = renderView(template, { rows: [], props: [], titleName: "Name", state: { view: "week", ...state }, app: {}, data: { w: wk }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+    assert.deepEqual(d.errors, [], JSON.stringify(state));
+  }
+});
