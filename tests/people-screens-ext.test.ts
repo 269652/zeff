@@ -365,4 +365,19 @@ test("the switch puts the screens in place: the overview and the person's page a
   await ensurePeopleDatabase();
   assert.equal(getDatabase(db)!.schema.views.filter((v) => v.type === "app").length, d.schema.views.filter((v) => v.type === "app").length, "not made again");
   assert.ok(anna);
+  // What Zeff keeps is what is drawn: the stored overview and the stored person page (a rowTemplate is cut at 20000 characters — a longer page lost its end) draw without an error
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const stored = getDatabase(db)!.schema;
+  assert.ok((stored.rowTemplate ?? "").length >= fs.readFileSync(path.join(repoPlugin("people-ext"), "views", "person.html"), "utf8").length - 2, "the whole page is kept");
+  const { rawRows } = await import("@/plugins/workspace/store");
+  const row = rawRows(db).find((x) => x.cells.srcref === `person:${anna}`)!;
+  const { call } = await world();
+  const page = await call<Record<string, unknown>>("people.person", { row: row.id, part: "page" });
+  const screen = await call<Record<string, unknown>>("people.screen", {});
+  const base = { rows: [], props: [], titleName: "People", app: {}, db: { id: db, title: "People" }, now: new Date(), locale: "de-DE", state: {} };
+  assert.deepEqual(renderView(stored.rowTemplate!, { ...base, data: { page, wiki: {}, loops: {} }, current: { id: row.id, title: "Anna", icon: "", cells: {}, createdAt: "", updatedAt: "" } } as never).errors, [], "the stored person page");
+  const view = stored.views.find((v) => v.type === "app" && v.app === "template")!;
+  assert.deepEqual(renderView(view.template!, { ...base, data: { people: screen, prog: {} } } as never).errors, [], "the stored overview");
+  // (and the plugin's files are within what Zeff keeps)
+  assert.ok(fs.readFileSync(path.join(repoPlugin("people-ext"), "views", "person.html"), "utf8").length < 20000);
 });
