@@ -99,3 +99,72 @@ test("the report's view draws with the lambdas' data without an error — the mo
   assert.match(text, /Ende Oktober|Kunde A/);
   assert.equal(draw({ view: "month" }, {}).errors.length, 0, "before the data is there");
 });
+
+test("the port's week is the built-in's: the same figures, table, report and entries out of the same bookings", { skip }, async () => {
+  const { run } = await setup();
+  const { getWeeklyReport } = await import("@/lib/entries");
+  const { getWeekTargets } = await import("@/lib/schedule");
+  const { getRewrittenReport, reportToText } = await import("@/lib/report");
+  const { resolveWeek } = await import("@/lib/week");
+  const { formatHours } = await import("@/lib/format");
+  for (const key of ["2026-W41", "2026-W44", "2026-W30"]) {
+    const week = resolveWeek(key)!;
+    const builtin = getWeeklyReport(week);
+    const port = await run("zeiterfassung.week", { week: key });
+    assert.equal(port.key, key);
+    assert.equal(port.figures.total, builtin.total, `${key}: the booked hours`);
+    assert.deepEqual(port.figures.dayTotals, builtin.dayTotals, `${key}: hours per day`);
+    assert.equal(port.figures.target, getWeekTargets(week).weekTarget, `${key}: the target`);
+    assert.equal(port.table.rows.length, builtin.rows.length, `${key}: a row per job`);
+    builtin.rows.forEach((row, i) => assert.deepEqual(port.table.rows[i].days.map((d: any) => d.text), row.hoursByDay.map((x) => (x ? formatHours(x) : "·"))));
+    assert.equal(port.report.text, reportToText(getRewrittenReport(week), formatHours), `${key}: the report's copy text`);
+    assert.equal(port.entryList.length, builtin.entries.length, `${key}: the entries`);
+  }
+  assert.match((await run("zeiterfassung.week", { week: "Woche" })).unreadable, /Could not read week "Woche"/);
+});
+
+test("the package installs: the flows book, change and delete an entry through the kernel's writes — what the report's form does", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  assert.ok(life.getInstalled("zeiterfassung-ext"), "the package is installed");
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { listEntries } = await import("@/lib/entries");
+  const before = listEntries({ from: "2026-12-07", to: "2026-12-07" }).length;
+  const added = await runFlow("zeiterfassung.add-entry", { date: "2026-12-07", hours: "1,5", description: "Ein Test, mit Komma", bookOn: "j:100001", ticket: "", type: "", tags: "alpha, #beta", comment: "" });
+  assert.equal(added.status, "done", JSON.stringify(added));
+  assert.match(String((added.output as any).message), /Booked 1\.5h on 100001 for 2026-12-07/);
+  const entries = listEntries({ from: "2026-12-07", to: "2026-12-07" });
+  assert.equal(entries.length, before + 1);
+  const entry = entries.find((e) => e.description === "Ein Test, mit Komma")!;
+  assert.equal(entry.hours, 1.5);
+  assert.deepEqual(entry.tags.map((x) => x.name).sort(), ["alpha", "beta"]);
+  const week = await run("zeiterfassung.week", { week: "2026-12-07" });
+  assert.equal(week.figures.total, 1.5);
+  assert.equal((await runFlow("zeiterfassung.entry-hours", { id: entry.id, hours: "2" })).status, "done");
+  assert.equal((await run("zeiterfassung.week", { week: "2026-12-07" })).figures.total, 2);
+  // a refusal is the flow's failure (the button says why)
+  const bad = await runFlow("zeiterfassung.add-entry", { date: "2026-12-07", hours: "1", description: "x", bookOn: "" });
+  assert.equal(bad.status, "failed");
+  assert.match(String(bad.error), /Pick a job or a project to book on/);
+  assert.equal((await runFlow("zeiterfassung.delete-entry", { id: entry.id })).status, "done");
+  assert.equal((await run("zeiterfassung.week", { week: "2026-12-07" })).figures.total, 0);
+});
+
+test("the report's view draws the week with the lambda's data — the form, the table, the dialogs", { skip }, async () => {
+  const { run } = await setup();
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const week = await run("zeiterfassung.week", { week: "2026-W41" });
+  const draw = (state: Record<string, string>, data: Record<string, unknown>) =>
+    renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  for (const state of [{ view: "week", week: "2026-W41" }, { view: "week", hoursedit: String(week.entryList[0].id) }, { view: "week", sugedit: "1" }] as Record<string, string>[]) {
+    const r = draw(state, { w: week });
+    assert.deepEqual(r.errors, [], JSON.stringify(state));
+  }
+  const text = JSON.stringify(draw({ view: "week" }, { w: week }).nodes);
+  assert.match(text, /zeiterfassung\.add-entry/, "the form runs the flow");
+  assert.match(text, /zeiterfassung\.delete-entry/, "an entry can be deleted");
+  assert.deepEqual(draw({ view: "week" }, {}).errors, [], "before the data is there");
+});

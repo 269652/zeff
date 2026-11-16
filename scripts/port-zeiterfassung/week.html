@@ -1,0 +1,184 @@
+<data name="w" lambda="zeiterfassung.week" with="week={{ state.week }}, by={{ state.by }}" when="{{ state.view != 'month' }}"/>
+<on event="time-changed" action="reload"/>
+{{#if data.w}}
+<col gap=3>
+  {{#if data.w.unreadable}}<callout tone=bad>{{ data.w.unreadable }}</callout>{{/if}}
+  {{#if data.booked.booked.message}}<callout tone=good>{{ data.booked.booked.message }}</callout>{{/if}}
+  <row gap=2 align=center wrap=true justify=between>
+    <row gap=2 align=center wrap=true>
+      <button action="state" state="week" value="{{ data.w.prev }}" label="←" tip="Previous week" variant=plain/>
+      <col><heading level=2>{{ data.w.title }} · {{ data.w.year }}</heading><small><muted>{{ data.w.range }}</muted></small></col>
+      <button action="state" state="week" value="{{ data.w.next }}" label="→" tip="Next week" variant=plain/>
+      {{#if not data.w.isCurrent}}<button action="state" state="week" value="{{ data.w.current }}" label="This week" variant=plain/>{{/if}}
+    </row>
+    <row gap=2 align=center wrap=true>
+      <input bind="week" type=date label="Jump to week" value=""/>
+      <select bind="by" options="{{ data.w.reporterOptions | tojson }}" label="Reported by"/>
+      <button action="url" href="{{ data.w.csv }}" label="CSV" variant=plain/>
+    </row>
+  </row>
+
+  <grid cols=2 gap=3 min=240>
+    <col gap=1>
+      <tile label="{{ data.w.booked.label }}" value="{{ data.w.booked.value }}" sub="{{ data.w.booked.sub }}" tone="{{ data.w.booked.tone }}"/>
+      {{#if data.w.booked.today}}<small>{{ data.w.booked.today }}</small>{{/if}}
+    </col>
+    <col gap=1>
+      <tile label="{{ data.w.past.label }}" value="{{ data.w.past.value }}" sub="{{ data.w.past.sub }}" tone="{{ data.w.past.tone }}"/>
+      <row gap=1 wrap=true>
+        {{#each data.w.past.weeks}}<button action="state" state="week" value="{{ key }}" label="{{ label }}" tip="{{ title }}" variant="{{ missing ? 'danger' : 'plain' }}"/>{{/each}}
+      </row>
+    </col>
+  </grid>
+
+  <section title="Hours per job and day">
+    {{#if data.w.table.rows}}
+    <grid cols=9 gap=2 min=50>
+      <small><muted>Job</muted></small>
+      {{#each data.w.table.heads}}<col align=end><text tone="{{ tone == 'bad' ? 'bad' : 'plain' }}"><b>{{ name }}</b></text><small><muted>{{ date }}</muted></small><small><muted>{{ note }}</muted></small></col>{{/each}}
+      <small><muted>Total</muted></small>
+      {{#each data.w.table.rows}}
+      <col>
+        {{#if project}}<b>{{ project }}</b><small><muted>{{ number }} {{ name }}</muted></small>{{#else}}<b>{{ number }} {{ name }}</b>{{#if customer}}<small><muted>{{ customer }}</muted></small>{{/if}}{{/if}}
+      </col>
+      {{#each days}}<text tone="{{ tone == 'muted' ? 'muted' : 'plain' }}">{{ text }}</text>{{/each}}
+      <b>{{ total }}</b>
+      {{/each}}
+      <b>Booked</b>
+      {{#each data.w.table.foot.booked}}<text tone="{{ tone == 'bad' ? 'bad' : tone == 'warn' ? 'warn' : 'plain' }}" tip="{{ title }}"><b>{{ text }}</b></text>{{/each}}
+      <b>{{ data.w.table.foot.bookedTotal }}</b>
+      {{#if data.w.table.foot.missing}}
+      <b>Missing</b>
+      {{#each data.w.table.foot.missing}}<text tone=bad>{{ text }}</text>{{/each}}
+      <text tone=bad>{{ data.w.table.foot.missingTotal }}</text>
+      {{/if}}
+      <small><muted>Target</muted></small>
+      {{#each data.w.table.foot.target}}<small><muted>{{ text }}</muted></small>{{/each}}
+      <small><muted>{{ data.w.table.foot.targetTotal }}</muted></small>
+      <small><muted>Pause</muted></small>
+      {{#each data.w.table.foot.pause}}<small><muted>{{ text }}</muted></small>{{/each}}
+      <text></text>
+    </grid>
+    {{#else}}<text tone=muted>{{ data.w.table.empty }}</text>{{/if}}
+  </section>
+
+  <section title="Add entry">
+    <col gap=2>
+      <grid cols=4 gap=2 min=160>
+        <input bind="n_date" type=date label="Date" value="{{ data.w.form.defaultDate }}"/>
+        <select bind="n_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>
+        <input bind="n_hours" type=number label="Hours" placeholder="1.5"/>
+        <select bind="n_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>
+      </grid>
+      <input bind="n_description" label="Description" placeholder="What did you do?"/>
+      <grid cols=3 gap=2 min=160>
+        <input bind="n_ticket" label="Ticket" placeholder="PROJ-337"/>
+        <input bind="n_tags" label="Tags" placeholder="tag1, tag2"/>
+        <input bind="n_comment" label="Comment"/>
+      </grid>
+      <row gap=2>
+        <button run="zeiterfassung.add-entry" with="date={{ state.n_date | default(data.w.form.defaultDate) }}, bookOn={{ state.n_bookon }}, hours={{ state.n_hours }}, type={{ state.n_type }}, description={{ state.n_description }}, ticket={{ state.n_ticket }}, tags={{ state.n_tags }}, comment={{ state.n_comment }}" into="booked" then="n_description=" emit="time-changed" label="Add entry" variant=primary/>
+      </row>
+    </col>
+  </section>
+
+  {{#if not data.w.closing.hidden}}
+  <section title="{{ data.w.closing.head }}" aside="{{ data.w.closing.summary }}">
+    {{#each data.w.closing.items}}
+    <row gap=2 align=baseline><text tone="{{ tone }}" tip="{{ title }}">{{ icon }}</text><b>{{ label }}</b><small><muted>{{ detail }}</muted></small></row>
+    {{/each}}
+  </section>
+  {{/if}}
+
+  {{#if data.w.suggestions.items}}
+  <section title="{{ data.w.suggestions.head }}" aside="{{ data.w.suggestions.count }}">
+    <small><muted>Reported by agents, not booked yet — check the hours and the line, then accept.</muted></small>
+    {{#each data.w.suggestions.items}}
+    <box>
+      <row gap=2 wrap=true align=baseline><small><muted>{{ ref }}</muted></small><b>{{ date }}</b>{{#if ticket}}<mono>{{ ticket }}</mono>{{/if}}{{#if target}}<small><muted>{{ target }}</muted></small>{{#else}}<text tone=warn>{{ noJobText }}</text>{{/if}}<small><muted>{{ by }}</muted></small></row>
+      <text>{{ description }}</text>
+      <small><muted tip="{{ evidence }}">Evidence: {{ evidence }}</muted></small>
+      <row gap=2 align=center justify=end>
+        <b>{{ hoursText }} h</b>
+        <button action="state" state="sugedit" value="{{ id }}" label="Edit" variant=plain/>
+        {{#if target}}<button run="zeiterfassung.suggestion" with="id={{ id }}, accept=true, hours={{ hours }}, description={{ description }}" emit="time-changed" done="Accepted." label="Accept" tip="{{ title }}" variant=primary/>{{/if}}
+        <button run="zeiterfassung.suggestion" with="id={{ id }}, accept=false" emit="time-changed" done="Suggestion dismissed." label="Dismiss" variant=plain/>
+      </row>
+    </box>
+    {{/each}}
+  </section>
+  <dialog bind="sugedit" title="Suggested entries">
+    {{#each data.w.suggestions.items | where('id', state.sugedit)}}
+    <col gap=2>
+      <small><muted>{{ ref }} · {{ date }} {{ ticket }} {{ target }}</muted></small>
+      <input bind="s_desc" label="Description" value="{{ description }}"/>
+      <input bind="s_hours" type=number label="Hours" value="{{ hours }}"/>
+      <row gap=2>
+        <button run="zeiterfassung.suggestion" with="id={{ id }}, accept=true, hours={{ state.s_hours | default(hours) }}, description={{ state.s_desc | default(description) }}" emit="time-changed" then="sugedit=" done="Accepted." label="Accept" variant=primary/>
+      </row>
+    </col>
+    {{/each}}
+  </dialog>
+  {{/if}}
+
+  {{#if data.w.done}}
+  <section title="Done today">
+    <small><muted>Todos ticked off today and time tracked on todos today, by ticket — adjust the hours and the words, then add them as entries.</muted></small>
+    {{#each data.w.done}}
+    <box>
+      <row gap=2 wrap=true align=baseline><mono>{{ ticket }}</mono><text>{{ summary }}</text>{{#if job}}<small><muted>{{ job }}</muted></small>{{#else}}<text tone=warn>{{ noJobText }}</text>{{/if}}</row>
+      <text>{{ description }}</text>
+      <small><muted>{{ todos }}</muted></small>
+      {{#if time}}<small><muted>{{ time }}</muted></small>{{/if}}
+      <row gap=2 align=center justify=end>
+        <b>{{ hoursText }} h</b>
+        {{#if job}}<button run="zeiterfassung.done-today" with="ticket={{ ticket }}, todoIds={{ todoIds | tojson }}, hours={{ hours }}, description={{ description }}" emit="time-changed" done="Booked." label="Add" variant=primary/>{{/if}}
+        <button run="zeiterfassung.done-today" with="ticket={{ ticket }}, todoIds={{ todoIds | tojson }}, skip=true" emit="time-changed" done="Skipped." label="Skip" variant=plain/>
+      </row>
+    </box>
+    {{/each}}
+  </section>
+  {{/if}}
+
+  <section title="{{ data.w.report.head }}" aside="grouped per day · configure on Schedule">
+    {{#if data.w.report.days}}
+    <row justify=end><copy text="{{ data.w.report.text }}" label="Copy"/></row>
+    {{#each data.w.report.days}}
+    <section title="{{ dateText }} · {{ total }}" collapsible=true open=true>
+      {{#each lines}}
+      {{#if expandable}}
+      <section title="{{ label }} {{ count }} · {{ hours }}" aside="{{ type }} {{ tags }}" collapsible=true open=false>
+        {{#each entries}}<row justify=between gap=2><small>{{ job }} · {{ description }}</small><small>{{ hours }}</small></row>{{/each}}
+      </section>
+      {{#else}}
+      <row justify=between gap=2><text>{{ label }} <small><muted>{{ tags }}</muted></small></text><row gap=2 align=center><dot color="{{ color }}"/><small>{{ type }}</small><b>{{ hours }}</b></row></row>
+      {{/if}}
+      {{/each}}
+    </section>
+    {{/each}}
+    {{#else}}<text tone=muted>{{ data.w.report.empty }}</text>{{/if}}
+  </section>
+
+  <section title="{{ data.w.entriesHead }}" aside="{{ data.w.entryList | count }}" collapsible=true open=false>
+    <datatable source="data.w.entryList" empty="No entries.">
+      <column label="Date">{{ dateText }}</column>
+      <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>
+      <column label="Description">{{ description }}{{#if ticket}} <small><muted>{{ ticket }}</muted></small>{{/if}}</column>
+      <column label="Type"><dot color="{{ color }}"/> {{ type }}</column>
+      <column label="Hours" align=right><button action="state" state="hoursedit" value="{{ id }}" label="{{ hoursText }}" variant=link/></column>
+      <column label=""><button run="zeiterfassung.delete-entry" with="id={{ id }}" confirm="Delete this entry?" emit="time-changed" done="Deleted." label="✕" variant=quiet/></column>
+    </datatable>
+  </section>
+  <dialog bind="hoursedit" title="Hours">
+    {{#each data.w.entryList | where('id', state.hoursedit)}}
+    <col gap=2>
+      <text>{{ description }}</text>
+      <input bind="e_hours" type=number label="Hours" value="{{ hours }}"/>
+      <row gap=2>
+        <button run="zeiterfassung.entry-hours" with="id={{ id }}, hours={{ state.e_hours | default(hours) }}" emit="time-changed" then="hoursedit=" done="Saved." label="Save" variant=primary/>
+      </row>
+    </col>
+    {{/each}}
+  </dialog>
+</col>
+{{#else}}<text tone=muted>…</text>{{/if}}

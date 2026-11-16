@@ -8,7 +8,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { swapPlugin } from "./lib/swap-reads.mts";
+import { swapPlugin } from "./lib/swap-reads.mjs";
 
 const ROOT = process.cwd();
 const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
@@ -23,6 +23,7 @@ const part = (name: string) => (fs.existsSync(path.join(SRC, name)) ? fs.readFil
 fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; timeoutMs: number }> = {
+  "zeiterfassung.week": { label: "Time tracking: the week's report", what: "The weekly report's figures and words for a week — the booked card, hours per job and day, the closing steps, the suggestions, what was done today, the report, the entries.", zeff: ["time.week"], timeoutMs: 60000 },
   "zeiterfassung.month": { label: "Time tracking: the month's report", what: "The monthly report's figures and words for a month — the booked card, the calendar, hours per job and week, by type and tag, what each job's time went to.", zeff: ["time.month"], timeoutMs: 60000 },
 };
 for (const [name, l] of Object.entries(LAMBDAS)) {
@@ -44,6 +45,34 @@ const report = [
 write("views/report.html", report);
 
 const EMPTY = { type: "doc", content: [{ type: "paragraph" }] };
+const flow = (id: string, name: string, title: string, description: string, action: string, input: Record<string, string>) => ({
+  id,
+  parent: "i1",
+  kind: "page",
+  title,
+  icon: "⏱️",
+  content: EMPTY,
+  flow: {
+    name,
+    title,
+    description,
+    inputs: [],
+    nodes: [
+      { id: "do", kind: "action", action, input },
+      { id: "done", kind: "return", value: { ok: true, message: "{{ steps.do.message }}" } },
+    ],
+    requested: { write: "all" },
+    triggers: [{ kind: "manual" }],
+  },
+});
+const i = (...names: string[]) => Object.fromEntries(names.map((n) => [n, `{{ input.${n} }}`]));
+const FLOWS = [
+  flow("f1", "zeiterfassung.add-entry", "Book time", "Books an entry (input date, hours, description, bookOn j:<job number> or p:<project id>, ticket, type, tags, comment). Run by the report's form.", "time.entry-add", i("date", "hours", "description", "bookOn", "ticket", "type", "tags", "comment")),
+  flow("f2", "zeiterfassung.entry-hours", "Change the hours of an entry", "Sets the hours of one entry (input id, hours). Run by the report.", "time.entry-hours", i("id", "hours")),
+  flow("f3", "zeiterfassung.delete-entry", "Delete an entry", "Deletes one booked entry (input id). Run by the report.", "time.entry-delete", i("id")),
+  flow("f4", "zeiterfassung.suggestion", "Take over or dismiss a suggested entry", "An agent's suggested booking (input id, accept true|false, hours, description). Run by the report.", "time.suggestion", i("id", "accept", "hours", "description")),
+  flow("f5", "zeiterfassung.done-today", "Book the todos done today", "A ticket's todos done today booked as one entry, or skipped (input ticket, todoIds, hours, description, skip). Run by the report.", "time.done-today", i("ticket", "todoIds", "hours", "description", "skip")),
+];
 write(
   "zeiterfassung.package.json",
   JSON.stringify(
@@ -52,10 +81,11 @@ write(
       id: "zeiterfassung-ext",
       version: "1.0.0",
       name: "Time tracking",
-      description: "The report of your booked time: the week and the month.",
+      description: "The report of your booked time: the week and the month, with booking, suggestions and closing the week.",
       icon: "⏱️",
       items: [
         { id: "i1", kind: "page", title: "Time tracking", icon: "⏱️", content: EMPTY },
+        ...FLOWS,
         {
           id: "i2",
           parent: "i1",
@@ -81,7 +111,7 @@ write(
       id: "zeiterfassung-ext",
       name: "Time tracking — the report",
       version: old.version ?? "0.1.0",
-      description: "The report of your booked time in the view language: the month as a calendar and per job, the week, over Zeff's own figures. The core (jobs, projects, bookings, the schedule) stays Zeff's.",
+      description: "The report of your booked time in the view language: the week (booking, suggestions, closing it) and the month, over Zeff's own figures. The core (jobs, projects, bookings, the schedule) stays Zeff's.",
       author: "Zeff",
       apiVersion: 1,
       permissions: [],
