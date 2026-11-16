@@ -43,6 +43,8 @@ export const ADOPTABLE_PREFS: Record<string, string[]> = {
   "know-ext": ["know.autoSummary"],
   // (the folders read in by themselves, and when each was looked at)
   "documents-ext": ["documents:folders"],
+  // (Calendar: how many days ahead appointments are read for todos, and the AI's verdicts on which give you something to do)
+  "calendar-ext": ["calendar:todos-days", "calendar:todo-verdicts"],
   "news-ext": ["news:prefs", "news:taste", "news:digest", "news:funnel-stats", "news:discover-queries", "news:autodiscover-at", "news:lowdiscover-at", "news:low-turn", "news:discoveries", "news:expand-at"],
 };
 

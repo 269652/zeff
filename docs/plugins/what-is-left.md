@@ -17,6 +17,7 @@ The platform and the **shared entity graph**, which every app reads and none own
 | Plugin | Lines | What moves | What it needs first |
 |---|---|---|---|
 | documents | 3.6k | **done in `documents-ext`:** the AI steps, local folders, reading, search. **left:** the screen and its parts, uploads, abstracts (knowledge), the settings page, the attach picker | UI in the view language (thumbnail, PDF frame, upload) |
+| documents | 3.6k | file reading, abstracts, search, todo relations | kernel reads for files and text extraction |
 | calendar | 3.9k (+2.3k lib) | the calendar app, meetings, entries | the calendar model (IR) as kernel reads |
 | jira-lage | 1.5k | "Meine Lage" | the Jira kernel reads |
 | knowledge (+hub) | 1.4k | Confluence client, export, graph | a connection kind (token) for plugins |

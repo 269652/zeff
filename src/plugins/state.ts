@@ -38,6 +38,8 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   news: { port: "news-ext", steps: ["news"] },
   // (Documents: the port's flows go through the documents for todos, match them to the todos, read in your local folders and read what waits — plugins/documents/port.ts; the screen, uploads, the settings page and the knowledge server's abstracts stay the built-in's)
   documents: { port: "documents-ext", steps: ["localdocs", "doctodos", "docrelations"] },
+  // (Calendar: the port's page, flows and AI steps — the model, the readers, the settings page and the plugin API stay the kernel's; its steps calendartodos and calendarrelations run the port's flows — lib/calendar/todos.ts calendarTodosVia, sync/registry.ts)
+  calendar: { port: "calendar-ext", steps: [] },
 };
 
 /**

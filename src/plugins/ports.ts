@@ -35,6 +35,7 @@ export const PORTS: Port[] = [
   { builtin: "auto-actions", plugin: "auto-actions-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("auto-actions", { port: "auto-actions-ext", flow: "autoactions.review", minutes: async () => (await import("@/lib/runs/store")).getBoardSettings().autoMinutes }) },
   { builtin: "finances", plugin: "finances-ext", switch: async () => (await import("./finances/to-plugin")).switchFinancesToPlugin() },
   { builtin: "documents", plugin: "documents-ext", switch: async () => (await import("./documents/to-plugin")).switchDocumentsToPlugin() },
+  { builtin: "calendar", plugin: "calendar-ext", switch: async () => (await import("./calendar/to-plugin")).switchCalendarToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */
