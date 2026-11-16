@@ -11,6 +11,5 @@ export default definePlugin({
   defaultInstalled: false,
   dependsOn: ["workspace", "documents"],
   requires: "Zeff running on the computer whose files you want to see (in Docker: only the folders mounted into it).",
-  apps: [{ href: "/explorer", label: "Explorer", short: "Files", hint: "The files of this computer, in the Workspace" }],
-  routes: ["/explorer", "/api/explorer"],
+  routes: ["/api/explorer"],
 });

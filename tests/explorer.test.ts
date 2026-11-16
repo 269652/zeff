@@ -162,38 +162,3 @@ test("a watched folder: listed in the side pane, the folders inside it know it; 
   assert.equal(w.ignored("sub/brief.docx"), false);
   folders.removeFolder(added.id);
 });
-
-test("Explorer pages: made by the template, remembered with their folder; /explorer opens the first one", async () => {
-  const pages = await import("@/plugins/explorer/pages");
-  const { getPage } = await import("@/plugins/workspace/store");
-  const id = pages.createExplorerPage(null, null);
-  assert.equal(getPage(id)?.title, "Explorer");
-  assert.equal(getPage(id)?.fullWidth, true);
-  assert.equal(pages.isExplorerPage(id), true);
-  pages.rememberPath(id, "C:\\Temp");
-  assert.equal(pages.lastPath(id), "C:\\Temp");
-  assert.equal(pages.explorerPage(), id);
-  assert.equal(pages.isExplorerPage(id + 999), false);
-});
-
-test("an Explorer page's places in the Workspace tree: under the page when set so, each leading to its folder; off again: gone", async () => {
-  const { setInstalled } = await import("@/plugins/state");
-  setInstalled("explorer", true);
-  const pages = await import("@/plugins/explorer/pages");
-  const { appNavs } = await import("@/plugins/workspace/app-nav");
-  const { pathOfNav } = await import("@/plugins/explorer/shared");
-  const id = pages.createExplorerPage(null, null);
-  assert.equal(pages.placesInTree(id), false);
-  assert.equal((await appNavs())[id], undefined, "not in the tree until set so");
-  pages.rememberPath(id, "C:\Temp");
-  pages.setPlacesInTree(id, true);
-  assert.equal(pages.lastPath(id), "C:\Temp", "the folder it was in stays");
-  const nav = (await appNavs())[id];
-  assert.ok(nav, "in the tree now");
-  assert.equal(nav.fixed, true, "no Hide in the tree — the page's own switch");
-  assert.ok(nav.entries.some((e) => e.group === "This PC"), "the drives");
-  assert.ok(nav.entries.every((e) => pathOfNav(e.id) !== null && !e.href), "each a ?nav=path:… of the page");
-  pages.setPlacesInTree(id, false);
-  assert.equal((await appNavs())[id], undefined);
-  assert.throws(() => pages.setPlacesInTree(id + 999, true), /isn't an Explorer page/);
-});
