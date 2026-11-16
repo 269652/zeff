@@ -134,8 +134,8 @@ export async function dayScreen(input: { date?: string; week?: string; state?: s
     mode: week ? "week" : "day",
     title: week ? t("The week to book") : t("End of day"),
     intro: week
-      ? t("{week} — each day as a booking suggestion: its meetings, the agents' suggestions, the tickets you worked on (todos done, worker runs, your commits — an estimate from their span when there is no time), with the evidence of each line.", { week: week === "current" ? t("This week") : week })
-      : t("{day} — the day as a booking suggestion: today's meetings, the agents' suggestions and the tickets you worked on (todos done, worker runs with their time). Check, adjust, book with one click.", { day: days[0] ? formatLongDay(days[0].date) : "" }),
+      ? t("{week} — each day as a booking suggestion: its meetings, the agents' suggestions, the tickets you worked on (todos done, worker runs, your commits — an estimate from their span where no time was taken, said so). Check each day, book it with its button — nothing is booked before.", { week: week === "current" ? t("This week") : week })
+      : t("{day} — the day as a booking suggestion: today's meetings, the agents' suggestions and the tickets you worked on (todos done, worker runs with their time). Check, adjust, book with one click — nothing is booked before.", { day: days[0] ? formatLongDay(days[0].date) : "" }),
     days: days.map((p) => dayView(p, state)),
   };
 }

@@ -50,7 +50,7 @@ export function entryDetail(input: { id?: unknown }) {
   return {
     found: true,
     id,
-    title: t("Entry #{id} · {hours}h on {target}", { id, hours: String(entry.hours), target: entry.project ? entry.project.title : entry.job.number }),
+    title: t("Entry #{id} · {hours}h on <target>{target}</target>", { id, hours: String(entry.hours), target: entry.project ? entry.project.title : entry.job.number }).replace(/<\/?target>/g, ""),
     created: t("Reported by {who} via {source} · created {at} UTC", { who: entry.reportedBy, source: entry.source, at: entry.createdAt }),
     ticket: entry.ticket ?? "",
     date: entry.date,

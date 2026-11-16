@@ -739,23 +739,6 @@ test("opened live: the installed view, its rows as the page hands them, German w
   assert.ok(latest.table.rows.length >= 1 && latest.entryList.length >= 1);
 });
 
-test("opened live in a new account: no job, no booking — every tab still draws (a select without options is an error of the language)", { skip }, async () => {
-  await setup();
-  const { setInstalled } = await import("@/plugins/state");
-  for (const id of ["zeiterfassung", "weekly-report", "monthly-report"]) setInstalled(id as never, false);
-  const { db, template } = await installedReport();
-  const { getSqlite } = await import("@/db");
-  const { listJobs } = await import("@/lib/jobs");
-  // (every job inactive and every entry away: what a new account has)
-  getSqlite().exec("delete from entry_items; delete from time_entries; update jobs set active = 0");
-  assert.equal(listJobs().length, 0);
-  for (const lang of ["en", "de"] as const)
-    for (const view of ["week", "month", "analysis", "day", "jobs", "settings"]) {
-      const o = await openLive(template, db, { view }, lang);
-      assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${view}`);
-    }
-});
-
 test("the gaps: rules edited in place, context items edited, files brought by an upload, linked, moved — and the kit: select value=, dialog reset=", { skip }, async () => {
   await setup();
   const { setInstalled } = await import("@/plugins/state");
@@ -778,11 +761,13 @@ test("the gaps: rules edited in place, context items edited, files brought by an
   assert.deepEqual(rule.conditions, [{ field: "type", value: "ticket" }, { field: "tag", value: "x" }]);
   assert.deepEqual(rule.tags, ["a", "b"]);
   assert.equal((await op({ what: "meetings", op: "add", match: "Alt", jobNumber: "100001" })).status, "done");
-  assert.equal((await op({ what: "meetings", op: "update", index: 0, match: "Neu", jobNumber: "100002", group: "true" })).status, "done");
-  assert.deepEqual(getMeetingJobRules(getReportSettings()).map((r) => [r.match, r.jobNumber, !!r.group]), [["Neu", "100002", true]]);
+  const mi = getMeetingJobRules(getReportSettings()).length - 1;
+  assert.equal((await op({ what: "meetings", op: "update", index: mi, match: "Neu", jobNumber: "100002", group: "true" })).status, "done");
+  assert.deepEqual(getMeetingJobRules(getReportSettings())[mi] && [getMeetingJobRules(getReportSettings())[mi].match, getMeetingJobRules(getReportSettings())[mi].jobNumber, !!getMeetingJobRules(getReportSettings())[mi].group], ["Neu", "100002", true]);
   assert.equal((await op({ what: "exclude", op: "add", value: "Alt" })).status, "done");
-  assert.equal((await op({ what: "exclude", op: "update", index: 0, value: "Neu" })).status, "done");
-  assert.deepEqual(getMeetingExcludeRules(getReportSettings()), ["Neu"]);
+  const xi = getMeetingExcludeRules(getReportSettings()).length - 1;
+  assert.equal((await op({ what: "exclude", op: "update", index: xi, value: "Neu" })).status, "done");
+  assert.equal(getMeetingExcludeRules(getReportSettings())[xi], "Neu");
   const rules = await run("zeiterfassung.rules", {});
   assert.equal(rules.typeRules[at].jobNumber, "100002");
   assert.equal(rules.reportRules[ri].f2, "tag");
@@ -867,4 +852,22 @@ test("switching to the plugin: its page is found, the built-in stands in through
   assert.equal(await reportLink({ view: "day", fweek: "current" }), `/workspace/${r.page}?s.view=day&s.fweek=current`);
   // the kernel's reads answer (the screens of the port are what ask them)
   assert.ok((await run("zeiterfassung.week", {})).key);
+});
+
+// (last: it empties the account)
+test("opened live in a new account: no job, no booking — every tab still draws (a select without options is an error of the language)", { skip }, async () => {
+  await setup();
+  const { setInstalled } = await import("@/plugins/state");
+  for (const id of ["zeiterfassung", "weekly-report", "monthly-report"]) setInstalled(id as never, false);
+  const { db, template } = await installedReport();
+  const { getSqlite } = await import("@/db");
+  const { listJobs } = await import("@/lib/jobs");
+  // (every job inactive and every entry away: what a new account has)
+  getSqlite().exec("delete from entry_items; delete from time_entries; update jobs set active = 0");
+  assert.equal(listJobs().length, 0);
+  for (const lang of ["en", "de"] as const)
+    for (const view of ["week", "month", "analysis", "day", "jobs", "settings"]) {
+      const o = await openLive(template, db, { view }, lang);
+      assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${view}`);
+    }
 });
