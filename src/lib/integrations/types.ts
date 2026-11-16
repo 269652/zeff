@@ -96,6 +96,8 @@ export type IntegrationServer = {
   month?: (ctx: MonthContext) => MonthSlot | Promise<MonthSlot>;
   jobs?: JobsSlot;
   weekClose?: (ctx: WeekCloseContext) => CloseItem[] | Promise<CloseItem[]>;
+  /** The same places as data (the time report plugin draws them): cards, marks, approvals, a jobs column, close steps — see plugins/zeiterfassung/time-slots.ts. */
+  slots?: import("@/plugins/zeiterfassung/time-slots").TimeSlot;
 };
 
 /**

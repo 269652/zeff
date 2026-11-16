@@ -4,6 +4,7 @@ import { getJobByNumber, listJobs } from "@/lib/jobs";
 import { getFlexTime, getWorkSchedule, listAbsences, scheduleHours } from "@/lib/schedule";
 import { absenceLabels, WEEKDAY_KEYS, weekdayLabels, type AbsenceType } from "@/lib/schedule-shared";
 import { todayIso } from "@/lib/week";
+import { isInstalled } from "@/plugins/state";
 
 /**
  * The time-tracking settings that are about the schedule, as plain data: the weekly hours, the default break, the flex-time job and the absences —
@@ -23,6 +24,8 @@ export function scheduleScreen() {
     hoursHead: t("Weekly hours · {hours} h/week", { hours: formatHours(weekTotal) }),
     days: WEEKDAY_KEYS.map((key, i) => ({ key, label: weekdayLabels(t)[i], hours: hours[i] })),
     defaultPauses: schedule.defaultPauses ?? "",
+    punchOn: isInstalled("punch" as never),
+    punchExport: schedule.punchDefaultPauses ? "1" : "",
     flexJob: flex.jobNumber ?? "",
     flexComment: flex.comment,
     flexJobOptions: [["", t("Off")] as [string, string], ...(flexJob ? [[flexJob.number, t("{name} (inactive)", { name: flexJob.name })] as [string, string]] : []), ...jobs],

@@ -21,6 +21,8 @@ import { absenceLabels, type AbsenceType } from "@/lib/schedule-shared";
 import { listTags } from "@/lib/tags";
 import { weekClose } from "@/lib/week-close";
 import { ticketInfos } from "./tickets";
+import { todoContextCounts } from "./entry-context";
+import { closeSlotItems, closeWith, fullAction, fullCard, weekSlotData, type SlotMark } from "./time-slots";
 import { currentWeek, formatDay, formatWeekRange, isoDate, resolveWeek, shiftWeek, todayIso } from "@/lib/week";
 import { doneToday } from "@/lib/work/booking";
 import { openSuggestions } from "@/lib/work/suggestions";
@@ -59,6 +61,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   const today = todayIso();
 
   const report = getWeeklyReport(week, { reportedBy: by });
+  // What the booking systems add (their places as data): cards, buttons, marks on entries and days.
+  const slots = await weekSlotData({ week, entries: report.entries, by });
+  const marksOf = (id: number): SlotMark[] => slots.flatMap((x) => (x.slot.entries?.[id] ? [x.slot.entries[id]] : []));
+  const joinMarks = (marks: SlotMark[]) => ({ mark: marks.map((m) => m.text).filter(Boolean).join(" "), markTitle: marks.map((m) => m.title ?? "").filter(Boolean).join(" · "), approved: marks.length > 0 && marks.every((m) => m.approved), markTone: marks.find((m) => m.tone && m.tone !== "plain")?.tone ?? "plain" });
   const targets = getWeekTargets(week);
   const rewritten = getRewrittenReport(week, { reportedBy: by });
   const reportText = reportToText(rewritten, formatHours);
@@ -130,7 +136,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     customer: row.job.customer ?? "",
     project: row.project?.title ?? "",
     noJob: row.job.number === NO_JOB_NUMBER,
-    days: row.hoursByDay.map((x, i) => ({ text: x ? h(x) : "·", tone: dayTone(i) })),
+    days: row.hoursByDay.map((x, i) => {
+      const cell = x ? joinMarks(report.entries.filter((e) => e.jobId === row.job.id && (e.projectId ?? null) === (row.project?.id ?? null) && e.date === isoDays[i]).flatMap((e) => marksOf(e.id))) : joinMarks([]);
+      return { text: x ? h(x) : "·", tone: cell.approved ? "good" : dayTone(i), mark: cell.mark, markTitle: cell.markTitle };
+    }),
     total: h(row.total),
   }));
   const missingTotal = round2(shortfall.reduce((a, s) => a + (s.state === "missing" ? s.gap : 0), 0));
@@ -154,6 +163,8 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     rows,
     foot: {
       booked: report.dayTotals.map((x, i) => ({
+        mark: slots.map((s) => s.slot.days?.[i]?.text ?? "").filter(Boolean).join(" "),
+        markTitle: slots.map((s) => s.slot.days?.[i]?.title ?? "").filter(Boolean).join(" · "),
         text: x ? h(x) : shortfall[i].state === "ok" ? "" : "0",
         tone: shortfall[i].state === "missing" ? "bad" : shortfall[i].state === "short" ? "warn" : dayTone(i),
         title: shortfall[i].state === "ok" ? "" : shortfall[i].state === "short" ? t("{hours} h below the target (day not over yet)", { hours: h(shortfall[i].gap) }) : t("{hours} h below the target", { hours: h(shortfall[i].gap) }),
@@ -178,7 +189,8 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   const defaultDate = today >= week.startIso && today <= week.endIso ? today : week.startIso;
 
   // --- closing the week
-  const close = await weekClose(week);
+  const base = await weekClose(week);
+  const close = closeWith(base, await closeSlotItems({ week, now: new Date(), over: base.over, entries: report.entries, query: `week=${encodeURIComponent(week.key)}` }));
   const MARK = { ok: { icon: "✓", tone: "good", title: t("done") }, open: { icon: "•", tone: "bad", title: t("open") }, unknown: { icon: "?", tone: "warn", title: t("not known — fetch it first") }, later: { icon: "…", tone: "muted", title: t("not due yet — the week is still running") } };
   const closeDone = close.items.filter((i) => i.state === "ok").length;
   const closing = {
@@ -229,6 +241,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
 
   // --- the report
   const tk = ticketInfos([...report.entries.map((e) => e.ticket), ...rewritten.days.flatMap((d) => d.lines.flatMap((l) => l.entries.map((e) => e.ticket)))]);
+  const ctxCount = todoContextCounts(report.entries.map((e) => e.id));
   const days = rewritten.days.map((d) => ({
     date: d.date,
     dateText: formatDate(d.date),
@@ -261,6 +274,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     csv: `/api/report?week=${week.key}${by ? `&by=${encodeURIComponent(by)}` : ""}`,
     booked,
     past,
+    slots: { cards: slots.flatMap((x) => (x.slot.cards ?? []).map(fullCard)), actions: slots.flatMap((x) => (x.slot.actions ?? []).map(fullAction)), exports: slots.flatMap((x) => (x.slot.exports ?? []).map(fullAction)) },
     table,
     form: {
       defaultDate,
@@ -273,6 +287,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     done,
     report: { head: t("Report · week {n}", { n: week.week }), days, text: reportText, empty: t("No entries.") },
     entriesHead: t("Entries in week {n}", { n: week.week }),
+    // (what a drop is cleared with: the collecting entries' names in the state)
+    dropClear: report.entries.filter((e) => e.isGroup && spanOfHead(e.id)?.mode === "collect").map((e) => `dr${e.id}=`).join("; "),
+    contextKinds: [["note", t("Note")], ["teams", "Teams"], ["jira", "Jira"], ["gitlab", "GitLab"], ["email", t("Email")]] as [string, string][],
     parallel: {
       head: t("Parallel work"),
       hint: t("These were done at the same time, but are booked on top of each other. Book the stretch once — in the way that fits."),
@@ -298,6 +315,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       start: e.start ?? "",
       isGroup: e.isGroup,
       groupFlag: e.isGroup ? "true" : "false",
+      ctxCount: ctxCount[e.id] ?? 0,
+      dropKey: e.isGroup && span?.mode === "collect" ? `dr${e.id}` : "",
+      draggable: !e.isGroup && !e.spanId,
       reportedBy: e.reportedBy,
       typeKey: e.type,
       member: !!e.spanId,
@@ -322,6 +342,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       hours: e.hours,
       hoursText: h(e.hours),
       by: e.reportedBy,
+      ...(() => {
+        const m = joinMarks(marksOf(e.id));
+        return { mark: m.mark, markTitle: m.markTitle, markTone: m.markTone, approved: m.approved };
+      })(),
       };
     }),
     figures: { total: report.total, target: targets.weekTarget, dayTotals: report.dayTotals, missing: missingTotal, due: due.missing, close: close.done },

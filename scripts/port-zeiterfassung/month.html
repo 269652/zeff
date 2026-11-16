@@ -28,6 +28,7 @@
   </grid>
 
   <section title="Days" aside="{{ data.m.calendarHint }}">
+    {{#if data.m.slotActions}}<row gap=2 wrap=true justify=end align=center>{{#if data.m.oldestPull}}<small><muted>{{ data.m.oldestPull }}</muted></small>{{/if}}{{#each data.m.slotActions}}<button run="{{ flow }}" with="{{ with }}" emit="time-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
     <grid cols=9 gap=1 min=60>
       <text></text>
       {{#each data.m.weekdays}}<small><muted>{{ this }}</muted></small>{{/each}}
@@ -46,6 +47,7 @@
       {{/each}}
     </grid>
     <small><muted>red: hours missing · amber: due today · grey: off / absent</muted></small>
+    {{#if data.m.approvals}}<row gap=3 wrap=true><small><muted>green: {{ data.m.approvals.legendAll }}</muted></small><small><muted>8 / 12 {{ data.m.approvals.legendPartly }}</muted></small><small><muted>{{ data.m.approvals.legendNone }}</muted></small>{{#if data.m.approvals.unpulled}}<small><muted>{{ data.m.approvals.unpulled }}</muted></small>{{/if}}</row>{{/if}}
   </section>
 
   <section title="Hours per job and week">
@@ -111,9 +113,10 @@
     <datatable source="data.m.entryList" empty="No entries.">
       <column label="Date">{{ dateText }}</column>
       <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>
-      <column label="Description">{{ description }}{{#if ticket}} {{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<small><muted>{{ ticket }}</muted></small>{{/if}}{{/if}}</column>
+      <column label="Description">{{#if mark}}<small tip="{{ markTitle }}">{{ mark }}</small> {{/if}}{{ description }}{{#if ticket}} {{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<small><muted>{{ ticket }}</muted></small>{{/if}}{{/if}}</column>
       <column label="Type"><dot color="{{ color }}"/> {{ type }}</column>
       <column label="Hours" align=right>{{ hours }}</column>
+      <column label=""><button action="state" state="week" value="{{ date }}" emit="openweek" label="→" tip="Open its week to edit it" variant=quiet/></column>
     </datatable>
   </section>
 </col>

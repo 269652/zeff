@@ -12,6 +12,7 @@ import { getDayTargets } from "@/lib/schedule";
 import { absenceLabels, type AbsenceType } from "@/lib/schedule-shared";
 import { isoDate, todayIso } from "@/lib/week";
 import { ticketInfos } from "./tickets";
+import { fullAction, monthSlotData } from "./time-slots";
 
 /**
  * The monthly report as figures and words, ready to draw: what src/app/month/page.tsx works out from the booked time, the schedule and the report rules
@@ -41,7 +42,7 @@ function bookedStatus(booked: number, target: number, days: { gap: number; state
   return { tone: "good", caption: onTarget ? t("Matches the target") : t("All booked so far") };
 }
 
-export function monthScreen(input: { month?: string; by?: string } = {}) {
+export async function monthScreen(input: { month?: string; by?: string } = {}) {
   const requested = resolveMonth(input.month);
   const month = requested ?? currentMonth();
   const by = String(input.by ?? "").trim() || undefined;
@@ -65,6 +66,10 @@ export function monthScreen(input: { month?: string; by?: string } = {}) {
     );
   const weekTargets = perWeek((i) => targets[i].target);
   const weekMissing = perWeek((i) => (shortfalls[i].state === "missing" ? shortfalls[i].gap : 0));
+  // What the booking systems add (their places as data): the approvals per day, buttons, marks on entries.
+  const slots = await monthSlotData({ month, entries: report.entries });
+  const approvals = slots.find((x) => x.slot.approvals)?.slot.approvals;
+  const system = approvals?.system ?? "";
   const workdays = targets.filter((x) => x.target > 0).length;
   const absentDays = targets.filter((x) => x.absence).length;
 
@@ -149,13 +154,29 @@ export function monthScreen(input: { month?: string; by?: string } = {}) {
           .filter(Boolean)
           .join(" · ");
         const shown = hours > 0 ? h(hours) : future || off ? "" : "0";
+        const chrono = approvals?.days[i] ?? null;
+        const approved = chrono ? round2(chrono.approved) : 0;
+        const allApproved = !!chrono && hours > 0 && approved >= round2(hours);
+        const partly = !!chrono && approved > 0 && !allApproved;
+        const none = !!chrono && hours > 0 && approved === 0;
+        const approvalTitle =
+          hours > 0 && approvals
+            ? !chrono
+              ? t("week not pulled from {system}", { system })
+              : allApproved
+                ? t("all approved in {system}", { system })
+                : partly
+                  ? t("{approved} of {hours} h approved in {system}", { approved: h(approved), hours: h(hours), system })
+                  : t("not approved in {system} yet", { system })
+            : "";
         return {
           in: true,
           day: String(d.getDate()),
           note,
-          hours: `${shown}${sf.state !== "ok" ? ` −${h(sf.gap)}` : ""}`.trim(),
-          tone: sf.state === "missing" ? "bad" : sf.state === "short" ? "warn" : off ? "muted" : "plain",
-          title,
+          hours: `${partly ? `${h(approved)} / ${h(hours)}` : shown}${sf.state !== "ok" ? ` −${h(sf.gap)}` : ""}`.trim(),
+          tone: sf.state === "missing" ? "bad" : sf.state === "short" ? "warn" : allApproved ? "good" : off ? "muted" : "plain",
+          title: [title, approvalTitle].filter(Boolean).join(" · "),
+          pending: none || partly,
           today: isoDate(d) === today,
           week: w.key,
         };
@@ -238,7 +259,17 @@ export function monthScreen(input: { month?: string; by?: string } = {}) {
     entries,
     weekdays,
     calendar,
-    calendarHint: t("booked hours · click a day to open its week"),
+    calendarHint: approvals ? t("booked hours and their {system} approval · click a day to open its week", { system }) : t("booked hours · click a day to open its week"),
+    approvals: approvals
+      ? {
+          legendAll: t("all approved in {system}", { system }),
+          legendPartly: t("approved / booked"),
+          legendNone: t("not approved yet"),
+          unpulled: approvals.days.some((r, i) => r === null && report.dayTotals[i] > 0) ? t("plain hours: week not pulled from {system}", { system }) : "",
+        }
+      : null,
+    slotActions: slots.flatMap((x) => (x.slot.actions ?? []).map(fullAction)),
+    oldestPull: slots.map((x) => x.slot.oldestPull ?? "").filter(Boolean).join(" · "),
     weekHeads: month.weeks.map((w) => ({ key: w.key, label: t("W{week}", { week: w.week }), range: weekRangeInMonth(w, month) })),
     jobRows,
     foot,
@@ -257,6 +288,8 @@ export function monthScreen(input: { month?: string; by?: string } = {}) {
     summaries,
     summaryText,
     entryList: report.entries.map((e) => ({
+      mark: slots.flatMap((x) => (x.slot.entries?.[e.id] ? [x.slot.entries[e.id].text] : [])).join(" "),
+      markTitle: slots.flatMap((x) => (x.slot.entries?.[e.id]?.title ? [x.slot.entries[e.id].title!] : [])).join(" · "),
       ticketUrl: tk(e.ticket).url,
       ticketTip: tk(e.ticket).tip,
       id: e.id,
