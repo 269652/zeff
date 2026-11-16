@@ -10,3 +10,4 @@ apiPoint.contribute("work", WORK_API);
 workspaceWidgets.contribute("work", WORK_WIDGETS);
 // … and its runs as something the Workspace's databases can join (by ticket).
 workspaceSources.contribute("work", [RUNS_SOURCE]);
+import "./flow-actions"; // (work.session-list … for lambdas and flows)

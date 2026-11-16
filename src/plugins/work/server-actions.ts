@@ -5,6 +5,15 @@ import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
 import { num, revalidateAll, str, type ActionState } from "@/app/action-helpers";
 
+/** The Code page read again — nothing to refresh outside a request (a flow of a plugin, a test). */
+function refreshWork() {
+  try {
+    revalidatePath("/work");
+  } catch {
+    // no page to refresh
+  }
+}
+
 /** Work: todos handed to workers — its server actions (each answers an ActionState unless it says otherwise). */
 
 /** Hand a todo to a worker (provider: the AI settings' unless given) — queued, started when one is free. */
@@ -39,7 +48,7 @@ export async function startSessionAction(v: {
     if (!instruction && v.todoId) {
       const { dispatchTodo } = await import("@/lib/work/runner");
       const run = dispatchTodo(Number(v.todoId));
-      revalidatePath("/work");
+      refreshWork();
       return { ok: true, runId: run.id };
     }
     if (!instruction) return { ok: false, error: t("What should the worker do?") };
@@ -54,11 +63,11 @@ export async function startSessionAction(v: {
       if (prev.status === "running" && (prev.provider === "claude" || (await import("@/lib/work/live-driver")).liveDriverOf(prev.id)) && !isAiProvider(v.provider)) {
         const { messageRunningSession } = await import("@/lib/work/runner");
         await messageRunningSession(prev.id, instruction);
-        revalidatePath("/work");
+        refreshWork();
         return { ok: true, runId: prev.id };
       }
       const run = dispatchTodo(prev.todoId, { instruction, attachments, continueRun: prev.id, provider: isAiProvider(v.provider) ? v.provider : undefined, conversation: true, session });
-      revalidatePath("/work");
+      refreshWork();
       return { ok: true, runId: run.id };
     }
     const { addSessionTodo, findSessionTodo, getTodo } = await import("@/lib/todos/store");
@@ -79,7 +88,7 @@ export async function startSessionAction(v: {
       conversation: true,
       session,
     });
-    revalidatePath("/work");
+    refreshWork();
     return { ok: true, runId: run.id };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -105,7 +114,7 @@ export async function switchSessionBranchAction(runId: number, branch: string): 
     const now = switchBranch(last.cwd, String(branch));
     // The conversation's runs all follow (a later message starts from the folder as it is now).
     for (const x of runsForTodos([r.todoId]).get(r.todoId) ?? [r]) if (x.cwd === last.cwd) updateRun(x.id, { branch: now });
-    revalidatePath("/work");
+    refreshWork();
     return { ok: true, branch: now };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -117,7 +126,7 @@ export async function archiveSessionAction(todoId: number, archived: boolean): P
   try {
     const { setSessionArchived } = await import("@/lib/work/session-admin");
     setSessionArchived(Number(todoId), !!archived);
-    revalidatePath("/work");
+    refreshWork();
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -129,7 +138,7 @@ export async function deleteSessionAction(todoId: number): Promise<ActionState> 
   try {
     const { deleteSession } = await import("@/lib/work/session-admin");
     deleteSession(Number(todoId));
-    revalidatePath("/work");
+    refreshWork();
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -327,7 +336,11 @@ export async function setAdminSessionsAction(_prev: ActionState, fd: FormData): 
     else if (what === "remove") await removeTask();
     else if (what === "uac") setElevationMode("uac");
     else return { ok: false, error: t("Unknown action.") };
-    revalidatePath("/work/admin");
+    try {
+      revalidatePath("/work/admin");
+    } catch {
+      // no page to refresh (a flow, a test)
+    }
     return { ok: true, message: what === "install" ? t("Set up — admin sessions start without asking.") : what === "remove" ? t("Removed — Windows asks each time again.") : t("Saved.") };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
