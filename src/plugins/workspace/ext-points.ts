@@ -460,9 +460,17 @@ reviewSources.provide("ext:reviewSources", () =>
       (s): ReviewSource => ({
         id: `${p.id}-${s.id}`,
         label: s.label,
-        list: async () => reviewEntriesFrom(await runPluginFunction(p.id, s.list, {})),
+        list: async () => reviewEntriesFrom(await runPart(p.id, { function: s.list, lambda: s.listLambda }, {})),
         act: async (item, action) => {
-          const v = await runPluginFunction(p.id, s.act, { item, action });
+          // (a flow: it may write what its package was allowed; a function only what it was granted)
+          if (s.actFlow) {
+            const { runFlow } = await import("./flows/engine");
+            const r = await runFlow(s.actFlow, { item, action }, { trigger: { kind: "manual" } });
+            if (r.status === "failed") throw new Error(r.error ?? "The action failed.");
+            const said = obj(r.output)?.message;
+            return typeof said === "string" && said ? said.slice(0, 500) : undefined;
+          }
+          const v = await runPluginFunction(p.id, s.act!, { item, action });
           return typeof v === "string" ? v.slice(0, 500) : undefined;
         },
       }),

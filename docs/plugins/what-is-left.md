@@ -24,9 +24,9 @@ The platform and the **shared entity graph**, which every app reads and none own
 | knowledge (+hub) | ✅ 1.4k | **done as `knowledge-ext`** (chat, state, sync/add, the matching to todos; connection and export stay the kernel's: `service.read`/`service.send`, `todos.attached`/`todos.attach`) | the todo panel and the repos' systems still move |
 | google-drive | 1.1k | Drive sync | OAuth for plugins (secrets, routes) |
 | explorer | 1.6k | file browser | kernel fs reads, UI in the view language |
-| people (screens + AI) | 9.2k | the People app, the extraction, the summaries | the entity graph's reads (mostly there) |
-| people (screens + AI) | 9.2k | **AI steps done** (`people-ext`: extraction, overviews, placing contacts, name matching — slice 1); left: the People app's screens (view-data + React parts), widgets, formulas, review/proposal sources, tools, pulse | kit parts for the card, the form and the panels |
 | news (rest) | ✅ | **done** (slice 8: kit `<stories>`, `<speak>`, `<visible>`, `<grid masonry>`; topic chips, Today's line, widget, kept-items source, settings catalog) — left: the kernel pieces named in runtime-conversion.md (tables, `/news` route, settings link, prompt catalog) | — |
+| people (screens + AI) | 9.2k | **AI steps done** (slice 1) and **the screens done** (slice 2: the People overview and a person's page in the view language, the 13 widgets, the review queue's five sources); left: the formula functions (`Personen`, `Kreis`), the identity proposals, the row badges, the pulse series, the Open-loops block of a person's page, the switch that turns the built-in's screens off | see runtime-conversion.md, People slice 2 |
+| news (rest) | ~0.8k | stories strip, masonry, topic chips, Today's news, the kept items' database | kit elements (stories, masonry) |
 | todos / work / zeiterfassung (screens) | 20k+ | the boards, the Code tab, the reports | the largest: after the others |
 
 ## Rhythm

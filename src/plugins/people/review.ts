@@ -25,7 +25,7 @@ function decide(action: string, yes: PeopleTool, no: PeopleTool): Promise<{ mess
 }
 const said = async (r: Promise<{ message?: string }>) => (await r).message;
 
-export const PEOPLE_REVIEW: ReviewSource[] = [
+const BUILTIN_REVIEW: ReviewSource[] = [
   {
     id: "people-claim",
     get label() {
@@ -100,3 +100,16 @@ export const PEOPLE_REVIEW: ReviewSource[] = [
     },
   },
 ];
+
+/** The port brings these (people-ext's reviewSources) while it is on: its lambdas list what the built-in's functions below list, the port's flows decide it. */
+const portHasReview = async (): Promise<boolean> => (await import("@/lib/ext/registry")).enabledPlugins().some((p) => p.id === "people-ext" && p.manifest.contributes.reviewSources.length > 0);
+
+/** The built-in's own sources, standing aside for the port's (the port reads them through `people.review-list` / `people.review-act`: use `BUILTIN_REVIEW`). */
+export const PEOPLE_REVIEW: ReviewSource[] = BUILTIN_REVIEW.map((s) => ({
+  ...s,
+  get label() {
+    return s.label;
+  },
+  list: async () => ((await portHasReview()) ? [] : s.list()),
+}));
+export const PEOPLE_REVIEW_OWN: ReviewSource[] = BUILTIN_REVIEW;

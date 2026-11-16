@@ -24,9 +24,30 @@ const write = (rel: string, text: string) => {
 };
 fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
+// The texts of the screens' data in the languages the packs have: every t("…") of the built-in's view-data.ts / row-data.ts and of the screen lambdas.
+const KEYS: string[] = [];
+for (const file of [path.join(ROOT, "src", "plugins", "people", "view-data.ts"), path.join(ROOT, "src", "plugins", "people", "row-data.ts"), path.join(SRC, "people.screen.mjs"), path.join(SRC, "people.person.mjs")])
+  for (const m of fs.readFileSync(file, "utf8").matchAll(/\bt\(\s*"([^"]*)"/g)) {
+    const k = m[1];
+    if (!KEYS.includes(k)) KEYS.push(k);
+  }
+const strings: Record<string, Record<string, string>> = {};
+for (const lang of ["de", "es"]) {
+  const file = path.join(repo, "plugins", `lang-${lang}`, "bundle.json");
+  const pack = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, string>) : {};
+  strings[lang] = Object.fromEntries(KEYS.filter((k) => pack[k]).map((k) => [k, pack[k]]));
+}
 const lib = await build({
   stdin: {
     contents: [
+      `import { setPluginStrings, translator, isLang } from "@/lib/i18n/shared";`,
+      `const STRINGS = ${JSON.stringify(strings)};`,
+      `setPluginStrings((lang) => STRINGS[lang] ?? {});`,
+      `export const tFor = (lang) => translator(isLang(lang) ? lang : "en");`,
+      `export { peopleAppData, agoText } from "@/plugins/people/view-data";`,
+      `export { personPageData } from "@/plugins/people/row-data";`,
+      `export { CIRCLES, circleLabels } from "@/plugins/people/shared";`,
+      `export { initials } from "@/plugins/workspace/widget-shared";`,
       `export { INSTRUCTIONS as EXTRACT_INSTRUCTIONS, SCHEMA as EXTRACT_SCHEMA, PER_BATCH, MAX_BATCHES, extractBatch, extractPrompt, acceptFindings, withLoopsAddendum } from "@/plugins/people/extract-core";`,
       `export { INSTRUCTIONS as COMPILE_INSTRUCTIONS, SCHEMA as COMPILE_SCHEMA } from "@/plugins/people/compile-core";`,
       `export { INSTRUCTIONS as CLASSIFY_INSTRUCTIONS, SCHEMA as CLASSIFY_SCHEMA, classifyPrompt } from "@/plugins/people/classify-core";`,
@@ -66,6 +87,18 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
     zeff: ["people.classify-input", "prompts.fill", "ai.json"],
     timeoutMs: 1200000,
   },
+  "people.screen": {
+    label: "People: what the overview shows",
+    what: "The people overview — the cards, who to get in touch with, the appointments with a brief each, dates coming up, what waits to be checked, the suggestions, the settings — as the built-in works it out.",
+    zeff: ["people.screen-data"],
+    timeoutMs: 120000,
+  },
+  "people.person": {
+    label: "People: what a person's page shows",
+    what: "A person's page — their profile, dates, details, what was read from messages, relations, the latest messages, todos, appointments, cases, documents — and what the knowledge knows of them, as the built-in works it out.",
+    zeff: ["people.page-data", "people.wiki-of"],
+    timeoutMs: 60000,
+  },
   "people.names": {
     label: "People: one identity per person",
     what: "Which names in your todos, chats and mails are one person: aliases, profiles for contacts, duplicates to merge, who is who for whom.",
@@ -83,13 +116,107 @@ const doc = { type: "doc", content: [{ type: "paragraph" }] };
 const REQUEST = { write: "all", ai: true };
 const call = (id: string, flow: string, input: Record<string, unknown> = {}) => ({ id, kind: "call", flow, input, onError: "continue" });
 
+// ---- the widgets, and what People has you confirm: the kernel's reads (people.widget, people.review-list) behind lambdas, the buttons through flows
+type WidgetDump = { id: string; label: string; icon: string; description: string; size: string; ttl: number; settings: { key: string; label: string; kind: string; default?: unknown; min?: number; max?: number; options?: { value: string; label: string }[]; hidden?: boolean }[]; acts: boolean };
+const WIDGETS = JSON.parse(fs.readFileSync(path.join(SRC, "widgets.json"), "utf8")) as WidgetDump[];
+const REVIEW = [
+  { id: "claim", source: "people-claim", label: "What the AI read about people" },
+  { id: "link", source: "people-link", label: "Who is connected to what" },
+  { id: "stale", source: "people-stale", label: "Still true?" },
+  { id: "date", source: "people-date", label: "Dates found — are they right?" },
+  { id: "followup", source: "people-followup", label: "Follow up?" },
+];
+const passLambda = (name: string, label: string, what: string, zeff: string[], body: string) => {
+  write(`lambdas/${name}/index.mjs`, body);
+  write(`lambdas/${name}/lambda.json`, JSON.stringify({ name, label, what, kind: "function", zeff, timeoutMs: 120000, memoryMb: 256 }, null, 2) + "\n");
+};
+for (const w of WIDGETS) {
+  const short = w.id.slice("people.".length);
+  passLambda(
+    `people.widget.${short}`,
+    `People widget: ${w.label}`,
+    `The data of the widget "${w.label}" — what the built-in shows, through the kernel's read people.widget.`,
+    ["people.widget"],
+    `/** The widget ${w.id}: its data as the built-in's widget works it out (the kernel's read \`people.widget\`). event: { config }. */\nexport async function handler(event, context) {\n  return await context.zeff.call("people.widget", { id: ${JSON.stringify(w.id)}, config: event?.config ?? {} });\n}\n`,
+  );
+}
+for (const r of REVIEW) {
+  passLambda(
+    `people.review.${r.id}`,
+    `People review: ${r.label}`,
+    `What waits for your word in the review queue — "${r.label}" — through the kernel's read people.review-list.`,
+    ["people.review-list"],
+    `/** The review source ${r.source}: what waits, as the built-in lists it (the kernel's read \`people.review-list\`). */\nexport async function handler(event, context) {\n  return (await context.zeff.call("people.review-list", { source: ${JSON.stringify(r.source)} })).entries;\n}\n`,
+  );
+}
+const EXTRA_ITEMS: unknown[] = [];
+let n = 9;
+for (const w of WIDGETS.filter((x) => x.acts)) {
+  const short = w.id.slice("people.".length);
+  EXTRA_ITEMS.push({
+    id: `i${n++}`,
+    parent: "i1",
+    kind: "page",
+    title: `Widget button: ${w.label}`,
+    icon: "👥",
+    content: doc,
+    flow: {
+      name: `people.widget-act.${short}`,
+      title: `A button of the widget “${w.label}”`,
+      description: `What a button of the widget ${w.id} does (input action, payload, config); the widget's data after it.`,
+      inputs: [],
+      nodes: [
+        { id: "run", kind: "action", action: "people.widget-act", input: { id: w.id, action: "{{ input.action }}", payload: "{{ input.payload }}", config: "{{ input.config }}" } },
+        { id: "done", kind: "return", value: "{{ steps.run }}" },
+      ],
+      requested: REQUEST,
+      triggers: [{ kind: "manual" }],
+    },
+  });
+}
+for (const r of REVIEW) {
+  EXTRA_ITEMS.push({
+    id: `i${n++}`,
+    parent: "i1",
+    kind: "page",
+    title: `Review: ${r.label}`,
+    icon: "👥",
+    content: doc,
+    flow: {
+      name: `people.review-act.${r.id}`,
+      title: `A word on “${r.label}”`,
+      description: `A button of the review queue's “${r.label}” (input item, action: yes or no); what came of it, in words.`,
+      inputs: [],
+      nodes: [
+        { id: "run", kind: "action", action: "people.review-act", input: { source: r.source, item: "{{ input.item }}", action: "{{ input.action }}" } },
+        { id: "done", kind: "return", value: { message: "{{ steps.run.message }}" } },
+      ],
+      requested: REQUEST,
+      triggers: [{ kind: "manual" }],
+    },
+  });
+}
+const widgetDecls = WIDGETS.map((w) => ({
+  id: w.id.slice("people.".length),
+  replaces: w.id,
+  label: w.label.slice(0, 60),
+  icon: w.icon,
+  description: w.description.slice(0, 200),
+  size: w.size,
+  ttl: Math.max(5, w.ttl),
+  settings: w.settings.filter((s) => !s.hidden).map(({ hidden, kind, ...s }) => ({ ...s, kind: ["number", "select", "text", "checkbox"].includes(kind) ? kind : "text" })),
+  lambda: `people.widget.${w.id.slice("people.".length)}`,
+  ...(w.acts ? { actFlow: `people.widget-act.${w.id.slice("people.".length)}` } : {}),
+}));
+const reviewDecls = REVIEW.map((r) => ({ id: r.id, label: r.label, listLambda: `people.review.${r.id}`, actFlow: `people.review-act.${r.id}` }));
+
 write(
   "people.package.json",
   JSON.stringify(
     {
       format: 1,
       id: "people-ext",
-      version: "1.0.0",
+      version: "1.1.0",
       name: "People",
       description: "The AI steps of People: what the messages say about people, their overviews, who is a person or an organisation, which names are one person.",
       icon: "👥",
@@ -214,6 +341,60 @@ write(
             triggers: [{ kind: "manual" }],
           },
         },
+        {
+          id: "i7",
+          parent: "i1",
+          kind: "page",
+          title: "A tool of the people overview",
+          icon: "👥",
+          content: doc,
+          flow: {
+            name: "people.tool",
+            title: "A tool of the people overview",
+            description: "What a button of the People overview does: add a person, import, find dates, match names, read new messages, place contacts, compile summaries, take what the AI is sure of, the verdicts on what waits to be checked, a circle, a todo, a greeting, the settings. Input: tool and what it needs. Output { message, draft }.",
+            inputs: [],
+            nodes: [
+              {
+                id: "run",
+                kind: "action",
+                action: "people.run-tool",
+                input: { tool: "{{ input.tool }}", id: "{{ input.id }}", name: "{{ input.name }}", whatsapp: "{{ input.whatsapp }}", entityId: "{{ input.entityId }}", days: "{{ input.days }}", force: "{{ input.force }}", accept: "{{ input.accept }}", action: "{{ input.action }}", circle: "{{ input.circle }}", text: "{{ input.text }}", weeks: "{{ input.weeks }}", myName: "{{ input.myName }}", aboutMe: "{{ input.aboutMe }}" },
+              },
+              { id: "done", kind: "return", value: { message: "{{ steps.run.message }}", draft: "{{ steps.run.draft }}" } },
+            ],
+            requested: REQUEST,
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
+          id: "i8",
+          parent: "i1",
+          kind: "page",
+          title: "An operation on a person's profile",
+          icon: "👥",
+          content: doc,
+          flow: {
+            name: "people.person-op",
+            title: "An operation on a person's profile",
+            description: "What a button of a person's page does (input row, op and what it needs): the profile's lines, the note, the star, dates, finding dates, the summary, what was read confirmed or rejected, details, relations, a merge, deleting the profile. Output { gone, href, message }.",
+            inputs: [],
+            nodes: [
+              {
+                id: "run",
+                kind: "action",
+                action: "people.run-op",
+                input: {
+                  row: "{{ input.row }}", op: "{{ input.op }}", name: "{{ input.name }}", aliases: "{{ input.aliases }}", emails: "{{ input.emails }}", whatsapp: "{{ input.whatsapp }}", jira: "{{ input.jira }}", note: "{{ input.note }}", on: "{{ input.on }}", kind: "{{ input.kind }}", date: "{{ input.date }}", label: "{{ input.label }}",
+                  id: "{{ input.id }}", days: "{{ input.days }}", what: "{{ input.what }}", action: "{{ input.action }}", key: "{{ input.key }}", value: "{{ input.value }}", rel: "{{ input.rel }}", other: "{{ input.other }}", keep: "{{ input.keep }}",
+                },
+              },
+              { id: "done", kind: "return", value: { gone: "{{ steps.run.gone }}", href: "{{ steps.run.href }}", message: "{{ steps.run.message }}" } },
+            ],
+            requested: REQUEST,
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        ...EXTRA_ITEMS,
       ],
     },
     null,
@@ -221,6 +402,8 @@ write(
   ) + "\n",
 );
 
+write("views/people.html", fs.readFileSync(path.join(SRC, "people-view.html"), "utf8"));
+write("views/person.html", fs.readFileSync(path.join(SRC, "person-view.html"), "utf8"));
 const old = fs.existsSync(path.join(dir, "zeff-plugin.json")) ? (JSON.parse(fs.readFileSync(path.join(dir, "zeff-plugin.json"), "utf8")) as { version?: string }) : {};
 write(
   "zeff-plugin.json",
@@ -229,7 +412,7 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "people-ext",
       name: "People (AI steps)",
-      version: old.version ?? "0.1.0",
+      version: "1.1.0",
       description: "What the AI does with your people: reads what new messages say about them (roles, tasks, promises, links), writes their overview, tells a person from an organisation and places them in a circle, and matches the names. The contacts themselves stay Zeff's.",
       author: "Zeff",
       apiVersion: 1,
@@ -237,6 +420,9 @@ write(
       contributes: {
         lambdas: "lambdas",
         workspacePackages: ["people.package.json"],
+        widgets: widgetDecls,
+        reviewSources: reviewDecls,
+        appViews: [{ id: "people", dataType: "people", label: "Overview (plugin)", icon: "👥", template: "views/people.html" }],
         aiTasks: [
           { id: "extract", label: "People: what the messages say", what: "Reads new messages for what they say about the people you keep a profile of: roles, tasks, facts, promises, links." },
           { id: "compile", label: "People: a person's overview", what: "Writes a person's short overview from everything Zeff has on them." },

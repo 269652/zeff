@@ -298,9 +298,11 @@ const pageNavDecl = z.object({
 const reviewSourceDecl = z.object({
   id: shortId.describe("Its id: <plugin id>-<this> in the review queue."),
   label: z.string().min(1).max(60),
-  list: shortId.describe("The plugin function that gives what waits for a word: [{ id, title, detail?, confidence?, href?, actions: [{ id, label, primary? }] }]."),
-  act: shortId.describe("The plugin function a button runs, called with { item, action }; what it gives (a text) is said."),
-});
+  list: shortId.optional().describe("The plugin function that gives what waits for a word: [{ id, title, detail?, confidence?, href?, actions: [{ id, label, primary? }] }]."),
+  act: shortId.optional().describe("The plugin function a button runs, called with { item, action }; what it gives (a text) is said."),
+  listLambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or one of its lambdas (kind function) that gives them — it only reads."),
+  actFlow: z.string().regex(/^[a-z][a-z0-9_.-]{0,79}$/).optional().describe("Or a flow of the plugin's package a button runs, called with { item, action }: the flow may write what its package was allowed. What it returns as `message` (a text) is said."),
+}).refine((r) => (!!r.list || !!r.listLambda) && (!!r.act || !!r.actFlow), { message: "a review source is listed by a function or a lambda, and decided by a function or a flow" });
 const toolDecl = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]{2,40}$/, "a tool name: lower-case letters, digits and _, 3–41 characters (web_search)").describe("Its name among Zeff's tools — one Zeff or another plugin already has is left out."),
   title: z.string().max(80).default(""),
