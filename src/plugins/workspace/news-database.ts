@@ -39,6 +39,8 @@ async function newsPluginOn(): Promise<boolean> {
 /** The news you saved or liked as a database of the Workspace — once, when the News plugin is on (a gone one is not made again). */
 export async function ensureNewsDatabase(): Promise<void> {
   if (!isInstalled("workspace") || !(await newsPluginOn())) return;
+  // (the News page's copy of the plugin's template kept current)
+  await (await import("./news-app")).refreshNewsApp().catch((e) => console.error("[news] refreshing the page failed", e));
   const known = newsDatabase();
   if (known) {
     // Cards first (made before they existed: once).
