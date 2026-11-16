@@ -64,20 +64,20 @@ test("the first due day is a one-off: pay today, the repeats begin on the 15th �
   const { addManualTodo, getTodo, listTodos, setTodoStatus, setTodoDue } = await import("@/lib/todos/store");
   const { setRecurrence, regenerateSeries, nextDue } = await import("@/lib/todos/recurring");
   const { eventsBetween } = await import("@/lib/calendar/ir");
-  assert.equal(nextDue({ ...monthly15, start: "2026-11-15" }, "2026-10-20", "2026-10-20"), "2026-11-15", "after the one-off: the first of the repeats");
+  assert.equal(nextDue({ ...monthly15, start: "2036-11-15" }, "2036-10-20", "2036-10-20"), "2036-11-15", "after the one-off: the first of the repeats");
   const t = addManualTodo({ ticket: "KB-2", text: "300 € Rate (Az. DR II 1121/26) überweisen" });
-  setTodoDue(t.id, "2026-10-20");
-  setRecurrence(t.id, { ...monthly15, start: "2026-11-15", until: "2027-01-31" });
-  assert.equal(getTodo(t.id)!.recurrence!.start, "2026-11-15");
-  const mine = () => eventsBetween("2026-10-01", "2027-03-01").filter((e) => e.todoId === t.id).map((e) => e.start.slice(0, 10)).sort();
-  assert.deepEqual(mine(), ["2026-10-20", "2026-11-15", "2026-12-15", "2027-01-15"]);
+  setTodoDue(t.id, "2036-10-20");
+  setRecurrence(t.id, { ...monthly15, start: "2036-11-15", until: "2037-01-31" });
+  assert.equal(getTodo(t.id)!.recurrence!.start, "2036-11-15");
+  const mine = () => eventsBetween("2036-10-01", "2037-03-01").filter((e) => e.todoId === t.id).map((e) => e.start.slice(0, 10)).sort();
+  assert.deepEqual(mine(), ["2036-10-20", "2036-11-15", "2036-12-15", "2037-01-15"]);
   // Regenerated: the same, not twice.
   regenerateSeries(t.id);
-  assert.deepEqual(mine(), ["2026-10-20", "2026-11-15", "2026-12-15", "2027-01-15"]);
+  assert.deepEqual(mine(), ["2036-10-20", "2036-11-15", "2036-12-15", "2037-01-15"]);
   setTodoStatus(t.id, "done");
   const next = listTodos({ status: "open" }).find((x) => x.text === t.text)!;
-  assert.equal(next.due, "2026-11-15", "the first of the repeats");
-  assert.equal(next.recurrence!.start, "2026-11-15");
+  assert.equal(next.due, "2036-11-15", "the first of the repeats");
+  assert.equal(next.recurrence!.start, "2036-11-15");
 });
 
 test("the appointments are the todo's context: its sources list the series and the one-off — the series follows the next todo", async () => {
@@ -116,12 +116,12 @@ test("the next one is a plain repeat: not the first payment's words (“Erste Ra
   const { addManualTodo, getTodo, listTodos, setTodoStatus, setTodoDue, setTodoFlagged } = await import("@/lib/todos/store");
   const { setRecurrence } = await import("@/lib/todos/recurring");
   const t = addManualTodo({ ticket: "KB-3", text: "Erste Rate 300 € (Az. DR II 4242/26) sofort überweisen; Folgeraten jeweils 300 € am 15. bis 15.09.2027" });
-  setTodoDue(t.id, "2026-10-20");
-  setRecurrence(t.id, { ...monthly15, start: "2026-11-15", until: "2027-09-15" });
+  setTodoDue(t.id, "2036-10-20");
+  setRecurrence(t.id, { ...monthly15, start: "2036-11-15", until: "2037-09-15" });
   setTodoFlagged(t.id, true);
   setTodoStatus(t.id, "done");
   const next = listTodos({ status: "open" }).find((x) => x.text.includes("4242/26"))!;
-  assert.equal(next.due, "2026-11-15", "the first of the repeats");
+  assert.equal(next.due, "2036-11-15", "the first of the repeats");
   assert.equal(next.text, "Rate 300 € (Az. DR II 4242/26) überweisen");
   assert.equal(getTodo(next.id)!.flaggedAt, null, "not important before its time");
   // And the one after it keeps the same plain words.
