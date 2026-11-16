@@ -114,7 +114,7 @@
 </col>
 </section>
 {{/if}}{{/if}}
-{{#if href}}<small><a href="{{ href }}">Open ↗</a></small>{{/if}}
+{{#if href}}<row gap=2 wrap=true><small><a href="{{ href }}">Open ↗</a></small>{{#if not data.p.closed}}<button run="todos-ext.browser-done" with="id={{ data.p.id }}, index={{ index }}" into="opsave" emit="todos-changed" label="Done in the browser" variant=quiet tip="You did it yourself: taken off the todo and noted"/>{{/if}}</row>{{/if}}
 </col>
 {{#if not data.p.closed}}
 {{#if runnable}}<button run="todos-ext.run" with="id={{ data.p.id }}, only={{ only }}" into="ran" confirm="Zeff does it itself, no AI" emit="todos-changed" label="Run" variant=primary/>{{/if}}

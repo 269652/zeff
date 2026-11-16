@@ -485,6 +485,28 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           questions: (a?.questions ?? []).map((x) => ({ q: x.q, a: x.a ?? "" })),
         };
       });
+      // What the ticket row shows beside the Lage: its comments (done ones marked), GitLab's, the mails naming it, its chat, its facts.
+      const keysShown = tickets.map((x) => x.key);
+      const { resolvedCommentIds } = await import("@/lib/resolved");
+      const { gitlabCommentsByTicket } = await import("@/lib/gitlab/store");
+      const { gitlabDone } = await import("@/lib/gitlab/shared");
+      const { mailsForTickets } = await import("@/lib/mail/store");
+      const { ticketChats } = await import("@/lib/runs/ticket-chat");
+      const doneIds = resolvedCommentIds((shown?.tickets ?? []).flatMap((x) => (x.recent ?? []).map((c) => c.id)));
+      const gl = gitlabCommentsByTicket(shown?.tickets.filter((x) => x.analyzed).map((x) => x.key) ?? []);
+      const mails = mailsForTickets(keysShown);
+      const chats = ticketChats(keysShown);
+      const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+      for (const x of tickets as Record<string, unknown>[]) {
+        const key = String(x.key);
+        const fct = facts.get(key)!;
+        x.facts = { issueType: fct.issueType ?? "", priority: fct.priority ?? "", comments: fct.comments, parent: fct.parent ?? "", updatedAt: fct.updatedAt ?? "" };
+        x.recent = (fct.recent ?? []).map((c) => ({ id: c.id, author: c.author, at: c.at, text: oneLine(c.text).slice(0, 400), done: doneIds.has(c.id) }));
+        x.gitlab = (gl[key] ?? []).map((c) => ({ key: c.key, ref: c.ref, title: c.title, url: c.url, author: c.author ?? "?", at: c.createdAt ?? "", body: oneLine(c.body).slice(0, 400), done: gitlabDone(c), resolvable: /^note:\d+$/.test(c.key) }));
+        x.mails = (mails[key] ?? []).map((m) => ({ key: m.key, from: m.fromName ?? m.fromEmail ?? "", subject: m.subject, preview: m.preview, at: m.receivedAt, unread: m.unread }));
+        x.chat = (chats.get(key) ?? []).map((c) => ({ id: c.id, q: c.q, a: c.a, sources: c.sources, at: c.at }));
+        x.questionSources = Object.fromEntries((analysis.get(key)?.questions ?? []).map((q) => [q.q, q.sources ?? []]));
+      }
       const leftNote = new Map((result?.left ?? []).map((l) => [l.key, l.note]));
       const pre = getContextPrefs().presync.sources;
       return {
@@ -494,6 +516,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
         provider: live?.provider ?? `${AI_PROVIDER_INFO[ai.provider].label}${ai.model ? ` · ${ai.model}` : ""}`,
         shown: shown ? { id: shown.id, at: shown.finishedAt ?? shown.startedAt, model: shown.model ?? "", durationMs: shown.durationMs ?? 0, costUsd: shown.costUsd ?? null, analyzed: shown.tickets.filter((x) => x.analyzed).length } : null,
         failed: failed ? { at: failed.startedAt, error: failed.error ?? "" } : null,
+        jql: (await import("@/lib/runs/store")).getBoardSettings().jql ?? "",
         lede: result?.lede ?? "",
         gaps: result?.gaps ?? [],
         counts: ATTENTIONS.map((attention) => ({ attention, n: tickets.filter((x) => x.attention === attention).length })).filter((x) => x.n > 0),
