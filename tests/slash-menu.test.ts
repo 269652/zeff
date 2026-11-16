@@ -13,7 +13,9 @@ test("slash menu: a bare slash lists the main items, a picker its own, and a sea
   // Nothing is out of reach: each item is in the bare menu or in a picker the bare menu has.
   const pickers = new Set(top.filter((i) => i.opens).map((i) => i.opens));
   for (const i of all) assert.ok(!i.under || pickers.has(i.under) || i.under === "ai" || i.under === "formula", `${i.key} is reachable`);
-  for (const i of all) assert.ok(filterItems(all, i.title.toLowerCase().replace(/ …$/, "")).includes(i), `a search for "${i.title}" finds it`);
+  // (a title that begins with a picker's word — "Widget (AI-built)" — is asked for inside that picker)
+  const words = all.filter((i) => i.opens).map((i) => `${i.opens} `);
+  for (const i of all) if (!words.some((w) => i.title.toLowerCase().startsWith(w))) assert.ok(filterItems(all, i.title.toLowerCase().replace(/ …$/, "")).includes(i), `a search for "${i.title}" finds it`);
   assert.equal(filterItems(all, "ticket ").length, 11, "the ticket picker has the 11 modules");
   assert.deepEqual(filterItems(all, "ticket chat").map((i) => i.key), ["module-chat"]);
   assert.deepEqual(filterItems(all, "embed ").map((i) => i.key).sort(), ["embed", "linked-db", "subpage-inline", "todo-embed"]);

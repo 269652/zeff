@@ -100,9 +100,9 @@ test("git missing → a message that says what to install; the Jira server missi
   assert.equal(gitFailure(enoent, "x").message, gitMissingMessage());
   assert.equal(gitFailure(other, "from stderr").message, "from stderr");
 
-  const { notFoundHint, runStdioSession } = await import("../src/lib/jira/mcp-client");
-  assert.match(notFoundHint("uvx", enoent), /Install uv \(.+\).*JIRA_MCP_COMMAND/);
-  assert.match(notFoundHint("C:\\Users\\a\\.local\\bin\\uvx.exe", enoent), /Install uv/);
+  const { notFoundHint, runStdioSession, jiraNotFoundHint } = await import("../src/lib/jira/mcp-client");
+  assert.match(notFoundHint("uvx", enoent, jiraNotFoundHint), /Install uv \(.+\).*JIRA_MCP_COMMAND/);
+  assert.match(notFoundHint("C:\\Users\\a\\.local\\bin\\uvx.exe", enoent, jiraNotFoundHint), /Install uv/);
   assert.equal(notFoundHint("uvx", new Error("boom")), "");
   await assert.rejects(runStdioSession({ command: "zeff-no-such-program-xyz", args: [], label: "Jira MCP" }, async () => 1, 5000), /Jira MCP.*zeff-no-such-program-xyz.*not found/);
 });
