@@ -33,14 +33,14 @@ after(() => site.close());
 const check = async (url: string) => new URL(url);
 
 test("the machine's own and private addresses are refused before a browser starts", async () => {
-  const { browserOpen } = await import("@/plugins/browser/browse");
+  const { browserOpen } = await import("@/lib/web/browser");
   for (const url of ["http://127.0.0.1:9333/", "http://localhost:9333/", "http://192.168.1.1/", "file:///C:/Windows/win.ini"]) {
     await assert.rejects(browserOpen(url, {}, { launch: async () => assert.fail("no browser for this") }));
   }
 });
 
 test("a page in a real browser: what JavaScript wrote, its main picture, its links; a step goes on from there", async (t) => {
-  const { browserOpen } = await import("@/plugins/browser/browse");
+  const { browserOpen } = await import("@/lib/web/browser");
   let page;
   try {
     page = await browserOpen(`${base}/`, {}, { check });
@@ -64,7 +64,7 @@ test("a page in a real browser: what JavaScript wrote, its main picture, its lin
 });
 
 test("what a page loads goes through the same check: a picture on a private host isn't fetched", async (t) => {
-  const { browserOpen } = await import("@/plugins/browser/browse");
+  const { browserOpen } = await import("@/lib/web/browser");
   hits.length = 0;
   // The page is on 127.0.0.1 (allowed here); its picture on localhost, the same server under a name the check refuses.
   const onlyThisHost = async (url: string) => {
