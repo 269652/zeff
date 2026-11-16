@@ -167,6 +167,10 @@ export async function runFlowButton(a: Record<string, string>, v: { row: number 
   if (a.into) v.setData(a.into, { [a.into]: res.output, [`${a.into}_status`]: res.status === "waiting" ? "waiting" : "ok" });
   if (res.status === "waiting") toast(res.waiting?.kind === "approve" ? v.t("It waits for your approval: {title}", { title: res.waiting.title ?? "" }) : v.t("It goes on later."), { ms: 6000 });
   else if (a.done) toast(a.done, { tone: "ok" });
+  // (no done=: what the flow says of itself — an output's `message` — is said; a person's page that is gone goes to its `href`)
+  else if (typeof (res.output as { message?: unknown } | null)?.message === "string" && (res.output as { message: string }).message) toast((res.output as { message: string }).message, { tone: "ok" });
+  const goTo = (res.output as { href?: unknown } | null)?.href;
+  if (typeof goTo === "string" && goTo.startsWith("/workspace/")) window.location.assign(goTo);
   if (a.then) {
     const i = a.then.indexOf("=");
     if (i > 0) v.setState(a.then.slice(0, i).trim(), a.then.slice(i + 1).trim());

@@ -1,11 +1,10 @@
 "use server";
 
 import { headers } from "next/headers";
-import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
 import { isInstalled } from "@/plugins/state";
 import { personBundle, personOfRow, personOp, type PersonBundle, type PersonOperation } from "./blocks";
-import { getPerson, rememberEntity } from "./store";
+import { personWiki, type KnowledgeOfPerson } from "./wiki";
 import { currentAccountId } from "@/db/accounts";
 import { pluginAction, type Result } from "@/lib/action-result";
 
@@ -39,15 +38,7 @@ export async function personOpAction(rowId: number, op: PersonOperation): Promis
   });
 }
 
-export type KnowledgeOfPerson = {
-  summary: string;
-  related: { name: string; rels: string[] }[];
-  pages: { id: string; title: string; space: string; href: string }[];
-  graph: string | null;
-  error: string | null;
-  /** The knowledge keeps them as several entries: a merge to confirm. */
-  merge?: { id: number; names: string[] } | null;
-};
+export type { KnowledgeOfPerson } from "./wiki";
 
 // Per account (a person's id is its account's database's): one account's knowledge of person 12 is never the other's.
 const wikiCache = new Map<string, { at: number; wiki: KnowledgeOfPerson | null }>();
@@ -59,62 +50,14 @@ export async function personWikiAction(rowId: number): Promise<Result<{ wiki: Kn
     const id = personId(rowId);
     const hit = wikiCache.get(wikiKey(id));
     if (hit && Date.now() - hit.at < 5 * 60000) return { wiki: hit.wiki };
+    const h = await headers();
     const wiki = await Promise.race([
-      personWiki(id),
+      personWiki(id, { host: h.get("x-forwarded-host") ?? h.get("host"), proto: h.get("x-forwarded-proto") }),
       new Promise<KnowledgeOfPerson>((resolve) => setTimeout(() => resolve({ summary: "", related: [], pages: [], graph: null, error: t("The knowledge server did not answer in time.") }), 4000)),
     ]);
     if (!wiki?.error) wikiCache.set(wikiKey(id), { at: Date.now(), wiki });
     return { wiki };
   });
-}
-
-async function personWiki(id: number): Promise<KnowledgeOfPerson | null> {
-  {
-    const p = getPerson(id);
-    if (!p || !isInstalled("knowledge")) return null;
-    try {
-      const { knowledgePerson, knowledgePersons, knowledgeBrowserUrl } = await import("@/plugins/knowledge/client");
-      const { knowledgeEntitiesOf } = await import("./identity");
-      // Every entity that is them — the knowledge may keep someone twice, under a name the profile has only as an alias
-      // (or the other way round), or by their address. The kept one first; without the list, the kept one or the name.
-      const persons = await knowledgePersons().catch(() => null);
-      const matched = knowledgeEntitiesOf(p, persons ?? []);
-      // Several: one entry to make of them (you confirm it on the card) — the list not read, what waits stays.
-      const { knowledgeMergeOf, proposeKnowledgeMerge } = await import("./knowledge-sync");
-      const merge = persons ? proposeKnowledgeMerge(p.id, matched) : knowledgeMergeOf(p.id);
-      const ids = [...new Set([...(p.entityId ? [p.entityId] : []), ...matched.map((e) => e.id)])].slice(0, 3);
-      let entities = (await Promise.all(ids.map((eid) => knowledgePerson({ id: eid })))).filter((e) => !!e);
-      if (!entities.length) for (const n of [p.name, ...p.aliases]) if ((entities = [await knowledgePerson({ name: n })].filter((e) => !!e)).length) break;
-      const entity = entities[0];
-      if (!entity) return { summary: "", related: [], pages: [], graph: null, error: null };
-      if (entity.id !== p.entityId) rememberEntity(p.id, entity.id);
-      const h = await headers();
-      const base = knowledgeBrowserUrl(h.get("x-forwarded-host") ?? h.get("host"), h.get("x-forwarded-proto"));
-      const related = new Map<number, { name: string; rels: string[] }>();
-      const pages = new Map<string, KnowledgeOfPerson["pages"][number]>();
-      const own = new Set(entities.map((e) => e.id));
-      for (const e of entities) {
-        for (const r of e.relations ?? []) {
-          if (own.has(r.other.id)) continue;
-          const g = related.get(r.other.id) ?? { name: r.other.name, rels: [] };
-          const text = r.fact || `${r.dir === "out" ? "→" : "←"} ${r.rel}`;
-          if (!g.rels.includes(text) && g.rels.length < 3) g.rels.push(text);
-          related.set(r.other.id, g);
-        }
-        for (const pg of e.pages) if (!pages.has(pg.id)) pages.set(pg.id, { id: pg.id, title: pg.title, space: pg.space, href: `${base}/seite/${encodeURIComponent(pg.id)}` });
-      }
-      return {
-        summary: [...new Set(entities.map((e) => (e.summary ?? "").trim()).filter(Boolean))].join("\n\n"),
-        related: [...related.values()].slice(0, 15),
-        pages: [...pages.values()].slice(0, 30),
-        graph: `${base}/graph?e=${entity.id}`,
-        error: null,
-        merge: merge ? { id: merge.id, names: merge.names } : null,
-      };
-    } catch (e) {
-      return { summary: "", related: [], pages: [], graph: null, error: errorMessage(e) };
-    }
-  }
 }
 
 /** The knowledge's entries of them made one (`merge`), or the proposal dismissed. */
