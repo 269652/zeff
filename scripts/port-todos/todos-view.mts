@@ -26,7 +26,7 @@ const row = (): string => `<row gap=2 wrap=false align=start>
 <copy text="{{ ref }}" label="{{ ref }}"/>
 {{#if workRun}}<small><muted>·</muted> <a href="{{ workRun }}" tip="Open the run working on it on the Code tab">{{ workRef }}</a></small>{{/if}}
 {{#if origin}}<small><muted>· {{ origin }}</muted></small>{{/if}}
-{{#if ticket}}<small><muted>·</muted> {{#if ticketUrl}}<a href="{{ ticketUrl }}" tip="{{ ticketTitle }}">{{ ticket }} ↗</a>{{#else}}<mono>{{ ticket }}</mono>{{/if}}</small>{{/if}}
+{{#if ticket}}<small><muted>·</muted> {{#if ticketUrl}}<hover><a href="{{ ticketUrl }}">{{ ticket }} ↗</a><hovercard><b>{{ ticket }}</b> {{ ticketTitle }}<small><muted>{{ ticketStatus }}</muted></small></hovercard></hover>{{#else}}<mono>{{ ticket }}</mono>{{/if}}</small>{{/if}}
 {{#each also}}<small><muted>+</muted> {{#if url}}<a href="{{ url }}" tip="Linked ticket — it's about the same thing">{{ key }} ↗</a>{{#else}}<mono>{{ key }}</mono>{{/if}}</small>{{/each}}
 {{#each mrs}}<small><muted>·</muted> <a href="{{ url }}" tip="{{ tip }}">{{ label }}</a>{{#if tag}} <muted>({{ tag }})</muted>{{/if}}</small>{{/each}}
 <small><muted>· {{ kind }}</muted></small>
@@ -75,7 +75,7 @@ export function todosViewTemplate(): string {
   const r = row();
   const [panel, activity, omni, runbar, recap, today] = ["panel", "activity", "omni", "runbar", "recap", "today"].map(part);
   const tickets = part("tickets").replace("ROW", r);
-  return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value=""/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="askq" value=""/><state name="jql" value=""/><state name="aq" value=""/><state name="busy" value=""/><state name="instr" value=""/><state name="opedit" value=""/><state name="optext" value=""/><state name="noteedit" value=""/><state name="notetext" value=""/><state name="tf_name" value=""/><state name="tf_iban" value=""/><state name="tf_bic" value=""/><state name="tf_amount" value=""/><state name="tf_purpose" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value=""/><state name="mins" value=""/><state name="timenote" value=""/>
+  return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value="" keep=true/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="askq" value="" keep=true/><state name="jql" value=""/><state name="aq" value=""/><state name="busy" value=""/><state name="instr" value="" keep=true/><state name="opedit" value=""/><state name="optext" value=""/><state name="noteedit" value=""/><state name="notetext" value=""/><state name="tf_name" value=""/><state name="tf_iban" value=""/><state name="tf_bic" value=""/><state name="tf_amount" value=""/><state name="tf_purpose" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value="" keep=true/><state name="mins" value=""/><state name="timenote" value=""/>
 <data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}, chips={{ state.chips }}" debounce="300" when="{{ state.part == 'todos' and state.scope != 'activity' }}"/>
 <data name="hits" lambda="todos.hits" with="q={{ state.omniq }}" debounce="150" when="{{ state.omniq }}"/>
 <data name="feed" lambda="todos.feed" with="filter={{ state.feedfilter }}" when="{{ state.part == 'todos' and state.scope == 'activity' }}"/>
@@ -118,7 +118,7 @@ ${omni}
 <button run="todos-ext.add" with="text={{ state.newtext }}, ticket={{ state.newticket }}, due={{ state.newdue }}" into="added" then="newtext=" emit="todos-changed" label="Add" variant=primary disabled="{{ not state.newtext }}"/>
 </row>
 <on event="todo-add" run="todos-ext.add" with="text={{ state.newtext }}, ticket={{ state.newticket }}, due={{ state.newdue }}" into="added" then="newtext="/>
-{{#if data.added.id}}<small>{{#if data.added.merged}}<text tone=warn>{{ data.added.ref }} says the same already - merged into it.</text>{{#else}}<text tone=good>{{ data.added.ref }} created.</text>{{/if}}</small>{{/if}}
+{{#if data.added.id}}<small><text tone="{{ data.added.merged ? 'warn' : 'good' }}">{{ data.added.message }}</text></small>{{/if}}
 </box>
 {{#if data.st.confirm}}
 <callout tone=warn>

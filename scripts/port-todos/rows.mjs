@@ -28,6 +28,7 @@ export function rowTools(t, lang) {
       ticket: r.ticket,
       ticketUrl: data.tickets?.[r.ticket]?.url ?? "",
       ticketTitle: data.tickets?.[r.ticket]?.summary ?? "",
+      ticketStatus: data.tickets?.[r.ticket]?.status ?? "",
       also: links(r.alsoTickets ?? []),
       kind: KINDS[r.kind] ?? KINDS.other,
       closed,

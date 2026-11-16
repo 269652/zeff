@@ -218,7 +218,8 @@
 <col gap=2>
 {{#each data.p.sources}}
 <box>
-<small><muted>{{ label }}{{#if author}} · {{ author }}{{/if}}{{#if when}} · {{ when }}{{/if}}</muted></small>
+<hover width=520><chip>{{ label }}</chip><hovercard><small><muted>{{ author }} {{ when }}</muted></small>{{#if headline}}<b>{{ headline }}</b>{{/if}}{{#if text}}<text pre=true>{{ text }}</text>{{/if}}</hovercard></hover>
+<small><muted>{{#if author}}{{ author }} · {{/if}}{{ when }}</muted></small>
 {{#if headline}}<b>{{ headline }}</b>{{/if}}
 {{#if text}}<text pre=true>{{ text }}</text>{{/if}}
 {{#if not data.p.closed}}<button run="todos-ext.context-dismiss" with="id={{ data.p.id }}, ref={{ ref }}" emit="todos-changed" label="✕" variant=quiet tip="Not about this todo"/>{{/if}}

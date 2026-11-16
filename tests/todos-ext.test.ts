@@ -541,3 +541,18 @@ test("as the browser draws it: the state every <state> starts with, every todo's
   for (const part of ["todos", "tickets", "recap", "today"]) draw(`empty ${part}`, { part }, {});
   draw("empty activity", { scope: "activity" }, {});
 });
+
+test("the kit's new pieces: a hover card, Backspace on an empty input, taking the last value off a list in the state", { skip }, async () => {
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const src = `<state name="chips" value="[]"/><state name="q" value="" keep=true/>
+<input bind="q" back="chip-back" enter="chip-first"/><on event="chip-back" action="pop" state="chips"/><on event="chip-first" action="pick" state="chips" value="a"/>
+<hover width=300><a href="/x">key</a><hovercard><b>Title</b><small>Status</small></hovercard></hover>
+<button action="pop" state="chips" label="x"/>`;
+  const r = renderView(src, { rows: [], props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
+  assert.deepEqual(r.errors, []);
+  const html = JSON.stringify(r.nodes);
+  assert.ok(html.includes('"t":"hover"') && html.includes('"t":"hovercard"') && html.includes("Title"));
+  assert.ok(html.includes('"back":"chip-back"'));
+  const bad = renderView(`<hover><hovercard>x</hovercard></hover><button action="nope" label="y"/>`, { rows: [], props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
+  assert.ok(bad.errors.length > 0, "an unknown action is still an error");
+});

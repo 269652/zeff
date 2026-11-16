@@ -268,7 +268,11 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const { todoSources } = await import("@/lib/todos/sources");
       const { lastGoodRun } = await import("@/lib/runs/store");
       const { entityHeadline, entitySourceLabel, entityText, entityWhoWhen } = await import("@/lib/entities-shared");
-      const cited = sourcesOf(t.refs, todoSources([t], lastGoodRun()?.tickets ?? []));
+      // Settings → Todos: what a todo shows under its text (context, the actions the AI proposed, knowledge — and which kinds of knowledge).
+      const { getTodoDisplayOff } = await import("@/lib/todo-display-store");
+      const { kindOfPage } = await import("@/lib/todo-display");
+      const off = getTodoDisplayOff();
+      const cited = off.includes("context") ? [] : sourcesOf(t.refs, todoSources([t], lastGoodRun()?.tickets ?? []));
       return {
         found: true,
         id: t.id,
@@ -283,7 +287,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
         source: t.source ?? "",
         note: t.note ?? "",
         notes: [...(t.relatedNotes ?? []), ...t.userNotes].map((n) => ({ at: n.at, by: n.by ?? "", text: n.text, url: n.url ?? "", urlLabel: n.urlLabel ?? "", instruction: n.kind === "instruction", own: !n.by && n.kind !== "instruction" && n.from === undefined, from: n.from ?? 0, jira: noteSyncState(n) })),
-        ops: t.ops.map((op, index) => {
+        ops: t.ops.filter(() => !(off.includes("actions") && t.autoOpsWhy)).map((op, index) => {
           const note = opNote(op, en);
           const href = actionHref(op);
           const o = op as unknown as Record<string, unknown>;
@@ -296,7 +300,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           const p = (await import("@/lib/girocode-todo")).paymentForTodo(t, people);
           return p ? { name: p.name, iban: p.iban, bic: p.bic ?? "", amount: p.amount ?? 0, purpose: p.purpose, via: p.via } : null;
         })(),
-        knowledge: t.knowledge ? { pages: t.knowledge.pages.map((x) => ({ title: x.title, url: x.url, snippet: (x.summary ?? x.snippet ?? "").slice(0, 300) })), entities: t.knowledge.entities.map((x) => ({ name: x.name, type: x.type, summary: x.summary.slice(0, 300) })), links: t.knowledge.links ?? [], repo: t.knowledge.repo ?? null } : null,
+        knowledge: t.knowledge && !off.includes("knowledge") ? { pages: t.knowledge.pages.filter((x) => !off.includes(kindOfPage(x))).map((x) => ({ title: x.title, url: x.url, snippet: (x.summary ?? x.snippet ?? "").slice(0, 300) })), entities: t.knowledge.entities.map((x) => ({ name: x.name, type: x.type, summary: x.summary.slice(0, 300) })), links: t.knowledge.links ?? [], repo: t.knowledge.repo ?? null } : null,
         draft: t.draft ?? "",
         recurrence: t.recurrence ? t.recurrence.freq : "",
         away: (t.away ?? []).map((a) => ({ name: a.name, until: a.until })),
@@ -411,12 +415,14 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     label: "Take back a briefing run's todos",
     summary: "The todos a briefing run made that you haven't touched are dismissed (those you worked on stay): { dismissed, kept, claims }. Needs the flow's todos permission.",
     input: [f("run", "number", { required: true })],
-    output: "{ dismissed, kept, claims }",
+    output: "{ dismissed, kept, claims, message }",
     writes: true,
     run: async (i, ctx) => {
       if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
       if (ctx.dryRun) return { dismissed: 0, kept: 0, claims: 0 };
-      return (await import("@/lib/runs/run-undo")).undoLageRun(Number(i.run));
+      const r = (await import("@/lib/runs/run-undo")).undoLageRun(Number(i.run));
+      const { t } = await import("@/lib/i18n/server");
+      return { ...r, message: `${t("{n} todos of the run dismissed, {kept} kept (you worked on them).", { n: r.dismissed, kept: r.kept })}${r.claims ? ` ${t("{n} promises and facts it read removed.", { n: r.claims })}` : ""}` };
     },
   },
   {

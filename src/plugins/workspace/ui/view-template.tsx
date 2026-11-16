@@ -18,6 +18,7 @@ import { navOf, renderView, viewDefaults, type ViewNavEntry, type VNode } from "
 import type { ActionEnv, AppViewProps, ViewAppModule } from "./app-view";
 import { draw, Level, type DrawExt } from "./card-template";
 import { ChannelLogo } from "@/components/ChannelLogo";
+import { HoverCard } from "@/components/HoverCard";
 import { toggleTaskAction } from "../actions";
 import { askWorkspace } from "./chat-client";
 import { WS_CHANGED } from "./ChatPanel";
@@ -282,6 +283,17 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           return void (rowId && props.rowOps?.hide(rowId));
         case "state":
           return void (a.state && setState(a.state, a.value ?? ""));
+        case "pop": {
+          if (!a.state) return;
+          let list: unknown[] = [];
+          try {
+            const v: unknown = JSON.parse(r.state[a.state] || "[]");
+            if (Array.isArray(v)) list = v;
+          } catch {
+            list = [];
+          }
+          return void (list.length && setState(a.state, JSON.stringify(list.slice(0, -1))));
+        }
         case "pick": {
           // A value in or out of the list kept in a state (what <check> does for one box) — a chip picked, a filter taken off.
           if (!a.state) return;
@@ -643,6 +655,16 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           if (!x.ok) return void toast(x.error, { tone: "error" });
           setSettings(x.values);
         }} />;
+      case "hover": {
+        const card = n.c.filter((c): c is Exclude<VNode, string> => typeof c !== "string" && c.t === "hovercard");
+        const rest = n.c.filter((c) => typeof c === "string" || c.t !== "hovercard");
+        if (!card.length) return <span key={key}>{kids(rest)}</span>;
+        return (
+          <HoverCard key={key} width={Math.min(720, Number(a.width) || 420)} card={<div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3 text-xs shadow-sm dark:border-zinc-800 dark:bg-zinc-900">{kids(card.flatMap((c) => c.c))}</div>}>
+            {kids(rest)}
+          </HoverCard>
+        );
+      }
       case "drag":
         return (
           <div key={key} draggable title={a.tip || undefined} className="cursor-grab active:cursor-grabbing" onDragStart={(e) => (e.stopPropagation(), e.dataTransfer.setData("text/plain", `zeff-drag:${a.value ?? ""}`), (e.dataTransfer.effectAllowed = "move"))}>
