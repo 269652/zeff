@@ -179,6 +179,7 @@ const sourceDecl = z.object({
   lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or a lambda of the plugin (kind function) that reads them — no Notebook needed; its records may also say status, typed (fields of fixed id and type) and dataType."),
   replaces: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/).optional().describe("A port's: the built-in's source it stands in for (its id, as the databases name it) — only its own built-in's (lib/ext/stores.ts REPLACEABLE_SOURCES)."),
   noNewRows: z.boolean().default(true).describe("The records are only read from where they live: a row cannot be made by hand."),
+  pull: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("A two-way source: a flow of the plugin that gets { rows: [{ cells }] } (the rows of the database it fills) before each read and takes back what was edited in them (a box ticked off)."),
   lockedFields: z.array(z.string().max(40)).max(40).default([]).describe("Fields (by their id) the records fix: not changed by hand on the rows the source brings."),
 }).refine((s) => !!s.read || !!s.lambda, { message: "a source reads its records by a function (read) or a lambda" });
 

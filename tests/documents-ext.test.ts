@@ -342,3 +342,54 @@ test("the screens' templates draw: the Documents screen (grid, list, a PDF and a
   assert.deepEqual(attach.errors, []);
   assert.match(rendered(attach), /Attach/);
 });
+
+test("the document inbox: the documents as records of the Workspace, their Unread box taken back, the screen says what waits and where a document lies", { skip }, async () => {
+  await setup();
+  const { getSqlite } = await import("@/db");
+  const { externalSources } = await import("@/plugins/workspace/ext-functions");
+  const { documentRecords } = await import("@/plugins/documents/workspace-source");
+  const doc = await addDoc("Inbox Brief.txt", "Ein Brief für den Eingang");
+  // The port's source stands in for the built-in's by its id; its records say what the built-in's do.
+  const src = externalSources().find((s) => s.id === "documents");
+  assert.ok(src, "the port's source is the documents source");
+  const mine = (await src!.read()).find((r) => r.ref === doc.ref)!;
+  const theirs = documentRecords().find((r) => r.ref === doc.ref)!;
+  assert.equal(mine.title, theirs.title);
+  assert.equal(mine.dataType, "documents");
+  const of = (r: { typed?: { id: string; value: unknown }[] }) => Object.fromEntries((r.typed ?? []).map((t) => [t.id, t.value]));
+  assert.deepEqual(of(mine), of(theirs));
+  assert.equal(of(mine).docunread, true);
+  // Ticking the box off in the row is "seen".
+  const cells = { srcref: doc.ref, srcedited: mine.updatedAt, docunread: false };
+  await src!.pull!(1, [{ id: 1, title: "x", cells } as never], {} as never);
+  assert.equal(getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id)!.n as number, 1);
+  // A row that is out of date (the document changed since) is left alone: unread again would not apply.
+  await src!.pull!(1, [{ id: 1, title: "x", cells: { srcref: doc.ref, srcedited: "old", docunread: true } } as never], {} as never);
+  assert.equal(getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id)!.n as number, 1);
+  const again = (await src!.read()).find((r) => r.ref === doc.ref)!;
+  await src!.pull!(1, [{ id: 1, title: "x", cells: { srcref: doc.ref, srcedited: again.updatedAt, docunread: true } } as never], {} as never);
+  assert.equal(getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id)!.n as number, 0);
+  // The screen: what waits for you, where a document of a folder lies.
+  getSqlite().prepare("insert into doc_gate (doc_id, state, at) values (?, 'pending', ?) on conflict(doc_id) do update set state = 'pending'").run(doc.id, new Date().toISOString());
+  const { setPref } = await import("@/lib/prefs");
+  setPref("documents:folders", [{ id: "f1", path: "C:\\Scans", mode: "confirm", addedAt: "", lastScanAt: null, files: 1 }]);
+  getSqlite().prepare("insert or replace into doc_local_files (path, folder_id, rel, doc_id, size, mtime, missing_at) values ('C:\\Scans\\a\\brief.txt', 'f1', 'a\\brief.txt', ?, 1, 1, null)").run(doc.id);
+  const s = await lambda("documents.screen", { scope: "all" });
+  const item = s.items.find((d: { id: number }) => d.id === doc.id);
+  assert.equal(item.held, true);
+  assert.equal(item.localShown, "Scans › a › brief.txt");
+  assert.ok(s.heldIds.includes(doc.id));
+  assert.match(item.tip, /Brief/);
+  assert.deepEqual(Object.keys(s.reading), ["now", "waiting"]);
+});
+
+test("switching: the databases' app view of the documents becomes the port's", { skip }, async () => {
+  await setup();
+  const { createPage, getDatabase } = await import("@/plugins/workspace/store");
+  const id = createPage({ kind: "database", title: "Old inbox", icon: "📥", schema: { titleName: "Name", properties: [], views: [{ id: "v1", name: "Documents", type: "app", app: "documents", filter: { op: "and", rules: [] }, sorts: [], hidden: [] } as never], dataType: "documents" as never } });
+  const { portDocumentViews } = await import("@/plugins/documents/to-plugin");
+  assert.ok((await portDocumentViews()) >= 1);
+  const v = getDatabase(id)!.schema.views[0];
+  assert.equal(v.app, "template");
+  assert.match(v.template ?? "", /documents\.screen/);
+});

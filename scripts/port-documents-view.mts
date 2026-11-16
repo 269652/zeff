@@ -43,6 +43,8 @@ ${mark("delete", "{{ state.checked }}", "🗑 Delete", 'then="checked=" variant=
 {{/if}}
 </row>
 {{#if state.busy}}<small><muted>Working …</muted></small>{{/if}}
+{{#if data.docs.reading.now}}<row gap=2 align=center><small><muted>Reading: {{ data.docs.reading.now }} now, {{ data.docs.reading.waiting }} waiting</muted></small>${mark("restart", "", "Restart reading", 'variant=quiet')}</row>{{#else}}{{#if data.docs.reading.waiting}}<row gap=2 align=center><small><muted>{{ data.docs.reading.waiting }} waiting — nothing is being read right now.</muted></small>${mark("restart", "", "Start reading", 'variant=quiet')}</row>{{/if}}{{/if}}
+{{#if data.docs.heldCount}}<callout tone=warn><row gap=2 align=center><text>{{ data.docs.heldCount }} documents from your folders wait for your confirmation — the AI reads, compiles and looks at them only then.</text><grow/>${mark("approve", "{{ data.docs.heldIds | join(',') }}", "Confirm all")}</row></callout>{{/if}}
 
 <grid cols="{{ data.docs.picked ? 2 : 1 }}" gap=4 min=320>
 <col gap=3>
@@ -64,13 +66,14 @@ ${mark("delete", "{{ state.checked }}", "🗑 Delete", 'then="checked=" variant=
 {{#each data.docs.items}}
 <col gap=1>
 <row gap=2><check bind="checked" value="{{ id }}"/><grow/>{{#if unread}}<dot color="#4f46e5"/>{{/if}}</row>
-<box action="state" state="selected" value="{{ id }}">
+<box action="state" state="selected" value="{{ id }}" tip="{{ tip }}">
 <col gap=2>
 ${THUMB}
 <clamp lines=2>${NAME}</clamp>
 <small><muted>{{ sizeText }} · {{ day }}</muted></small>
 {{#if from}}<small><muted>✉ {{ from }}</muted></small>{{/if}}
-<row>${BADGES}</row>
+{{#if localShown}}<small><muted>📁 {{ localShown }}{{#if localMissing}} · deleted in the folder{{/if}}</muted></small>{{/if}}
+<row>${BADGES}{{#if held}}<badge color=yellow>waits for your confirmation</badge>{{/if}}</row>
 </col>
 </box>
 </col>
@@ -98,6 +101,7 @@ ${THUMB}
 <button run="documents.act" with="op=read, ids={{ data.docs.picked.id }}" emit="doc-open" label="Open"/>
 <a href="{{ data.docs.picked.fileUrl }}&download=1">Download</a>
 {{#if data.docs.picked.unread}}${mark("read", "{{ data.docs.picked.id }}", "✓ Mark read")}{{#else}}${mark("unread", "{{ data.docs.picked.id }}", "● Mark unread")}{{/if}}
+{{#if data.docs.picked.held}}${mark("approve", "{{ data.docs.picked.id }}", "Confirm")}{{/if}}
 {{#if data.docs.picked.status == 'failed' or data.docs.picked.status == 'unsupported'}}${mark("reread", "{{ data.docs.picked.id }}", "Read again")}{{/if}}
 {{#if data.docs.picked.status == 'queued' or data.docs.picked.status == 'extracting'}}${mark("skip", "{{ data.docs.picked.id }}", "Skip")}{{/if}}
 ${mark("delete", "{{ data.docs.picked.id }}", "🗑", 'then="selected=" variant=danger confirm="Delete this document for good?"')}
@@ -107,6 +111,7 @@ ${fact("Type", "{{ data.docs.picked.kindLabel }}")}
 ${fact("Size", "{{ data.docs.picked.sizeText }}")}
 ${fact("Added", "{{ data.docs.picked.added }}")}
 {{#if data.docs.picked.fromFull}}${fact("From", "{{ data.docs.picked.fromFull }}")}{{/if}}
+{{#if data.docs.picked.localShown}}${fact("Folder", "{{ data.docs.picked.localShown }}")}{{/if}}
 ${fact("State", "{{ data.docs.picked.stateText }}")}
 </col>
 {{#if data.docs.picked.error}}<text tone=bad>{{ data.docs.picked.error }}</text>{{/if}}

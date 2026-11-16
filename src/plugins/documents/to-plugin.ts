@@ -28,6 +28,29 @@ export async function switchDocumentsToPlugin(): Promise<{ flows: string[] }> {
     await life.installTracked(pkg, system && getPage(system) && !getPage(system)!.archivedAt ? system : null, { allow: true });
   }
   flows.setSyncFlowMinutes("documents.folders", minutes);
+  const views = await portDocumentViews();
   (await import("@/plugins/state")).setInstalled("documents", false);
-  return { flows: ["documents.review", "documents.relate", "documents.folders", "documents.read"] };
+  return { flows: ["documents.review", "documents.relate", "documents.folders", "documents.read"], views };
 }
+
+/**
+ * The documents databases' screen: the built-in's app view of them ("documents") becomes the port's (a template view of its contributes.appViews entry) —
+ * so they go on drawing when the built-in is gone. Once switched, a view is the port's own (what you changed in it stays). How many views.
+ */
+export async function portDocumentViews(): Promise<number> {
+  const { extAppViews, appViewFields } = await import("@/plugins/workspace/app-views");
+  const mine = extAppViews.all().flatMap((c) => c.impl).find((a) => a.plugin === "documents-ext" && a.dataType === "documents" && a.template);
+  if (!mine) return 0;
+  const { getSqlite } = await import("@/db");
+  const { getDatabase, updateSchema } = await import("@/plugins/workspace/store");
+  const ids = (getSqlite().prepare("select id from ws_pages where kind = 'database' and archived_at is null and template = 0").all() as { id: number }[]).map((r) => r.id);
+  let n = 0;
+  for (const id of ids) {
+    const d = getDatabase(id);
+    if (!d || !d.schema.views.some((v) => v.type === "app" && v.app === "documents")) continue;
+    updateSchema(id, { ...d.schema, views: d.schema.views.map((v) => (v.type === "app" && v.app === "documents" ? { ...v, ...appViewFields(mine) } : v)) });
+    n++;
+  }
+  return n;
+}
+
