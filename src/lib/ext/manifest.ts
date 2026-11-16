@@ -241,7 +241,13 @@ const metricDecl = z.object({
 }).refine((m) => !!m.function || !!m.lambda, { message: "a metric is answered by a function or a lambda" });
 const rowBadgeDecl = z.object({
   prefix: z.string().regex(/^[a-z][a-z0-9-]{0,39}:$/, 'the start of its records\' refs, with the colon: "film:"').describe("The rows its sources brought (by their record's ref) it puts badges on."),
-  function: shortId.describe('The plugin function that gives the badges: { "film:12": [{ "label": "2 new", "tone": "warn" }] }.'),
+  function: shortId.optional().describe('The plugin function that gives the badges: { "film:12": [{ "label": "2 new", "tone": "warn" }] }.'),
+  lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or one of its lambdas (kind function) that gives them — it only reads. A part may say `todo: true` (counted in the todos' own pill)."),
+}).refine((b) => !!b.function || !!b.lambda, { message: "badges are given by a function or a lambda" });
+const seriesDecl = z.object({
+  id: shortId.describe("Its id: <plugin id>.<this> among the Correlations' series providers."),
+  replaces: z.string().regex(/^[a-z][a-z0-9-]*\.[a-z0-9.-]+$/).max(80).optional().describe("A port's: the built-in provider's id it takes over (its series keep their ids); the built-in's gives nothing while the port is on."),
+  lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).describe('The lambda (kind function) that gives the series for a period, called with { from, to } (days): [{ "id", "label", "group", "kind": "number|ordinal|binary", "unit"?, "levels"?, "values": { "YYYY-MM-DD": number } }].'),
 });
 const tabMenuDecl = z.object({
   tab: z.string().regex(/^\/[\w/-]{0,80}$/).describe('The tab (by its address, "/my-app") whose menu it fills.'),
@@ -368,6 +374,7 @@ const contributes = z.object({
   metrics: z.array(metricDecl).max(20).default([]).describe("Kennzahlen: numbers a plugin function gives, kept and asked again when they are older than everyMinutes."),
   stores: z.array(storeDecl).max(10).default([]).describe("Data of its own, beyond Workspace databases (many rows, looked up by key): tables the kernel keeps for it — read and written through the store actions, by its flows with the permission, read by its lambdas."),
   appViews: z.array(appViewDecl).max(10).default([]).describe("App views for the databases of a type (a mail client for mails): a template of the view language each, made the database's view."),
+  seriesProviders: z.array(seriesDecl).max(10).default([]).describe("Daily series for the Correlations, given by a lambda for a period."),
   rowBadges: z.array(rowBadgeDecl).max(10).default([]).describe("Badges on the rows its sources brought (by their refs), given by a plugin function."),
   tabMenus: z.array(tabMenuDecl).max(10).default([]).describe("The menu of a tab (its address): entries a plugin function gives."),
   widgets: z.array(widgetDecl).max(20).default([]).describe("Widgets for pages and the dashboard (New block → widget): a list, figures or one figure, given by a plugin function, with buttons that run another."),
@@ -419,7 +426,7 @@ export const manifestSchema = z
       .describe("Where newer versions of it are: a GitHub repository (one repository may hold many plugins, each in a folder with its own zeff-plugin.json and version). Plugins → Sources checks it and updates on a click."),
     apiVersion: z.number().int().min(1).max(API_VERSION).describe(`The extension API version it was written for (this Zeff speaks up to ${API_VERSION}).`),
     permissions: z.array(permissionId).max(30).default([]).describe("What it may do (granted by you): exec, network, prompt, and the permissions plugins bring (work.read, todos.write, workspace.write …)."),
-    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], personFormulas: [], knowledgeDocs: [], aiTasks: [], stores: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [], oauth: [] }),
+    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], personFormulas: [], knowledgeDocs: [], aiTasks: [], stores: [], appViews: [], rowBadges: [], seriesProviders: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [], oauth: [] }),
   })
   .superRefine((m, ctx) => {
     const has = (p: Permission) => m.permissions.includes(p);

@@ -39,8 +39,13 @@ export const PORTS: Port[] = [
   { builtin: "documents", plugin: "documents-ext", switch: async () => (await import("./documents/to-plugin")).switchDocumentsToPlugin() },
   { builtin: "calendar", plugin: "calendar-ext", switch: async () => (await import("./calendar/to-plugin")).switchCalendarToPlugin() },
   { builtin: "knowledge", plugin: "knowledge-ext", switch: async () => (await import("./knowledge/to-plugin")).switchKnowledgeToPlugin() },
-  // (People: only its AI steps — the extraction, the overviews, placing contacts, matching names — are the port's; the people, their screens and widgets stay Zeff's, so the built-in stays on)
-  { builtin: "people", plugin: "people-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true }) },
+  // (People: its AI steps, the overview, the person's page, the widgets and the review sources are the port's; the people model — contacts, claims, links, circles, the graph — stays Zeff's, so the built-in stays on)
+  { builtin: "people", plugin: "people-ext", switch: async () => {
+      const r = await (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true });
+      // (and its screens: the overview and the person's page)
+      await (await import("./people/to-plugin")).switchPeopleScreensToPlugin();
+      return r;
+    } },
   // (Code: only the screens are the port's so far — the built-in Code tab stays on beside them until the port is 1:1; the engine stays the kernel's)
   { builtin: "work", plugin: "work-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("work", { port: "work-ext", flow: "work.start", minutes: async () => 0, keepBuiltin: true }) },
   { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },

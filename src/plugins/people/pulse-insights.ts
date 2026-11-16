@@ -313,6 +313,8 @@ export async function contactDaysByPerson(range: { from: string; to: string }, t
 export const PEOPLE_SERIES: SeriesProvider = {
   id: "people.contact",
   series: async (range) => {
+    // (the port's lambda gives them while people-ext declares its series)
+    if (await (await import("./port-state")).portDeclares("seriesProviders")) return [];
     const { filled } = await import("@/lib/series/days");
     const group = t("People");
     return (await contactDaysByPerson(range)).map(({ person, days, first }) => ({

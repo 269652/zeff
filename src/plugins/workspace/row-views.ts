@@ -25,8 +25,8 @@ export const DETAIL_VIEW: RowView = { id: "detail", plugin: "workspace", dataTyp
 /** The custom view the rows of a database of this type have now (its plugin installed). */
 export const rowViewOf = (dataType: DataType | undefined): RowView | undefined => (dataType ? ROW_VIEWS.find((v) => v.dataType === dataType && isInstalled(v.plugin)) : undefined);
 
-/** The custom view of a database's rows: its plugin's, else its own detail page when it has a template for one. */
-export const rowViewFor = (schema: { dataType?: DataType; rowTemplate?: string } | undefined): RowView | undefined => rowViewOf(schema?.dataType) ?? (schema?.rowTemplate ? DETAIL_VIEW : undefined);
+/** The custom view of a database's rows: its own detail page when it has a template for one (a port's, yours), else its plugin's. */
+export const rowViewFor = (schema: { dataType?: DataType; rowTemplate?: string } | undefined): RowView | undefined => (schema?.rowTemplate ? DETAIL_VIEW : rowViewOf(schema?.dataType));
 
 const has = (doc: Doc): boolean => (doc.content ?? []).some((n) => n.type === "rowView");
 

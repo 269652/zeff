@@ -198,6 +198,71 @@ export const SCREEN_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "people.progress",
+    group: "people",
+    label: "What runs in the background for People",
+    summary: "Whether the search for everyone's dates or the compiling of the summaries is running, and how far: dates { done, total, found } and compile { done, total, current } (null: not running). Cheap — the overview reads it again and again while something runs.",
+    input: [],
+    output: "{ dates, compile }",
+    run: async () => {
+      const { findAllProgress } = await import("./dates");
+      const { compileProgress } = await import("./compile");
+      const compile = compileProgress();
+      return { dates: findAllProgress(), compile: compile && !compile.result ? { done: compile.done, total: compile.total, current: compile.current ?? "" } : null };
+    },
+  },
+  {
+    name: "people.loops-of",
+    group: "people",
+    label: "Open loops with a person",
+    summary: "What is open with the person a row stands for (promises either way, questions, requests — the Open loops plugin's list: who owes, what, since when, its quote, a proposal to close it): { ok, loops, counts } — ok false with off true while the Open loops plugin is off.",
+    input: [f("row", "number", { required: true })],
+    output: "{ ok, off?, error?, loops, counts }",
+    run: async (i) => {
+      const { loopsAction } = await import("@/plugins/loops/server-actions");
+      return (await loopsAction({ row: num(i.row) })) as unknown as Record<string, unknown>;
+    },
+  },
+  {
+    name: "people.loop-decide",
+    group: "people",
+    label: "Your word on an open loop",
+    summary: "Close, dismiss (not a loop), confirm, reopen, accept-close / reject-close (a proposal to close it) or later — for the loop ref, as the Open loops list on a person's page does.",
+    input: [f("ref", "text", { required: true }), f("op", "text", { required: true })],
+    output: "{ ok, error? }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (ctx.dryRun) return { ok: true };
+      const { decideLoopAction } = await import("@/plugins/loops/server-actions");
+      return (await decideLoopAction(String(i.ref ?? ""), String(i.op ?? "") as never)) as unknown as Record<string, unknown>;
+    },
+  },
+  {
+    name: "people.row-badges",
+    group: "people",
+    label: "The badges of the people's rows",
+    summary: "What waits with each person, for the Workspace tree: their open and overdue todos, the promises past their day, their unread messages — by the row's ref (person:<id>): { \"person:12\": [{ count, tone, label, todo? }] }.",
+    input: [],
+    output: "{ \"person:<id>\": [{ count, tone, label, todo? }] }",
+    run: async () => {
+      const { PEOPLE_ROW_BADGES_OWN } = await import("./badges");
+      return Object.fromEntries(await PEOPLE_ROW_BADGES_OWN.badges());
+    },
+  },
+  {
+    name: "people.contact-days",
+    group: "people",
+    label: "The days you were in touch with each person",
+    summary: "For a period (from, to: days, inclusive): the twelve people you were in touch with on most days, each with their days of contact and the first of them (read from 90 days before the period) — what the Correlations' series of contact are made of.",
+    input: [f("from", "text", { required: true }), f("to", "text", { required: true })],
+    output: "{ people: [{ id, name, days, first }] }",
+    run: async (i) => {
+      const { contactDaysByPerson } = await import("./pulse-insights");
+      const r = await contactDaysByPerson({ from: String(i.from ?? ""), to: String(i.to ?? "") });
+      return { people: r.map((x) => ({ id: x.person.id, name: x.person.name, days: x.days, first: x.first })) };
+    },
+  },
+  {
     name: "people.widget",
     group: "people",
     label: "What a People widget shows",

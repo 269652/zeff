@@ -26,7 +26,7 @@ fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 // The texts of the screens' data in the languages the packs have: every t("…") of the built-in's view-data.ts / row-data.ts and of the screen lambdas.
 const KEYS: string[] = [];
-for (const file of [path.join(ROOT, "src", "plugins", "people", "view-data.ts"), path.join(ROOT, "src", "plugins", "people", "row-data.ts"), path.join(SRC, "people.screen.mjs"), path.join(SRC, "people.person.mjs")])
+for (const file of [path.join(ROOT, "src", "plugins", "people", "view-data.ts"), path.join(ROOT, "src", "plugins", "people", "row-data.ts"), path.join(SRC, "people.screen.mjs"), path.join(SRC, "people.person.mjs"), path.join(SRC, "people.progress.mjs"), path.join(SRC, "people.series.mjs"), path.join(ROOT, "src", "plugins", "people", "pulse-insights.ts"), path.join(ROOT, "src", "plugins", "people", "badges.ts"), path.join(ROOT, "src", "plugins", "loops", "shared.ts")])
   for (const m of fs.readFileSync(file, "utf8").matchAll(/\bt\(\s*"([^"]*)"/g)) {
     const k = m[1];
     if (!KEYS.includes(k)) KEYS.push(k);
@@ -48,6 +48,8 @@ const lib = await build({
       `export { personPageData } from "@/plugins/people/row-data";`,
       `export { CIRCLES, circleLabels } from "@/plugins/people/shared";`,
       `export { initials } from "@/plugins/workspace/widget-shared";`,
+      `export { filled } from "@/lib/series/days";`,
+      `export { kindLabel } from "@/plugins/loops/shared";`,
       `export { INSTRUCTIONS as EXTRACT_INSTRUCTIONS, SCHEMA as EXTRACT_SCHEMA, PER_BATCH, MAX_BATCHES, extractBatch, extractPrompt, acceptFindings, withLoopsAddendum } from "@/plugins/people/extract-core";`,
       `export { INSTRUCTIONS as COMPILE_INSTRUCTIONS, SCHEMA as COMPILE_SCHEMA } from "@/plugins/people/compile-core";`,
       `export { INSTRUCTIONS as CLASSIFY_INSTRUCTIONS, SCHEMA as CLASSIFY_SCHEMA, classifyPrompt } from "@/plugins/people/classify-core";`,
@@ -93,10 +95,28 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
     zeff: ["people.screen-data"],
     timeoutMs: 120000,
   },
+  "people.row-badges": {
+    label: "People: the badges of the rows",
+    what: "What waits with each person in the Workspace tree: open and overdue todos, promises past their day, unread messages.",
+    zeff: ["people.row-badges"],
+    timeoutMs: 60000,
+  },
+  "people.series": {
+    label: "People: days in touch, for the Correlations",
+    what: "A daily series per person you are most in touch with: 1 on a day in touch with them, 0 on a day without.",
+    zeff: ["people.contact-days"],
+    timeoutMs: 120000,
+  },
+  "people.progress": {
+    label: "People: what runs in the background",
+    what: "How far the search for everyone's dates and the compiling of the summaries are — what the overview shows while they run.",
+    zeff: ["people.progress"],
+    timeoutMs: 30000,
+  },
   "people.person": {
     label: "People: what a person's page shows",
     what: "A person's page — their profile, dates, details, what was read from messages, relations, the latest messages, todos, appointments, cases, documents — and what the knowledge knows of them, as the built-in works it out.",
-    zeff: ["people.page-data", "people.wiki-of"],
+    zeff: ["people.page-data", "people.wiki-of", "people.loops-of"],
     timeoutMs: 60000,
   },
   "people.names": {
@@ -394,6 +414,26 @@ write(
             triggers: [{ kind: "manual" }],
           },
         },
+        {
+          id: "i50",
+          parent: "i1",
+          kind: "page",
+          title: "Your word on an open loop",
+          icon: "👥",
+          content: doc,
+          flow: {
+            name: "people.loop",
+            title: "Your word on an open loop",
+            description: "A button of the Open loops block on a person's page (input ref, op: close, dismiss, confirm, reopen, accept-close, reject-close, later). Output { ok, error }.",
+            inputs: [],
+            nodes: [
+              { id: "run", kind: "action", action: "people.loop-decide", input: { ref: "{{ input.ref }}", op: "{{ input.op }}" } },
+              { id: "done", kind: "return", value: { ok: "{{ steps.run.ok }}", error: "{{ steps.run.error }}" } },
+            ],
+            requested: REQUEST,
+            triggers: [{ kind: "manual" }],
+          },
+        },
         ...EXTRA_ITEMS,
       ],
     },
@@ -420,6 +460,8 @@ write(
       contributes: {
         lambdas: "lambdas",
         workspacePackages: ["people.package.json"],
+        rowBadges: [{ prefix: "person:", lambda: "people.row-badges" }],
+        seriesProviders: [{ id: "contact", replaces: "people.contact", lambda: "people.series" }],
         widgets: widgetDecls,
         reviewSources: reviewDecls,
         appViews: [{ id: "people", dataType: "people", label: "Overview (plugin)", icon: "👥", template: "views/people.html" }],

@@ -101,15 +101,12 @@ const BUILTIN_REVIEW: ReviewSource[] = [
   },
 ];
 
-/** The port brings these (people-ext's reviewSources) while it is on: its lambdas list what the built-in's functions below list, the port's flows decide it. */
-const portHasReview = async (): Promise<boolean> => (await import("@/lib/ext/registry")).enabledPlugins().some((p) => p.id === "people-ext" && p.manifest.contributes.reviewSources.length > 0);
-
 /** The built-in's own sources, standing aside for the port's (the port reads them through `people.review-list` / `people.review-act`: use `BUILTIN_REVIEW`). */
 export const PEOPLE_REVIEW: ReviewSource[] = BUILTIN_REVIEW.map((s) => ({
   ...s,
   get label() {
     return s.label;
   },
-  list: async () => ((await portHasReview()) ? [] : s.list()),
+  list: async () => ((await (await import("./port-state")).portDeclares("reviewSources")) ? [] : s.list()),
 }));
 export const PEOPLE_REVIEW_OWN: ReviewSource[] = BUILTIN_REVIEW;
