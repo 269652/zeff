@@ -2,6 +2,10 @@ import { promptText } from "@/lib/prompts";
 import { clip as flatClip } from "@/lib/text";
 import { desc, like, or, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { RAG_INSTRUCTIONS, RAG_SOURCES, askWithRetrievalWith, type Need, type RagHit, type RagSource } from "./rag-ask";
+
+export { RAG_INSTRUCTIONS, RAG_SOURCES };
+export type { Need, RagHit, RagSource };
 
 /**
  * Retrieval on demand (RAG) for the AI steps. They run closed — no tools — so context that wasn't
@@ -12,30 +16,6 @@ import { getDb, schema } from "@/db";
  */
 
 const { emails, teamsMessages, gitlabItems, jiraComments, jiraTickets, contexts, facts, documents } = schema;
-
-export const RAG_SOURCES = ["knowledge", "mails", "teams", "gitlab", "jira", "notes", "facts", "todos", "documents", "pages", "people"] as const;
-export type RagSource = (typeof RAG_SOURCES)[number];
-
-/** What an AI step asks for when it misses context: search words, in all sources or only in some. */
-export type Need = { query: string; where?: string[] };
-export type RagHit = { source: RagSource; ref: string; title: string; text: string; when?: string };
-
-/** What a step adds to its prompt so the AI knows it can ask — and how. */
-export const RAG_INSTRUCTIONS = `Fehlt dir Kontext, um sicher zu antworten (ein Name, ein Beschluss, was in einer Rückfrage steht, wie etwas funktioniert), rate nicht: lass die Antwort leer und nenne unter needs bis zu 3 Suchanfragen — query: 2–5 Suchwörter, die in den gesuchten Texten stehen dürften; where (optional): knowledge (Dokumentation), mails, teams, gitlab, jira, notes, facts, todos, documents (Dokumente und Bilder, die ich an Todos gehängt habe: was darin steht oder zu sehen ist), pages (meine Workspace-Seiten: Notizen, Wiki, Beschlüsse, Meeting-Protokolle), people (was Zeff über Personen weiß: Rollen, Fakten, Bankverbindung, Adressen, Telefon). Zeff sucht dort und fragt dich mit den Fundstellen noch einmal. Ist der Kontext unten schon ausreichend, antworte gleich und lass needs weg.`;
-
-/** The optional `needs` field added to a step's answer schema. */
-const NEEDS_PROPERTY = {
-  type: "array",
-  description: "Nur wenn dir Kontext fehlt und die Antwort leer bleibt: was Zeff für dich nachschlagen soll.",
-  items: {
-    type: "object",
-    required: ["query"],
-    properties: {
-      query: { type: "string", description: "2–5 Suchwörter." },
-      where: { type: "array", items: { type: "string", enum: [...RAG_SOURCES] }, description: "Nur in diesen Quellen suchen (sonst in allen)." },
-    },
-  },
-};
 
 const STOP = new Set("der die das den dem des und oder ist sind war was wer wie wo wann warum für ein eine einer einen mit von zum zur nicht auch bei aus nach über the and for with that this what who how why are was were you your".split(" "));
 export const wordsOf = (q: string) => [...new Set(q.toLowerCase().split(/[^\p{L}\p{N}_]+/u).filter((w) => w.length >= 3 && !STOP.has(w)))].slice(0, 6);
@@ -215,41 +195,8 @@ export async function retrieve(needs: Need[], opts: RetrieveOpts = {}): Promise<
   return { text: lines.join("\n"), hits: kept };
 }
 
-type WithNeeds = { needs?: Need[] };
-
-/**
- * Ask the AI, and while it says it misses context (`needs`) look it up and ask again with the
- * finds — at most `rounds` asks (default 2); the last one has no `needs` and must answer. A need
- * already looked up isn't looked up twice. `ask` gets the prompt and the schema of the round.
- */
-export async function askWithRetrieval<T extends object>(o: {
-  prompt: string;
-  schema: object;
-  ask: (prompt: string, schema: object) => Promise<T & WithNeeds>;
-  retrieve?: (needs: Need[]) => Promise<{ text: string }>;
-  rounds?: number;
-}): Promise<T & WithNeeds> {
-  const rounds = Math.max(1, o.rounds ?? 2);
-  const fetch = o.retrieve ?? ((needs: Need[]) => retrieve(needs));
-  const done = new Set<string>();
-  let extra = "";
-  for (let round = 1; ; round++) {
-    const last = round >= rounds;
-    const base = o.schema as { properties?: Record<string, unknown> };
-    const schema = last ? o.schema : { ...base, properties: { ...base.properties, needs: NEEDS_PROPERTY } };
-    const res = await o.ask(`${o.prompt}${extra}${last && round > 1 ? "\n\nDas ist die letzte Runde: antworte jetzt mit dem, was da ist." : ""}`, schema);
-    const asked = (res.needs ?? []).filter((n) => String(n?.query ?? "").trim());
-    if (last || !asked.length) return res;
-    const needs = asked.filter((n) => !done.has(String(n.query).trim().toLowerCase()));
-    // Asked again for what was looked up already: nothing more to find — it has to answer now.
-    if (!needs.length) return o.ask(`${o.prompt}${extra}
-
-Dazu wurde schon gesucht, mehr gibt es nicht: antworte jetzt mit dem, was da ist.`, o.schema);
-    for (const n of needs) done.add(String(n.query).trim().toLowerCase());
-    const found = await fetch(needs);
-    extra += `\n\n# Nachgeholter Kontext (Runde ${round}; gesucht: ${needs.map((n) => `„${n.query}“`).join(", ")})\n${found.text || "(nichts gefunden)"}`;
-  }
-}
+/** The loop of asking and looking up (rag-ask.ts, pure — the People port runs it in a lambda); here with this module's own search. */
+export const askWithRetrieval = <T extends object>(o: Omit<Parameters<typeof askWithRetrievalWith<T>>[0], "retrieve"> & { retrieve?: (needs: Need[]) => Promise<{ text: string }> }) => askWithRetrievalWith<T>({ ...o, retrieve: o.retrieve ?? ((needs: Need[]) => retrieve(needs)) });
 
 /** For prompts of the steps that can ask: the instructions (see RAG_INSTRUCTIONS) behind the step's own. */
 export const withRagInstructions = (instructions: string) => `${instructions}\n\n${promptText("rag", RAG_INSTRUCTIONS)}`;

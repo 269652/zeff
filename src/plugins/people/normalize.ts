@@ -19,46 +19,11 @@ import { addAliases, addRelation, createPerson, getPerson, listPeople, mergePeop
 import type { Person } from "./shared";
 import type { TodoView } from "@/lib/todos/shared";
 import { accountFlag, setAccountFlag } from "@/lib/sync/account-flags";
+import { INSTRUCTIONS, SCHEMA, normalizePrompt, type NormalizeAnswer as Answer } from "./normalize-core";
+
+export { INSTRUCTIONS };
 
 const { emails } = schema;
-
-const SCHEMA = {
-  type: "object",
-  properties: {
-    aliases: { type: "array", items: { type: "object", properties: { person: { type: "integer" }, mention: { type: "string" } }, required: ["person", "mention"] } },
-    people: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: { name: { type: "string" }, aliases: { type: "array", items: { type: "string" } }, whatsapp: { type: "string" }, email: { type: "string" } },
-        required: ["name"],
-      },
-    },
-    merges: { type: "array", items: { type: "object", properties: { keep: { type: "integer" }, drop: { type: "integer" } }, required: ["keep", "drop"] } },
-    relations: {
-      type: "array",
-      items: { type: "object", properties: { person: { type: "integer" }, rel: { type: "string" }, other: { type: "integer" }, evidence: { type: "string" } }, required: ["person", "rel", "other", "evidence"] },
-    },
-  },
-  required: ["aliases", "people", "merges", "relations"],
-};
-type Answer = {
-  aliases?: { person?: number; mention?: string }[];
-  people?: { name?: string; aliases?: string[]; whatsapp?: string; email?: string }[];
-  merges?: { keep?: number; drop?: number }[];
-  relations?: { person?: number; rel?: string; other?: number; evidence?: string }[];
-};
-
-export const INSTRUCTIONS = `Du pflegst meine Personen-Profile, damit jede Person EINE Identität hat — egal, wie sie in meinen Todos genannt wird (Vorname, Nachname, „Herr X“, Spitzname, voller Name).
-
-Unten stehen meine Profile (id, Name, Aliasse, WhatsApp-Chat, Mail-Adressen), meine Kontakte (WhatsApp-Chats, Mail-Absender) und meine Todos.
-
-1. aliases: Eine Person, die in einem Todo anders genannt wird als in ihrem Profil (z. B. „Herr Meier“, wo das Profil „Thomas Meier“ heißt; ein Spitzname) → {person: ihre id, mention: die Nennung genau wie im Todo, ohne Genitiv-s und ohne „Herr“/„Frau“}. Nur, wenn eindeutig dieselbe Person (gleicher Nachname und es gibt keine zweite passende; derselbe Chat; dieselbe Adresse).
-2. people: Eine Person, die in einem Todo vorkommt, kein Profil hat, aber ein Kontakt von mir ist (ein WhatsApp-Chat oder ein Mail-Absender unten) → {name: ihr voller Name (wie beim Kontakt), aliases: wie sie in den Todos genannt wird, whatsapp: der Chat-Name genau wie unten (oder leer), email: ihre Adresse (oder leer)}.
-3. merges: Zwei Profile, die dieselbe Person sind (gleicher Chat, gleiche Adresse, ein Name ist eindeutig die Kurzform des anderen — oder ein Rollen- bzw. Verwandtschaftsname wie „Mama“, „Papa“, „Schwester“, „Chef“ gegen einen echten Namen, wenn die Hinweise es zeigen: schreibe ich in einem Chat „Hey Mama“, ist die Person dieses Chats „Mama“; stammen die Todos über „Mama“ aus Nachrichten eines Chats, ist es dessen Person — mehrere Hinweise auf denselben Chat sind ein klarer Beleg) → {keep: die id des vollständigeren (der echte Name), drop: die andere}. Die Hinweise stehen bei den Profilen, die Chat-Auszüge bei Profilen und Kontakten: „ich:“ sind meine Nachrichten, sonst die der Person.
-4. relations: Wer ist wer für wen — jede Bezugnahme und jeder Querverweis, den meine Kontexte (Todos, Nachrichten, Erwähnungen unten) tragen, als strukturierte Beziehung: {person: die id des Profils, rel: was die Person ist, kurz und aus MEINER Sicht, wenn other 0 ist („Mutter“, „Schwester“, „Vermieter“, „Zahnärztin“, „Kollege“, „Ehefrau“), other: 0 = zu mir, sonst die id eines anderen Profils, zu dem die Beziehung besteht (dann aus Sicht von person als blankes Substantiv, ohne „von“: „Ehemann“, „Tochter“, „Chef“ — z. B. person Lotte, rel „Schwester“, other 0; person Max, rel „Sohn“, other Paula), evidence: der Beleg in einem Satz (was im Kontext steht)}. Eine „Mama“, die zu einer Person gehört, ist ein merge bzw. alias — und wird zusätzlich als Beziehung „Mutter“ (other 0) festgehalten. Schon bekannte Beziehungen (bei den Profilen) nicht wiederholen.
-
-Regeln: Nichts raten — im Zweifel weglassen. Keine Firmen, Teams, Rollen, Gruppenchats, Dienste. Nicht mich selbst („Ich“). Nichts doppelt: was schon Name oder Alias des Profils ist, nicht noch einmal. Beziehungen nur, wenn ein Kontext sie klar sagt oder nahelegt (z. B. „Hey Mama“, „meine Schwester Lotte“, „Paulas Mann“). Leere Listen, wenn nichts zu tun ist.`;
 
 /**
  * What links a profile to a chat, from your own context: the chats where you address them by one of
@@ -120,6 +85,13 @@ function mentions(people: Person[]): Map<number, string> {
 
 export type NormalizeResult = { ok: boolean; aliases: number; created: number; merged: number; relations: number; claims?: number; links?: number; error?: string };
 
+/** After the extraction: the promises kept since (the Open loops plugin) closed by their threads, or proposed closed by the AI — a failure there doesn't fail the step. */
+export async function afterExtraction(): Promise<void> {
+  // The promises kept since (the Open loops plugin): closed by their threads, or proposed closed by the AI — a failure there doesn't fail the step.
+  if (isInstalled("loops") && (await import("@/plugins/state")).onlyThroughPort("loops")) await (await import("@/lib/cases/there")).casesPortFlows(["loops.close-by-rule", ...(isInstalled("llm") ? ["loops.close-by-ai"] : [])]).catch((e) => console.error("[loops] after the extraction:", e));
+  else if (isInstalled("loops")) await (await import("@/plugins/loops/close")).afterExtraction().catch((e) => console.error("[loops] after the extraction:", e));
+}
+
 /** The step after each briefing: names matched (AI), then what the new messages say about people read (extract.ts). */
 export async function normalizePeople(): Promise<NormalizeResult> {
   if (accountFlag<boolean>("__zeffPeopleNormalize")) return { ok: false, aliases: 0, created: 0, merged: 0, relations: 0, error: "already running" };
@@ -129,9 +101,7 @@ export async function normalizePeople(): Promise<NormalizeResult> {
     // What the new messages say about them — a failure here doesn't undo the matching.
     try {
       const x = await (await import("./extract")).extractKnowledge();
-      // The promises kept since (the Open loops plugin): closed by their threads, or proposed closed by the AI — a failure there doesn't fail the step.
-      if (isInstalled("loops") && (await import("@/plugins/state")).onlyThroughPort("loops")) await (await import("@/lib/cases/there")).casesPortFlows(["loops.close-by-rule", ...(isInstalled("llm") ? ["loops.close-by-ai"] : [])]).catch((e) => console.error("[loops] after the extraction:", e));
-      else if (isInstalled("loops")) await (await import("@/plugins/loops/close")).afterExtraction().catch((e) => console.error("[loops] after the extraction:", e));
+      await afterExtraction();
       return { ...r, claims: x.claims, links: x.links + x.derived };
     } catch {
       return r;
@@ -141,125 +111,138 @@ export async function normalizePeople(): Promise<NormalizeResult> {
   }
 }
 
-async function matchNames(): Promise<NormalizeResult> {
+/** The names matching's rule-based part (no AI): Jira accounts tied to profiles, the names the sources write queued, the entities, Zeff's facts on the profiles, their details. */
+export async function maintainPeople(): Promise<void> {
+  // Jira users tied to profiles by name — no AI needed (so they're there for the @-mentions).
   try {
-    // Jira users tied to profiles by name — no AI needed (so they're there for the @-mentions).
+    (await import("./accounts")).linkJiraAccounts();
+  } catch {
+    // without accounts, then
+  }
+  // Names the sources write for people, queued for review (no AI).
+  try {
+    (await import("./identity")).findIdentitySuggestions();
+  } catch {
+    // the sources aren't there, then
+  }
+  // Organisations, projects and places the sources name, queued for review; people linked to the ones confirmed (no AI).
+  if (isInstalled("entities")) {
     try {
-      (await import("./accounts")).linkJiraAccounts();
-    } catch {
-      // without accounts, then
+      const e = await import("@/plugins/entities/suggest");
+      e.findEntitySuggestions();
+      e.deriveEntityLinks();
+    } catch (err) {
+      console.warn("[people] entities:", errorMessage(err));
     }
-    // Names the sources write for people, queued for review (no AI).
-    try {
-      (await import("./identity")).findIdentitySuggestions();
-    } catch {
-      // the sources aren't there, then
-    }
-    // Organisations, projects and places the sources name, queued for review; people linked to the ones confirmed (no AI).
-    if (isInstalled("entities")) {
-      try {
-        const e = await import("@/plugins/entities/suggest");
-        e.findEntitySuggestions();
-        e.deriveEntityLinks();
-      } catch (err) {
-        console.warn("[people] entities:", errorMessage(err));
-      }
-    }
-    // Zeff's facts on the profiles they name (no AI); what you confirmed and the knowledge didn't get yet, sent.
-    try {
-      (await import("./synergy")).syncFactClaims();
-      // Their details read off the claims, each with trust: a changed IBAN or address waits in the review queue.
-      const { syncDetails } = await import("./details");
-      for (const p of listPeople()) syncDetails(p.id);
-      (await import("./knowledge-sync")).flushSoon();
-    } catch (e) {
-      console.warn("[people] facts:", errorMessage(e));
-    }
-    const people = listPeople();
-    // The todos: open ones, and those of the last 30 days.
-    const since = new Date(Date.now() - 30 * 864e5).toISOString();
-    const todos = listTodos({ status: "all" }).filter((t) => t.status === "open" || (t.updatedAt ?? "") >= since);
-    if (!todos.length) return { ok: true, aliases: 0, created: 0, merged: 0, relations: 0 };
-    // Mentions not known yet are what's to do — the todos that name only known people (or none) are left out.
-    const matcher = mentionMatcher(buildPeopleIndex(people));
-    const unknownName = /(?<![\p{L}\p{N}])\p{Lu}[\p{Ll}]{2,}/u;
-    const relevant = todos.filter((t) => splitMentions(t.text, matcher).some((m) => !m.person && unknownName.test(m.text)));
-    const chats = whatsappChats().slice(0, 80);
-    const senders = getDb()
-      .selectDistinct({ name: emails.fromName, email: emails.fromEmail })
-      .from(emails)
-      .where(and(gte(emails.receivedAt, new Date(Date.now() - 120 * 864e5).toISOString()), isNotNull(emails.fromEmail), ne(emails.folder, "WhatsApp")))
-      .orderBy(desc(emails.receivedAt))
-      .limit(400)
-      .all()
-      .filter((s) => s.name && s.name !== "Ich" && /\s/.test(s.name) && !NOT_A_CONTACT.test(s.email ?? ""))
-      .slice(0, 120);
-    // The last words of a chat: how they're addressed there tells who "Mama" is.
-    const sample = (chat: string) => {
-      const rows = getSqlite().prepare("select from_name, preview from emails where conv_id = ? order by received_at desc limit 4").all(`wa:${chat}`) as { from_name: string | null; preview: string }[];
-      return rows.length ? ` — Auszug: ${rows.reverse().map((r) => `${r.from_name === "Ich" ? "ich" : "sie/er"}: „${plain(r.preview, 70)}“`).join(" | ")}` : "";
-    };
-    const hints = evidence(people, todos);
-    const said = mentions(people);
-    const known = (id: number) => {
-      const r = relationsOf(id).out;
-      return r.length ? ` — bekannt: ${r.map((x) => `${x.rel}${x.otherId ? ` von [${x.otherId}]` : ""}`).join(", ")}` : "";
-    };
-    const prompt = [
-      promptText("people-normalize", INSTRUCTIONS),
-      "",
-      "# Meine Profile",
-      ...(people.length ? people.map((p) => `- [${p.id}] ${p.name}${p.aliases.length ? ` — auch: ${p.aliases.join(", ")}` : ""}${p.whatsapp ? ` — WhatsApp: ${p.whatsapp}${sample(p.whatsapp)}` : ""}${p.emails.length ? ` — ${p.emails.join(", ")}` : ""}${hints.get(p.id) ?? ""}${said.get(p.id) ?? ""}${known(p.id)}`) : ["(noch keine)"]),
-      "",
-      "# Meine Kontakte",
+  }
+  // Zeff's facts on the profiles they name (no AI); what you confirmed and the knowledge didn't get yet, sent.
+  try {
+    (await import("./synergy")).syncFactClaims();
+    // Their details read off the claims, each with trust: a changed IBAN or address waits in the review queue.
+    const { syncDetails } = await import("./details");
+    for (const p of listPeople()) syncDetails(p.id);
+    (await import("./knowledge-sync")).flushSoon();
+  } catch (e) {
+    console.warn("[people] facts:", errorMessage(e));
+  }
+}
+
+/** What the AI is asked in the names matching (null: nothing to do — no todos): the profiles, contacts and todos as lines, and the chats and addresses an answer may name. */
+export function normalizeInput(): { profiles: string[]; contacts: string[]; todos: string[]; chatNames: string[]; addresses: string[] } | null {
+  const people = listPeople();
+  // The todos: open ones, and those of the last 30 days.
+  const since = new Date(Date.now() - 30 * 864e5).toISOString();
+  const todos = listTodos({ status: "all" }).filter((t) => t.status === "open" || (t.updatedAt ?? "") >= since);
+  if (!todos.length) return null;
+  // Mentions not known yet are what's to do — the todos that name only known people (or none) are left out.
+  const matcher = mentionMatcher(buildPeopleIndex(people));
+  const unknownName = /(?<![\p{L}\p{N}])\p{Lu}[\p{Ll}]{2,}/u;
+  const relevant = todos.filter((t) => splitMentions(t.text, matcher).some((m) => !m.person && unknownName.test(m.text)));
+  const chats = whatsappChats().slice(0, 80);
+  const senders = getDb()
+    .selectDistinct({ name: emails.fromName, email: emails.fromEmail })
+    .from(emails)
+    .where(and(gte(emails.receivedAt, new Date(Date.now() - 120 * 864e5).toISOString()), isNotNull(emails.fromEmail), ne(emails.folder, "WhatsApp")))
+    .orderBy(desc(emails.receivedAt))
+    .limit(400)
+    .all()
+    .filter((s) => s.name && s.name !== "Ich" && /\s/.test(s.name) && !NOT_A_CONTACT.test(s.email ?? ""))
+    .slice(0, 120);
+  // The last words of a chat: how they're addressed there tells who "Mama" is.
+  const sample = (chat: string) => {
+    const rows = getSqlite().prepare("select from_name, preview from emails where conv_id = ? order by received_at desc limit 4").all(`wa:${chat}`) as { from_name: string | null; preview: string }[];
+    return rows.length ? ` — Auszug: ${rows.reverse().map((r) => `${r.from_name === "Ich" ? "ich" : "sie/er"}: „${plain(r.preview, 70)}“`).join(" | ")}` : "";
+  };
+  const hints = evidence(people, todos);
+  const said = mentions(people);
+  const known = (id: number) => {
+    const r = relationsOf(id).out;
+    return r.length ? ` — bekannt: ${r.map((x) => `${x.rel}${x.otherId ? ` von [${x.otherId}]` : ""}`).join(", ")}` : "";
+  };
+  return {
+    profiles: people.map((p) => `- [${p.id}] ${p.name}${p.aliases.length ? ` — auch: ${p.aliases.join(", ")}` : ""}${p.whatsapp ? ` — WhatsApp: ${p.whatsapp}${sample(p.whatsapp)}` : ""}${p.emails.length ? ` — ${p.emails.join(", ")}` : ""}${hints.get(p.id) ?? ""}${said.get(p.id) ?? ""}${known(p.id)}`),
+    contacts: [
       ...chats.map((c) => `- WhatsApp-Chat: ${c.name}${people.some((p) => p.whatsapp === c.name) ? "" : sample(c.name)}`),
       ...senders.map((s) => `- Mail: ${s.name} <${s.email}>`),
-      "",
-      "# Meine Todos",
-      ...(relevant.length ? relevant : todos).slice(0, 120).map((t) => `- ${plain(t.text, 200)}`),
-    ].join("\n");
-    const answer = (await runAi<Answer>(prompt, SCHEMA, { task: "people-normalize", timeoutMs: 6 * 60000, maxBudgetUsd: 0.5 })).output;
+    ],
+    todos: (relevant.length ? relevant : todos).slice(0, 120).map((t) => `- ${plain(t.text, 200)}`),
+    chatNames: chats.map((c) => c.name),
+    addresses: senders.map((s) => (s.email ?? "").toLowerCase()),
+  };
+}
 
-    let merged = 0;
-    for (const m of answer?.merges ?? []) {
-      const keep = getPerson(Number(m.keep));
-      const drop = getPerson(Number(m.drop));
-      if (!keep || !drop || keep.id === drop.id) continue;
-      mergePeople(keep.id, drop.id);
-      merged++;
-    }
-    // An alias only where it names no one else.
-    const taken = (name: string, id: number) => listPeople().some((p) => p.id !== id && namesOf(p).some((n) => n.toLowerCase() === name.toLowerCase()));
-    let aliases = 0;
-    for (const a of answer?.aliases ?? []) {
-      const p = getPerson(Number(a.person));
-      const mention = (a.mention ?? "").replace(/^(herrn?|frau)\s+/i, "").trim();
-      if (!p || mention.length < 2 || taken(mention, p.id)) continue;
-      aliases += addAliases(p.id, [mention]);
-    }
-    // New profiles: only for a contact (their chat, their address) — at most ten per run.
-    const chatNames = new Set(chats.map((c) => c.name));
-    const addresses = new Set(senders.map((s) => (s.email ?? "").toLowerCase()));
-    let created = 0;
-    for (const n of (answer?.people ?? []).slice(0, 10)) {
-      const name = (n.name ?? "").trim();
-      const whatsapp = n.whatsapp && chatNames.has(n.whatsapp) ? n.whatsapp : "";
-      const email = n.email && addresses.has(n.email.toLowerCase()) ? n.email.toLowerCase() : "";
-      if (!name || (!whatsapp && !email) || taken(name, -1)) continue;
-      const id = createPerson({ name, aliases: (n.aliases ?? []).filter((x) => !taken(x, -1)), whatsapp, emails: email ? [email] : [] });
-      if (id) created++;
-      // An existing profile by that name (createPerson found it): its contact added.
-      const p = getPerson(id);
-      if (p && whatsapp && !p.whatsapp) updatePerson(p.id, { whatsapp });
-    }
-    // Relations last (after merges, aliases and new profiles: ids may have changed). Only with a stated evidence.
-    let relations = 0;
-    for (const r of (answer?.relations ?? []).slice(0, 60)) {
-      const other = Number(r.other) || 0;
-      if (!getPerson(Number(r.person)) || (other && !getPerson(other)) || !(r.rel ?? "").trim() || !(r.evidence ?? "").trim()) continue;
-      if (addRelation(Number(r.person), r.rel!, other, r.evidence!)) relations++;
-    }
-    return { ok: true, aliases, created, merged, relations };
+/** What the AI answered, kept: merges, aliases (only where they name no one else), new profiles (only for a contact, ten at most), relations (with their evidence). */
+export function applyNormalized(answer: Answer | null | undefined, ctx: { chatNames: string[]; addresses: string[] }): { aliases: number; created: number; merged: number; relations: number } {
+  const chatNames = new Set(ctx.chatNames);
+  const addresses = new Set(ctx.addresses);
+  let merged = 0;
+  for (const m of answer?.merges ?? []) {
+    const keep = getPerson(Number(m.keep));
+    const drop = getPerson(Number(m.drop));
+    if (!keep || !drop || keep.id === drop.id) continue;
+    mergePeople(keep.id, drop.id);
+    merged++;
+  }
+  // An alias only where it names no one else.
+  const taken = (name: string, id: number) => listPeople().some((p) => p.id !== id && namesOf(p).some((n) => n.toLowerCase() === name.toLowerCase()));
+  let aliases = 0;
+  for (const a of answer?.aliases ?? []) {
+    const p = getPerson(Number(a.person));
+    const mention = (a.mention ?? "").replace(/^(herrn?|frau)\s+/i, "").trim();
+    if (!p || mention.length < 2 || taken(mention, p.id)) continue;
+    aliases += addAliases(p.id, [mention]);
+  }
+  // New profiles: only for a contact (their chat, their address) — at most ten per run.
+  let created = 0;
+  for (const n of (answer?.people ?? []).slice(0, 10)) {
+    const name = (n.name ?? "").trim();
+    const whatsapp = n.whatsapp && chatNames.has(n.whatsapp) ? n.whatsapp : "";
+    const email = n.email && addresses.has(n.email.toLowerCase()) ? n.email.toLowerCase() : "";
+    if (!name || (!whatsapp && !email) || taken(name, -1)) continue;
+    const id = createPerson({ name, aliases: (n.aliases ?? []).filter((x) => !taken(x, -1)), whatsapp, emails: email ? [email] : [] });
+    if (id) created++;
+    // An existing profile by that name (createPerson found it): its contact added.
+    const p = getPerson(id);
+    if (p && whatsapp && !p.whatsapp) updatePerson(p.id, { whatsapp });
+  }
+  // Relations last (after merges, aliases and new profiles: ids may have changed). Only with a stated evidence.
+  let relations = 0;
+  for (const r of (answer?.relations ?? []).slice(0, 60)) {
+    const other = Number(r.other) || 0;
+    if (!getPerson(Number(r.person)) || (other && !getPerson(other)) || !(r.rel ?? "").trim() || !(r.evidence ?? "").trim()) continue;
+    if (addRelation(Number(r.person), r.rel!, other, r.evidence!)) relations++;
+  }
+  return { aliases, created, merged, relations };
+}
+
+async function matchNames(): Promise<NormalizeResult> {
+  try {
+    await maintainPeople();
+    const input = normalizeInput();
+    if (!input) return { ok: true, aliases: 0, created: 0, merged: 0, relations: 0 };
+    const prompt = normalizePrompt(promptText("people-normalize", INSTRUCTIONS), input);
+    const answer = (await runAi<Answer>(prompt, SCHEMA, { task: "people-normalize", timeoutMs: 6 * 60000, maxBudgetUsd: 0.5 })).output;
+    return { ok: true, ...applyNormalized(answer, input) };
   } catch (e) {
     return { ok: false, aliases: 0, created: 0, merged: 0, relations: 0, error: errorMessage(e) };
   }

@@ -1,6 +1,7 @@
 import { extensionPoint } from "@/lib/plugin-kit/extension-point";
 import type { FlowAction } from "@/plugins/workspace/flows/actions";
 import { GRAPH_FLOW_ACTIONS } from "./graph-actions"; // (messages.recent, people.resolve, people.claims … for lambdas and flows)
+import { AI_FLOW_ACTIONS } from "./ai-actions"; // (the port of the AI steps: people.extract-input, people.compile-input … rag.retrieve)
 
 /**
  * What the People plugin lets lambdas and flows read (while it is built in — its port brings these the same way): your contacts' names,
@@ -144,4 +145,4 @@ export const PEOPLE_FLOW_ACTIONS: FlowAction[] = [
   },
 ];
 
-extensionPoint<FlowAction[]>("workspace.flowActions").contribute("people", [...PEOPLE_FLOW_ACTIONS, ...GRAPH_FLOW_ACTIONS]);
+extensionPoint<FlowAction[]>("workspace.flowActions").contribute("people", [...PEOPLE_FLOW_ACTIONS, ...GRAPH_FLOW_ACTIONS, ...AI_FLOW_ACTIONS]);

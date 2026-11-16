@@ -224,6 +224,10 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
         if (stepAvailable("peoplenorm")) {
           setAccountFlag("__zeffBoardRun", { id, phase: "people", since: t0, provider });
           await syncAndWait("peoplenorm");
+        } else if ((await import("@/plugins/state")).stepTakenByPort("peoplenorm")) {
+          // (its port's flow does it: the names matched, what the messages say read, the contacts placed, the summaries — plugins/people-ext)
+          setAccountFlag("__zeffBoardRun", { id, phase: "people", since: t0, provider });
+          await (await import("@/lib/cases/there")).casesPortFlows(["people.normalize"]);
         }
         // The Cases plugin: the case numbers in what came in (by rule), then the cases with new sources summed up (AI) — a
         // failure there doesn't stop the run.

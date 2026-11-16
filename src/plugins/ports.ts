@@ -38,6 +38,8 @@ export const PORTS: Port[] = [
   { builtin: "documents", plugin: "documents-ext", switch: async () => (await import("./documents/to-plugin")).switchDocumentsToPlugin() },
   { builtin: "calendar", plugin: "calendar-ext", switch: async () => (await import("./calendar/to-plugin")).switchCalendarToPlugin() },
   { builtin: "knowledge", plugin: "knowledge-ext", switch: async () => (await import("./knowledge/to-plugin")).switchKnowledgeToPlugin() },
+  // (People: only its AI steps — the extraction, the overviews, placing contacts, matching names — are the port's; the people, their screens and widgets stay Zeff's, so the built-in stays on)
+  { builtin: "people", plugin: "people-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true }) },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

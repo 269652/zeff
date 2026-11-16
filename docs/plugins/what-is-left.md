@@ -25,6 +25,7 @@ The platform and the **shared entity graph**, which every app reads and none own
 | google-drive | 1.1k | Drive sync | OAuth for plugins (secrets, routes) |
 | explorer | 1.6k | file browser | kernel fs reads, UI in the view language |
 | people (screens + AI) | 9.2k | the People app, the extraction, the summaries | the entity graph's reads (mostly there) |
+| people (screens + AI) | 9.2k | **AI steps done** (`people-ext`: extraction, overviews, placing contacts, name matching — slice 1); left: the People app's screens (view-data + React parts), widgets, formulas, review/proposal sources, tools, pulse | kit parts for the card, the form and the panels |
 | news (rest) | ~0.8k | stories strip, masonry, topic chips, Today's news, the kept items' database | kit elements (stories, masonry) |
 | todos / work / zeiterfassung (screens) | 20k+ | the boards, the Code tab, the reports | the largest: after the others |
 
