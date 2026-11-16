@@ -398,3 +398,21 @@ test("attachments: a staged upload is kept for the next message of its scope, li
   assert.equal(draw('<frame src="/api/work/1/prompt"/>').errors.length, 1, "a page of Zeff's own is refused");
   assert.equal(draw('<frame src="javascript:alert(1)"/>').errors.length, 1);
 });
+
+test("switching to the plugin: its pages are found, the built-in stands in through it, the engine's actions go on working", { skip }, async () => {
+  const { call } = await world();
+  const state = await import("@/plugins/state");
+  const ports = await import("@/plugins/ports");
+  const port = ports.PORTS.find((p) => p.builtin === "work");
+  assert.ok(port, "the Code port is registered");
+  await port!.switch();
+  const { workCodePage, workSettingsPage } = await import("@/plugins/work/to-plugin");
+  const { getPage } = await import("@/plugins/workspace/store");
+  assert.equal(getPage(workCodePage()!)?.title, "Sessions");
+  assert.equal(getPage(workSettingsPage()!)?.title, "Code settings");
+  assert.equal(state.isInstalled("work"), true, "the built-in counts as there through its port");
+  assert.equal(state.onlyThroughPort("work"), true);
+  // The kernel's reads still answer (the screens of the port are what ask them).
+  const screen = await call<{ settingsHref: string }>("work.screen", {});
+  assert.equal(screen.settingsHref, `/workspace/${workSettingsPage()}`);
+});

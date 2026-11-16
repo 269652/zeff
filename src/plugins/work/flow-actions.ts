@@ -68,7 +68,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     summary:
       "The tickets with sessions (a session = a todo's conversation with a worker, shown as its newest run), each with its sessions: id, ref, status, whether it is live or waits for you, provider, title, time, todo, branch, archived; and how many are archived and running.",
     input: [f("archived", "boolean", { help: "Your archived sessions too (marked)." })],
-    output: "{ tickets: [{ ticket, summary, status, url, openTodos, active, lastAt, sessions: [{ id, ref, status, live, waiting, provider, title, at, todoId, branch, archived }] }], archivedCount, running, gitMissing, tabs: [{ id, title, plugin, href }], panels: [{ id, plugin, entry, title }] }",
+    output: "{ tickets: [{ ticket, summary, status, url, openTodos, active, lastAt, sessions: [{ id, ref, status, live, waiting, provider, title, at, todoId, branch, archived }] }], archivedCount, running, gitMissing, settingsPage, tabs: [{ id, title, plugin, href }], panels: [{ id, plugin, entry, title }] }",
     run: async (i) => {
       need();
       const { sessionTickets } = await import("@/lib/work/sessions");
@@ -82,6 +82,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
         archivedCount: archivedSessions().size,
         running,
         gitMissing: gitAvailable() ? "" : gitMissingMessage(),
+        settingsPage: (await import("./to-plugin")).workSettingsPage(),
         tabs: extWorkPanels("tab").map((x) => ({ id: x.id, title: x.title, plugin: x.pluginName, href: x.href })),
         panels: extWorkPanels("session").map((x) => ({ id: x.id, plugin: x.plugin, entry: x.entry, title: x.title })),
       };

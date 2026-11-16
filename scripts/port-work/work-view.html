@@ -1,4 +1,4 @@
-<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value="" keep=true/><state name="all" value="false"/><state name="qpick" value=""/><state name="note" value=""/><state name="qo0" value=""/><state name="qo1" value=""/><state name="qo2" value=""/><state name="qo3" value=""/><state name="preview" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
+<state name="sel" value="" keep=url/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value="" keep=true/><state name="all" value="false"/><state name="qpick" value=""/><state name="note" value=""/><state name="qo0" value=""/><state name="qo1" value=""/><state name="qo2" value=""/><state name="qo3" value=""/><state name="preview" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
 <data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}, branches={{ state.branchopen }}, all={{ state.all }}, msg={{ state.msg }}, qpick={{ state.qpick }}, qo0={{ state.qo0 }}, qo1={{ state.qo1 }}, qo2={{ state.qo2 }}, qo3={{ state.qo3 }}" every=2 debounce="300"/>
 <data name="panes" lambda="work.panes" with="run={{ data.x.session.runId }}" when="{{ data.x.session.runId }}" every=5/>
 <on event="work-changed" action="reload"/>
@@ -38,7 +38,7 @@
 {{#each data.x.tabs}}<row gap=2><a href="{{ href }}">{{ title }}</a><small><muted>{{ plugin }}</muted></small></row>{{/each}}
 </col>
 <row gap=2 align=center>
-<a href="/settings/time#work">Code settings</a>
+<a href="{{ data.x.settingsHref }}">Code settings</a>
 <grow/>
 {{#if data.x.archivedCount}}<toggle bind="archived" label="{{ data.x.labels.showArchived }}"/>{{/if}}
 </row>

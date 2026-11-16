@@ -66,6 +66,7 @@ export async function handler(event, context) {
     total: groups.reduce((n, g) => n + g.rows.length, 0),
     hidden: grouped.reduce((n, g) => n + g.rows.length, 0) - groups.reduce((n, g) => n + g.rows.length, 0),
     gitMissing: list.gitMissing ?? "",
+    settingsHref: list.settingsPage ? "/workspace/" + list.settingsPage : "/settings/time#work",
     tabs: list.tabs ?? [],
     archivedCount: list.archivedCount,
     running: list.running,
