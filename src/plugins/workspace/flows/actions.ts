@@ -13,6 +13,7 @@ import "./ai-actions";
 import "./store-actions";
 import "./data-actions";
 import "./bank-actions";
+import "./oauth-actions";
 import "./mirror-actions";
 import "./file-actions";
 import "./session-actions";

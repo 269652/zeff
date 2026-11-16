@@ -172,7 +172,9 @@ async function proxyCall(m: LambdaManifest, name: string, input: unknown, plugin
   if (a.writes) throw new Error(`“${name}” changes something — a lambda only reads; a flow can write what it returns.`);
   // (an external plugin's lambda reads its own plugin's stores — it never writes: store.put is refused above)
   const own = plugin?.startsWith("ext:") ? ((getPlugin(plugin.slice(4))?.manifest.contributes as { stores?: { name: string }[] } | undefined)?.stores ?? []).map((x) => `${plugin.slice(4)}.${x.name}`) : [];
-  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}) };
+  // (and its own plugin's sign-ins: a fresh access token — oauth.token — for the calls its fetch makes)
+  const ownOauth = plugin?.startsWith("ext:") ? ((getPlugin(plugin.slice(4))?.manifest.contributes as { oauth?: { id: string }[] } | undefined)?.oauth ?? []).map((x) => `${plugin.slice(4)}.${x.id}`) : [];
+  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}), ...(ownOauth.length ? { oauth: ownOauth } : {}) };
   return a.run((input && typeof input === "object" ? input : {}) as Record<string, unknown>, {
     flow: `lambda:${m.name}`,
     runId: null,

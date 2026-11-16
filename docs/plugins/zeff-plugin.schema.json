@@ -1765,6 +1765,108 @@
             ]
           }
         },
+        "oauth": {
+          "default": [],
+          "description": "Signing in to a service with an OAuth client of the user's own (authorization code with PKCE): the kernel serves the way there and back (/api/ext/oauth/<plugin>/<id>/connect and /callback), keeps the tokens encrypted and refreshes them. Its lambdas ask for a fresh access token (the read action oauth.token); its flows call the service as the user (oauth.fetch, oauth.upload, oauth.download). The client id and secret are its settings.",
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$",
+                "description": "Its id (unique in the plugin): <plugin>.<id> in the oauth actions and a flow's permissions."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "authUrl": {
+                "type": "string",
+                "pattern": "^https:\\/\\/[^\\s]{4,300}$",
+                "description": "Where the user signs in (the provider's authorization endpoint)."
+              },
+              "tokenUrl": {
+                "type": "string",
+                "pattern": "^https:\\/\\/[^\\s]{4,300}$",
+                "description": "Where the code and the refresh token are exchanged for access tokens."
+              },
+              "scopes": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "description": "What it asks for by default."
+              },
+              "scopeSets": {
+                "default": {},
+                "description": "More of what it can ask for, by name: connecting \"with\" one asks for that set instead (a narrow and a wide access).",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                },
+                "additionalProperties": {
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "clientId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][\\w]{0,39}$",
+                "description": "The key of its settings (kind text or secret) that holds the client id."
+              },
+              "clientSecret": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][\\w]{0,39}$",
+                "description": "The key of its settings (kind secret) that holds the client secret."
+              },
+              "authParams": {
+                "default": {},
+                "description": "More parameters of the sign-in address ({ \"access_type\": \"offline\" }).",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "identity": {
+                "default": "none",
+                "description": "id_token: the e-mail address in the id token the provider sends (to show who is connected).",
+                "type": "string",
+                "enum": [
+                  "none",
+                  "id_token"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "authUrl",
+              "tokenUrl",
+              "scopes",
+              "clientId",
+              "clientSecret"
+            ]
+          }
+        },
         "reviewLinks": {
           "default": [],
           "description": "Things waiting on a page of their own: the review queue shows how many and links there.",

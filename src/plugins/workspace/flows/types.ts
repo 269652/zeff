@@ -96,6 +96,8 @@ export type FlowPermissions = {
   sync?: string[];
   /** The plugins' stores it may read and write ("<plugin>.<store>": contributes.stores). */
   store?: string[];
+  /** The sign-ins it may use ("<plugin>.<id>": contributes.oauth) — a token, a call to the service as the user. */
+  oauth?: string[];
   /** The driver lambdas it may run (their names — kind driver: a scraper in the automation Chrome, a desktop app's reader). */
   driver?: string[];
   /** May book money: payments into the ledger, a booking confirming one, what a payment settles (a promise, a debt). */
@@ -265,6 +267,7 @@ function normalizePermissions(raw: unknown): FlowPermissions {
     ...(o.todos === true ? { todos: true } : {}),
     ...(Array.isArray(o.sync) && o.sync.map(str).filter((x) => SYNC_SOURCES.includes(x)).length ? { sync: [...new Set(o.sync.map(str).filter((x) => SYNC_SOURCES.includes(x)))] } : {}),
     ...(Array.isArray(o.store) && o.store.map(str).filter((x) => STORE_NAME.test(x)).length ? { store: [...new Set(o.store.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
+    ...(Array.isArray(o.oauth) && o.oauth.map(str).filter((x) => STORE_NAME.test(x)).length ? { oauth: [...new Set(o.oauth.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
     ...(Array.isArray(o.driver) && o.driver.map(str).filter((x) => DRIVER_NAME.test(x)).length ? { driver: [...new Set(o.driver.map(str).filter((x) => DRIVER_NAME.test(x)))] } : {}),
     ...(metaOf(o.meta).length ? { meta: metaOf(o.meta) } : {}),
     ...(posInt(o.maxSteps) ? { maxSteps: Math.min(20000, posInt(o.maxSteps)!) } : {}),

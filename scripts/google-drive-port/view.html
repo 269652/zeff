@@ -1,0 +1,77 @@
+<data name="o" do="oauth.status" with='{"connection": "google-drive-ext.drive"}'/>
+<data name="d" lambda="drive.status"/>
+<state name="browse" value=""/>
+<state name="cur" value="root"/>
+<data name="f" lambda="drive.folders" with='{"parent": {{ state.cur | tojson }}}' when="{{ state.browse }}"/>
+
+<text tone=muted>Keeps a copy of your documents in your Google Drive — and, if you turn it on, of your backups. Files you add to Zeff's Documents folder in Drive can come into Zeff too (off until you switch it on). By default Zeff only sees the files it puts in Drive itself.</text>
+
+<section title="1 · Your OAuth client">
+  <text tone=muted>Zeff signs in with a client of your own, so nothing runs through anyone else's account. Once, in Google Cloud Console:</text>
+  <text>1. Make a project and switch on the “Google Drive API” in it — <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com">open</a></text>
+  <text>2. OAuth consent screen: type “External”, add your Google address as a test user — and publish the app (“In production”): while it is in “Testing”, Google ends the sign-in after 7 days — <a href="https://console.cloud.google.com/apis/credentials/consent">open</a></text>
+  <text>3. Credentials → Create credentials → OAuth client ID → “Web application”, with this authorized redirect URI — <a href="https://console.cloud.google.com/apis/credentials">open</a></text>
+  <mono>{{ data.o.redirectUri }}</mono>
+  <text>4. Paste its client ID and secret under Plugins → Google Drive → ⚙️ Settings.</text>
+  {{#if data.o.hasClient}}
+    <text tone=good>Your client is set.</text>
+  {{#else}}
+    <text tone=warn>No client set yet.</text>
+  {{/if}}
+</section>
+
+<section title="2 · Sign in">
+  {{#if data.o.connected}}
+    <row gap=2 align=center>
+      <text tone=good>Connected{{#if data.o.email}} as {{ data.o.email }}{{/if}}.</text>
+      <button do="oauth.disconnect" with='{"connection": "google-drive-ext.drive"}' label="Disconnect" variant=plain confirm="Sign out of Google Drive? What Zeff put there stays there." done="Disconnected. What is in Drive stays there."/>
+    </row>
+    {{#if data.d.needsReconnect}}
+      <callout tone=warn title="Connect again">To read the files you add in Drive, connect again — Google then asks for access to all of Drive.</callout>
+      <button do="oauth.connect-url" with='{"connection": "google-drive-ext.drive", "with": "full"}' variant=primary label="Connect again"/>
+    {{/if}}
+  {{#else}}
+    <button do="oauth.connect-url" with='{"connection": "google-drive-ext.drive", "with": {{ data.d.connectWith | tojson }}}' variant=primary label="Connect to Google Drive" disabled="{{ data.o.hasClient ? 'false' : 'true' }}"/>
+    <muted>Google opens in a new tab; you come back here.</muted>
+  {{/if}}
+</section>
+
+<section title="3 · What syncs">
+  <kv min=220>
+    <pair label="Folder in Drive">{{ data.d.folder }}</pair>
+    <pair label="Backups: what the retention removes goes from Drive too">{{ data.d.mirrorBackupRetention ? 'yes' : 'no' }}</pair>
+    <pair label="Backups without a password also go up">{{ data.d.uploadUnencrypted ? 'yes' : 'no' }}</pair>
+    <pair label="Files you add in Zeff's Drive folder come in">{{ data.d.pullDocuments ? 'yes' : 'no' }}</pair>
+    <pair label="In Drive">{{ data.d.documentsInDrive }} documents · {{ data.d.backupsInDrive }} backups</pair>
+  </kv>
+  <muted>Change these under Plugins → Google Drive → ⚙️ Settings.</muted>
+  <row gap=2>
+    <button run="google-drive.sync-documents" label="Sync documents now" variant=plain done="Documents synced." disabled="{{ data.o.connected ? 'false' : 'true' }}"/>
+    <button run="google-drive.sync-backups" label="Sync backups now" variant=plain done="Backups synced." disabled="{{ data.o.connected ? 'false' : 'true' }}"/>
+  </row>
+</section>
+
+<section title="Folders of your Drive that come into the documents">
+  <muted>Besides Zeff's own folder, any folder you choose — My Drive → Kontoauszug — is an inbox: what you put there comes in with the next sync, each file once (an edited one again). Read only: Zeff never writes or deletes there. Files you put there yourself need access to all of Drive.</muted>
+  {{#each data.d.pullFolders}}
+    <row gap=2 align=center>
+      <text>{{ path }}</text>
+      <button run="google-drive.remove-folder" with='{"id": {{ id | tojson }}}' label="Remove" variant=quiet done="Removed — what came in from it stays in the documents."/>
+    </row>
+  {{/each}}
+  {{#if state.browse}}
+    <box tone=muted>
+      <text><b>{{ data.f.path }}</b></text>
+      <row gap=2>
+        {{#if data.f.id != 'root'}}<button action="state" state="cur" value="{{ data.f.up }}" label="↑ Up" variant=plain/>{{/if}}
+        <button run="google-drive.add-folder" with='{"id": {{ data.f.id | tojson }}, "path": {{ data.f.path | tojson }}}' label="Read this folder" variant=primary disabled="{{ data.f.id == 'root' ? 'true' : 'false' }}" done="Added — its files come in with the next sync."/>
+        <button action="state" state="browse" value="" label="Close" variant=quiet/>
+      </row>
+      {{#each data.f.folders}}
+        <button action="state" state="cur" value="{{ id }}" label="📁 {{ name }}" variant=plain/>
+      {{/each}}
+    </box>
+  {{#else}}
+    <button action="state" state="browse" value="1" label="Add a folder" variant=plain disabled="{{ data.o.connected ? 'false' : 'true' }}"/>
+  {{/if}}
+</section>

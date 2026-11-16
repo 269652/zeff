@@ -22,7 +22,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** Backups → Google Drive: on (the extension), signed in. */
-function driveBackupView() {
+async function driveBackupView() {
+  // (the plugin on: its backup flow's schedule is the switch, its sign-in the kernel's — plugins/google-drive/port.ts)
+  const port = await import("@/plugins/google-drive/port");
+  if (await port.portOn()) return { on: await port.portBackupOn(), connected: await port.portConnected(), installed: true };
   return { on: extensionInstalled("google-drive:backup-sync"), connected: isDriveConnected(), installed: isInstalled("google-drive") };
 }
 
@@ -122,7 +125,7 @@ export default async function PreferencesPage() {
               )}
             </p>
           </div>
-          <BackupSettings s={getBackupSettings()} backups={listBackups()} drive={driveBackupView()} />
+          <BackupSettings s={getBackupSettings()} backups={listBackups()} drive={await driveBackupView()} />
         </section>
       )}
     </div>

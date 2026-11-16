@@ -33,6 +33,8 @@ export const ADOPTABLE: Record<string, string[]> = {
   "loops-ext": ["loops_state"],
   // (News: its sources, items, what was cleared away, the words it learned and the finds for an item)
   "news-ext": ["news_sources", "news_items", "news_gone", "news_terms", "news_similar"],
+  // (the files Zeff recorded as its own in Drive: nothing goes up twice through the switch)
+  "google-drive-ext": ["google_drive_files"],
 };
 
 /**
@@ -48,6 +50,8 @@ export const ADOPTABLE_PREFS: Record<string, string[]> = {
   // (Calendar: how many days ahead appointments are read for todos, and the AI's verdicts on which give you something to do)
   "calendar-ext": ["calendar:todos-days", "calendar:todo-verdicts"],
   "news-ext": ["news:prefs", "news:taste", "news:digest", "news:funnel-stats", "news:discover-queries", "news:autodiscover-at", "news:lowdiscover-at", "news:low-turn", "news:discoveries", "news:expand-at"],
+  // (the folders of your Drive the built-in read into the documents — taken over once)
+  "google-drive-ext": ["googleDrive.pullFolders"],
 };
 
 /** The built-ins' sources their ports may stand in for (a source's `replaces`), by the port's plugin id: the databases that read it go on. */

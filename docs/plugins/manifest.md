@@ -471,6 +471,60 @@ The functions are the plugin's own (`contributes.functions`) and do only what yo
     kept with the run.
   - `required` settings not set yet show as *needs setting up* on the card.
 
+## `contributes.oauth` — signing in to a service
+
+```json
+"settings": [
+  { "key": "clientId", "label": "OAuth client ID", "kind": "text", "required": true },
+  { "key": "clientSecret", "label": "OAuth client secret", "kind": "secret", "required": true }
+],
+"oauth": [{
+  "id": "drive", "label": "Google Drive",
+  "authUrl": "https://accounts.google.com/o/oauth2/v2/auth", "tokenUrl": "https://oauth2.googleapis.com/token",
+  "scopes": ["openid", "email", "https://www.googleapis.com/auth/drive.file"],
+  "scopeSets": { "full": ["openid", "email", "https://www.googleapis.com/auth/drive"] },
+  "clientId": "clientId", "clientSecret": "clientSecret",
+  "authParams": { "access_type": "offline", "prompt": "consent select_account" },
+  "identity": "id_token"
+}]
+```
+
+A plugin that works with a service the user signs in to — with an OAuth client **of their own**, so nothing runs through anyone else's
+account — declares it here. The kernel (`src/lib/ext/oauth.ts`) does the rest, the authorization-code flow with PKCE; the plugin never
+handles the redirect, the refresh token or the client secret.
+
+- **The client** is two of the plugin's `settings` (`clientId`, `clientSecret`: the keys named in the declaration; the secret as a `secret`,
+  encrypted and never shown again).
+- **The way there and back** is the kernel's: `GET /api/ext/oauth/<plugin>/<id>/connect[?with=<set>]` sends the user to `authUrl` (the pending
+  sign-in — state, verifier — lives in a cookie for ten minutes; the state is checked), `GET …/callback` exchanges the code. The user lands
+  where the click came from (the Referer, inside Zeff), else on the Plugins page, with `?connected=1` or `?error=…`. The address the service must
+  send the user back to (`<origin>/api/ext/oauth/<plugin>/<id>/callback`) is in the answer of `oauth.status` (`redirectUri`) — a page shows it
+  for the user to register with the client. `scopes` is what it asks for; connecting `with` a name of `scopeSets` asks for that set instead (a
+  narrow and a wide access). `identity: "id_token"` reads the e-mail address out of the id token, to show who is connected.
+- **The tokens** are kept encrypted per plugin and account (`v1:…` in a preference, the same key file as the plugin's secrets), and refreshed by
+  the kernel when they are about to run out (or after the service said 401).
+- **A port takes over the sign-in its built-in had** (`OAUTH_ADOPTS` in `lib/ext/oauth.ts`, only what the kernel allows): the built-in's row of
+  tokens and settings is imported once, when the port first asks — the tokens sealed, the settings written where the port has none yet — and
+  the built-in's row stays as it is. A sign-in that worked keeps working through the switch.
+
+What a plugin does with it — the actions (`group: oauth`), with the permission `"oauth": ["<plugin>.<id>"]` (a flow's, which a package asks for
+and you allow when installing; a plugin's lambdas get their own plugin's) and the domains the flow's `web` / the lambda's `web` allow:
+
+| Action | Who | What |
+| --- | --- | --- |
+| `oauth.token` | a lambda (read; `"zeff": ["oauth.token"]`) | `{ accessToken, expiresAt }`, refreshed when due (`force`: after a 401). The lambda calls the service itself with `fetch` (its `web` names the domain). |
+| `oauth.status` | a lambda, a view (`<data do>`) | `{ connected, email, scope, scopes, connectedAt, hasClient, redirectUri, sets }` — never a token. |
+| `oauth.connect-url` | a view button (`<button do>`) | `{ href }` — the page opens it in a tab of its own. |
+| `oauth.disconnect` | a view button | the tokens forgotten (what the plugin put at the service stays there). |
+| `oauth.fetch` | a flow (writes) | a request to the service with the token (401 → a fresh token once; 429/5xx and rate limits tried again); an error answer throws with the service's own words, except `okStatus`; gives `{ status, json, text, location }`. |
+| `oauth.upload` | a flow (writes) | a backup (`source: { kind: "backup", name }`) or a document (`{ kind: "document", id }`) up in a resumable upload — the request that starts it (`start`), then the bytes in chunks, resumed where it stopped after a hiccup; gives the service's last answer. |
+| `oauth.download` | a flow (writes) | a file of the service kept among the documents (`name`, `mime`); gives `{ id, size, fresh }`. |
+
+Beside them two reads of what the kernel keeps for everyone, which a sync plans from: `backup.files` (the backup ZIPs: name, size, encrypted?)
+and `documents.list` (the documents that have a file). A lambda only **reads**: it works out the plan (what goes up, what comes in, which
+folders must be made); the flow that calls it does the writing. Google Drive is built this way
+([zeff-plugins/plugins/google-drive-ext](../../../zeff-plugins/plugins/google-drive-ext), generated by `scripts/port-google-drive.mts`).
+
 ## `contributes.lambdas` — code that runs without the Notebook
 
 ```json
