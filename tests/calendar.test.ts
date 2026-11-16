@@ -80,7 +80,8 @@ test("Google Calendar lines", async () => {
 /** Appointments of today and tomorrow as todos — in Zeff's own calendars (by default), once each. */
 test("calendar todos: today's and tomorrow's appointments, once", async () => {
   const ir = await import("@/lib/calendar/ir");
-  const { calendarTodos } = await import("@/lib/calendar/todos");
+  const { calendarTodos, setTodosDaysAhead } = await import("@/lib/calendar/todos");
+  setTodosDaysAhead(1); // (today and tomorrow — the default reaches a week ahead)
   const { listTodos } = await import("@/lib/todos/store");
   const own = ir.createCalendar("Haushalt");
   assert.equal(own.todos, true);

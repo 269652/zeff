@@ -8,6 +8,9 @@ import { caseAppData } from "../src/plugins/cases/view-data";
 import type { CaseBundle } from "../src/plugins/cases/blocks";
 import type { CaseSummary } from "../src/plugins/cases/shared";
 import type { T } from "../src/lib/i18n/shared";
+import fs from "node:fs";
+import path from "node:path";
+import { repoPlugin, skipWithoutRepo } from "./plugins-repo";
 
 const t: T = (s, vars) => s.replace(/\{(\w+)\}/g, (_m, k: string) => String(vars?.[k] ?? `{${k}}`));
 
@@ -140,9 +143,9 @@ test("an own debt: its chip, no case number, no Sum up, no figures", () => {
   assert.equal(find(r.nodes, "tile").length, 0);
 });
 
-test("in German and Spanish too: the bundles' texts (quotes, apostrophes) draw without an error", async () => {
+test("in German and Spanish too: the bundles' texts (quotes, apostrophes) draw without an error", { skip: skipWithoutRepo("lang-de") }, async () => {
   for (const lang of ["de", "es"]) {
-    const texts = (await import(`../src/plugins/lang-${lang}/bundle.json`, { with: { type: "json" } })).default as Record<string, string>;
+    const texts = JSON.parse(fs.readFileSync(path.join(repoPlugin(`lang-${lang}`), "bundle.json"), "utf8")) as Record<string, string>;
     const tl: T = (s, vars) => (texts[s] ?? s).replace(/\{(\w+)\}/g, (_m, k: string) => String(vars?.[k] ?? `{${k}}`));
     for (const b of [SUMMED, bundle()]) {
       const r = renderView(CASE_PAGE.defaultTemplate(tl), { rows: [row], props: [], titleName: "Name", state: {}, app: caseAppData(b, { t: tl, busy: false, locale: "de-DE" }), db: { id: 1, title: "Vorgänge" }, locale: "de-DE", current: row }, { parts: CASE_PAGE.parts, actions: CASE_PAGE.actions });

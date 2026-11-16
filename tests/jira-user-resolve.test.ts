@@ -24,7 +24,7 @@ test("names are compared the way people write them: umlauts, case, 'Last, First'
 test("Jira usernames here are the first three letters of the first name and the first five of the last — candidates follow that, with the digit for a second one", async () => {
   const { usernameCandidates } = await import("@/plugins/people/accounts");
   assert.deepEqual(usernameCandidates("Jonas Teichrueb").slice(0, 3), ["jonteich", "jonteich1", "jonteich2"]);
-  assert.equal(usernameCandidates("Christopher Lorenz")[0], "chrlorenz");
+  assert.equal(usernameCandidates("Christopher Lorenz")[0], "chrloren");
   assert.equal(usernameCandidates("Rico Clemen")[0], "riccleme");
   assert.equal(usernameCandidates("Anna Groß")[0], "anngross");
   assert.equal(usernameCandidates("Lisa")[0], undefined, "one word: nothing to go by");
