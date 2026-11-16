@@ -24,7 +24,7 @@ export function normPath(raw: string): string {
   return abs.replace(/[\\/]+$/, "") === root.replace(/[\\/]+$/, "") ? root : abs.replace(/[\\/]+$/, "");
 }
 
-const under = (child: string, parent: string) => {
+export const under = (child: string, parent: string) => {
   const c = process.platform === "win32" ? child.toLowerCase() : child;
   const p = (process.platform === "win32" ? parent.toLowerCase() : parent).replace(/[\\/]+$/, "");
   return c === p || c.startsWith(`${p}${path.sep}`) || c.startsWith(`${p}/`);

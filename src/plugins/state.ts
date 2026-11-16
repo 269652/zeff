@@ -44,6 +44,8 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   calendar: { port: "calendar-ext", steps: [] },
   // (Knowledge: the port's lambdas and flows are the chat, the matching of knowledge to todos, the sync and adding; the connection to the knowledge server, the export it reads, the todo panel and the repos' systems stay the kernel's)
   knowledge: { port: "knowledge-ext", steps: [] },
+  // (the Explorer: the port's screen is a view of the Workspace, its writes are flows; the disk, the viewer's file route, the watchers and the imports stay the kernel's — fs.* actions, /api/explorer/file)
+  explorer: { port: "explorer-ext", steps: [] },
 };
 
 /**

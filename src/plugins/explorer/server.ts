@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n/server";
 import { pageNavProviders } from "@/plugins/workspace/app-nav-point";
 import { workspacePageApps, workspaceTemplates } from "@/plugins/workspace/page-apps-point";
 import { createExplorerPage, isExplorerPage, pagesWithPlacesInTree } from "./pages";
+import "./flow-actions";
 import { startWatching } from "./watch";
 
 // An Explorer page: the Explorer above its text, in the folder it was last in.
