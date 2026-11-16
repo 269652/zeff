@@ -47,7 +47,7 @@ export async function handler(event, context) {
     ticketKey: g.id === "ticket" ? g.ticket || "-" : "",
     summary: g.summary ?? "",
     n: g.rows.length,
-    rows: take(g.rows).map((s) => ({
+    items: take(g.rows).map((s) => ({
       id: s.id,
       todoId: s.todoId,
       title: s.title,
@@ -63,8 +63,8 @@ export async function handler(event, context) {
   const out = {
     mode: run ? "session" : ticketArg !== undefined ? "ticket" : "new",
     groups,
-    total: groups.reduce((n, g) => n + g.rows.length, 0),
-    hidden: grouped.reduce((n, g) => n + g.rows.length, 0) - groups.reduce((n, g) => n + g.rows.length, 0),
+    total: groups.reduce((n, g) => n + g.items.length, 0),
+    hidden: grouped.reduce((n, g) => n + g.rows.length, 0) - groups.reduce((n, g) => n + g.items.length, 0),
     gitMissing: list.gitMissing ?? "",
     settingsHref: list.settingsPage ? "/workspace/" + list.settingsPage : "/settings/time#work",
     tabs: list.tabs ?? [],
@@ -75,7 +75,7 @@ export async function handler(event, context) {
       newTitle: t("What should we work on?"),
       newHint: list.running ? t("Ask a question or give a task — on a ticket, in its repo or one you pick. Sessions run side by side ({n} working now).", { n: list.running }) : t("Ask a question or give a task — on a ticket, in its repo or one you pick. Sessions run side by side."),
       showArchived: t("Show archived ({n})", { n: list.archivedCount }),
-      showMore: t("Show more ({n})", { n: grouped.reduce((n, g) => n + g.rows.length, 0) - groups.reduce((n, g) => n + g.rows.length, 0) }),
+      showMore: t("Show more ({n})", { n: grouped.reduce((n, g) => n + g.rows.length, 0) - groups.reduce((n, g) => n + g.items.length, 0) }),
     },
   };
 

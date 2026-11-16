@@ -15,8 +15,10 @@ setupTempData();
  */
 
 const skip = skipWithoutRepo("work-ext");
+/** The rows of the database the screen sits on, as the page hands them over live (the view's own `rows`): a row of its own — a name of the screen must never read as one of these. */
+const LIVE_ROWS = [{ id: 1, title: "Code", icon: "", cells: {}, createdAt: "2026-01-01", updatedAt: "2026-01-01" }] as never[];
 type Row = { id: number; title: string; ticket: string; dot: string; ago: string; selected: boolean; archived: boolean; active: boolean; todoId: number };
-type Group = { key: string; heading: string; ticket: string; n: number; rows: Row[] };
+type Group = { key: string; heading: string; ticket: string; n: number; items: Row[] };
 type Line = { k: string; text: string; answer: string; bad: boolean };
 type Screen = {
   mode: string;
@@ -89,21 +91,21 @@ test("the screen's lambda lists the sessions as the built-in's sidebar: one per 
   const built = sessionTickets().flatMap((t) => t.sessions.map((s) => s.id)).sort();
   const screen = await call<Screen>("work.screen", {});
   assert.equal(screen.mode, "new");
-  assert.deepEqual(screen.groups.flatMap((g) => g.rows.map((r) => r.id)).sort(), built);
+  assert.deepEqual(screen.groups.flatMap((g) => g.items.map((r) => r.id)).sort(), built);
   assert.deepEqual(built, [a.run, b.run, c.run].sort());
   // (Newest: by time — the two recent ones today or earlier, the 30-hour-old one never in "Today" unless it is.)
   assert.ok(screen.groups.every((g) => g.heading), "every group has a heading by time");
-  assert.ok(screen.groups.some((g) => g.rows.some((r) => r.id === b.run)));
+  assert.ok(screen.groups.some((g) => g.items.some((r) => r.id === b.run)));
   const byTicket = await call<Screen>("work.screen", { sort: "ticket" });
   assert.deepEqual(byTicket.groups.map((g) => g.ticket).sort(), ["No ticket", "PROJ-1", "PROJ-2"].sort());
   const byPriority = await call<Screen>("work.screen", { sort: "priority" });
-  assert.equal(byPriority.groups[0].rows[0].id, c.run, "what works comes first");
+  assert.equal(byPriority.groups[0].items[0].id, c.run, "what works comes first");
   const alpha = await call<Screen>("work.screen", { sort: "alpha" });
-  assert.deepEqual(alpha.groups[0].rows.map((r) => r.title), ["A question about the repo", "Fix the login", "Write the docs"]);
+  assert.deepEqual(alpha.groups[0].items.map((r) => r.title), ["A question about the repo", "Fix the login", "Write the docs"]);
   const found = await call<Screen>("work.screen", { q: "docs" });
-  assert.deepEqual(found.groups.flatMap((g) => g.rows.map((r) => r.id)), [b.run]);
+  assert.deepEqual(found.groups.flatMap((g) => g.items.map((r) => r.id)), [b.run]);
   // The red and the green dot.
-  const dots = Object.fromEntries(screen.groups.flatMap((g) => g.rows).map((r) => [r.id, r.dot]));
+  const dots = Object.fromEntries(screen.groups.flatMap((g) => g.items).map((r) => [r.id, r.dot]));
   assert.equal(dots[a.run], "🟢");
   assert.equal(dots[b.run], "🔴");
 });
@@ -119,7 +121,7 @@ test("a session's page: the conversation lines as the log reads them, the state,
   assert.ok(lines.some((l) => l.k === "say" && l.text === "I fixed it."));
   assert.ok(lines.some((l) => l.k === "tool" && l.text.includes("npm test")));
   assert.equal(s.session!.canReplyLive, false);
-  assert.ok(s.groups.flatMap((g) => g.rows).find((r) => r.id === a.run)!.selected);
+  assert.ok(s.groups.flatMap((g) => g.items).find((r) => r.id === a.run)!.selected);
   const failed = await call<Screen>("work.screen", { sel: `run:${b.run}` });
   assert.equal(failed.session!.error, "boom");
   const ticket = await call<Screen>("work.screen", { sel: "ticket:proj-1" });
@@ -156,7 +158,7 @@ test("the screen's template draws without an error: new, a session (idle and ask
   const { renderView } = await import("@/plugins/workspace/view-template");
   const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work.html"), "utf8");
   const draw = (x: unknown, state: Record<string, string>) =>
-    renderView(template, { rows: [], props: [], titleName: "Code", state: { ...state }, app: {}, data: { x, started: { runId: 1 } }, db: { id: 1, title: "Code" } } as never);
+    renderView(template, { rows: LIVE_ROWS, props: [], titleName: "Code", state: { ...state }, app: {}, data: { x, started: { runId: 1 } }, db: { id: 1, title: "Code" } } as never);
   assert.deepEqual(draw(await call("work.screen", {}), { sel: "" }).errors, []);
   assert.deepEqual(draw(await call("work.screen", { sel: `run:${b.run}` }), { sel: `run:${b.run}` }).errors, []);
   assert.deepEqual(draw(await call("work.screen", { sel: "ticket:PROJ-2" }), { sel: "ticket:PROJ-2" }).errors, []);
@@ -254,7 +256,7 @@ test("the panes: a session's changes as the built-in's diff reads them (a change
   const x = await call("work.screen", { sel: `run:${a.run}` });
   const withProcs = { ...panes, procs: [{ name: "web", running: true, url: "http://localhost:3000", showUrl: true, log: "ready", dot: "🟢" }, { name: "api", running: false, url: "", showUrl: false, log: "", dot: "⚪" }] };
   for (const pane of ["chat", "changes", "preview"])
-    assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code", state: { sel: `run:${a.run}`, pane }, app: {}, data: { x, panes: withProcs, gitresult: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], pane);
+    assert.deepEqual(renderView(template, { rows: LIVE_ROWS, props: [], titleName: "Code", state: { sel: `run:${a.run}`, pane }, app: {}, data: { x, panes: withProcs, gitresult: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], pane);
 });
 
 test("the message box's options: providers, modes, repos as the built-in's composer offers them; a ticket's repo is inferred", { skip }, async () => {
@@ -320,10 +322,10 @@ test("the settings: read as the Settings page reads them, one setting changed at
   // The settings template draws.
   const { renderView } = await import("@/plugins/workspace/view-template");
   const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work-settings.html"), "utf8");
-  const withRepo = { ...shown, repos: [{ id: 1, name: "R", path: "C:/r", ok: true, state: "on main", gitlabProject: "", boardsText: "", boards: "no boards", tickets: "", instructions: "", systems: "", systemsNote: "Not read yet", delivery: "mr", mr: true, direct: false }], pools: [{ source: "learn", label: "Reserved for Learn", n: 1, more: 2, less: 0, hint: "x" }] };
+  const withRepo = { ...shown, repos: [{ id: 1, name: "R", path: "C:/r", ok: true, where: "on main", gitlabProject: "", boardsText: "", boards: "no boards", tickets: "", instructions: "", systems: "", systemsNote: "Not read yet", delivery: "mr", mr: true, direct: false }], pools: [{ source: "learn", label: "Reserved for Learn", n: 1, more: 2, less: 0, hint: "x" }] };
   for (const state of [{}, { instred: "1", instr: "x" }, { agented: "1" }, { repoedit: "1" }])
-    assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: { ...state }, app: {}, data: { s: withRepo, result: { message: "Saved." } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(state));
-  assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: null }, db: { id: 1, title: "Code settings" } } as never).errors, []);
+    assert.deepEqual(renderView(template, { rows: LIVE_ROWS, props: [], titleName: "Code settings", state: { ...state }, app: {}, data: { s: withRepo, result: { message: "Saved." } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(state));
+  assert.deepEqual(renderView(template, { rows: LIVE_ROWS, props: [], titleName: "Code settings", state: {}, app: {}, data: { s: null }, db: { id: 1, title: "Code settings" } } as never).errors, []);
 });
 
 test("the rest of the page: dangling sessions are listed and ended, a session's branch is switched, Admin sessions state is read", { skip }, async () => {
@@ -362,11 +364,11 @@ test("the rest of the page: dangling sessions are listed and ended, a session's 
   const { renderView } = await import("@/plugins/workspace/view-template");
   const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work.html"), "utf8");
   for (const branches of ["false", "true"])
-    assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code", state: { sel: `run:${b.run}`, branchopen: branches }, app: {}, data: { x: { ...open, dangling: { n: 1, text: "1 sessions count as running" } }, result: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], branches);
+    assert.deepEqual(renderView(template, { rows: LIVE_ROWS, props: [], titleName: "Code", state: { sel: `run:${b.run}`, branchopen: branches }, app: {}, data: { x: { ...open, dangling: { n: 1, text: "1 sessions count as running" } }, result: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], branches);
   const sTemplate = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work-settings.html"), "utf8");
   const s = await call<Record<string, unknown>>("work.settings", {});
   for (const adminInfo of [{ windows: true, elevated: true, task: false, how: "UAC", taskText: "not set up" }, { windows: true, elevated: false, task: true, how: "task", taskText: "set up" }, { windows: false }])
-    assert.deepEqual(renderView(sTemplate, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: { ...s, admin: true, adminInfo } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(adminInfo));
+    assert.deepEqual(renderView(sTemplate, { rows: LIVE_ROWS, props: [], titleName: "Code settings", state: {}, app: {}, data: { s: { ...s, admin: true, adminInfo } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(adminInfo));
 });
 
 test("attachments: a staged upload is kept for the next message of its scope, listed on the screen and taken off again; the kit's frame shows another address only", { skip }, async () => {
@@ -393,7 +395,7 @@ test("attachments: a staged upload is kept for the next message of its scope, li
   assert.deepEqual((await call<C>("work.screen", {})).composer.files, []);
   // The frame of the kit.
   const { renderView } = await import("@/plugins/workspace/view-template");
-  const draw = (t: string) => renderView(t, { rows: [], props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
+  const draw = (t: string) => renderView(t, { rows: LIVE_ROWS, props: [], titleName: "x", state: {}, app: {}, data: {}, db: { id: 1, title: "x" } } as never);
   assert.deepEqual(draw('<frame src="http://localhost:3000" h=400 title="Preview"/>').errors, []);
   assert.deepEqual(draw('<frame plugin="my-plugin" entry="panel.html" run="3" ticket="A-1" todo="2"/>').errors, []);
   assert.equal(draw('<frame src="/api/work/1/prompt"/>').errors.length, 1, "a page of Zeff's own is refused");
