@@ -5,20 +5,7 @@ import type { FieldSpec } from "@/plugins/workspace/flows/types";
 const f = (name: string, type: FieldSpec["type"], extra: Partial<FieldSpec> = {}): FieldSpec => ({ name, type, ...extra });
 const text = (v: unknown): string => (v == null ? "" : String(v));
 const list = (v: unknown): string[] => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => String(x).trim()).filter(Boolean);
-/** A folder of the account's data folder a flow may keep files in: a plain name — not Zeff's own (plugins, accounts, backups …). */
-const KEEP_DIR = /^[a-z][a-z0-9_-]{0,39}$/;
-const OWN_DIRS = new Set(["plugins", "accounts", "backups", "lambdas", "notebooks", "logs", "launcher", "work", "account-secret", "files", "ext", "uploads"]);
-
-/** A file's place inside a folder of the account's data folder — throws for anything else (no path in a name, no folder of Zeff's own). */
-async function inDataDir(dir: unknown, file: unknown): Promise<string> {
-  const path = await import("node:path");
-  const d = text(dir);
-  const name = text(file);
-  if (!KEEP_DIR.test(d) || OWN_DIRS.has(d)) throw new Error("dir: a plain folder name of your data folder (not one of Zeff's own).");
-  if (!name || name !== path.basename(name) || name.startsWith(".")) throw new Error("file: a file name, no path.");
-  const { dataDir } = await import("@/db");
-  return path.join(dataDir(), d, name);
-}
+import { inDataDir } from "@/lib/files/kept";
 
 /**
  * What the Documents plugin lets lambdas and flows read (while it is built in): your letters that are read, with their text.

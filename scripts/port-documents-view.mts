@@ -11,11 +11,12 @@ const STATES = `<state name="scope" value="inbox"/><state name="sort" value="new
 <data name="docs" lambda="documents.screen" with="scope={{ state.scope }}, q={{ state.q }}, sort={{ state.sort }}, limit={{ state.limit }}, selected={{ state.selected }}, checked={{ state.checked }}" debounce=250/>
 <data name="doc" lambda="documents.text" with="id={{ state.selected }}, chars={{ state.full ? 0 : 6000 }}" when="{{ state.selected }}"/>
 <on event="docs-changed" action="reload"/>
-<on event="find" action="state" state="scope" value="all"/>`;
+<on event="find" action="state" state="scope" value="all"/>
+{{#if data.docs.picked}}<on event="doc-open" action="url" href="{{ data.docs.picked.fileUrl }}"/>{{/if}}`;
 
 const BADGES = `{{#if status == 'failed'}}<badge color=red>failed</badge>{{#else}}{{#if status == 'queued' or status == 'extracting'}}<badge color=blue>reading …</badge>{{#else}}{{#if status == 'unsupported'}}<badge color=yellow>not readable</badge>{{#else}}{{#if compiled}}<badge color=green>✓ compiled</badge>{{/if}}{{/if}}{{/if}}{{/if}}`;
 const NAME = `{{#if unread}}<b>{{ title | truncate(80) }}</b>{{#else}}{{ title | truncate(80) }}{{/if}}`;
-const THUMB = `{{#if isImage}}<img src="/api/documents/{{ id }}/file" alt="{{ title }}" h=140 fit=cover/>{{#else}}<box tone=muted><col gap=1 align=center><heading level=1>{{ icon }}</heading><small><muted>{{ ending }}</muted></small></col></box>{{/if}}`;
+const THUMB = `{{#if isImage}}<img src="{{ fileUrl }}" alt="{{ title }}" h=140 fit=cover/>{{#else}}<box tone=muted><col gap=1 align=center><heading level=1>{{ icon }}</heading><small><muted>{{ ending }}</muted></small></col></box>{{/if}}`;
 const fact = (label: string, value: string) => `<row gap=3><muted>${label}</muted><small>${value}</small></row>`;
 
 const mark = (op: string, ids: string, label: string, extra = "") => `<button run="documents.act" with="op=${op}, ids=${ids}" emit="docs-changed" ${extra} label="${label}"/>`;
@@ -89,13 +90,13 @@ ${THUMB}
 <box>
 <col gap=3>
 <row gap=2 align=start><b>{{ data.docs.picked.title }}</b><grow/><button action="state" state="selected" value="" label="✕" variant=quiet/></row>
-{{#if data.docs.picked.isPdf}}<media src="/api/documents/{{ data.docs.picked.id }}/file" kind=pdf h=520 label="{{ data.docs.picked.title }}"/>
-{{#else}}{{#if data.docs.picked.isImage}}<img src="/api/documents/{{ data.docs.picked.id }}/file" alt="{{ data.docs.picked.title }}" fit=contain/>
-{{#else}}{{#if data.docs.picked.isAudio}}<media src="/api/documents/{{ data.docs.picked.id }}/file" kind=audio label="{{ data.docs.picked.title }}"/>
+{{#if data.docs.picked.isPdf}}<media src="{{ data.docs.picked.fileUrl }}" kind=pdf h=520 label="{{ data.docs.picked.title }}"/>
+{{#else}}{{#if data.docs.picked.isImage}}<img src="{{ data.docs.picked.fileUrl }}" alt="{{ data.docs.picked.title }}" fit=contain/>
+{{#else}}{{#if data.docs.picked.isAudio}}<media src="{{ data.docs.picked.fileUrl }}" kind=audio label="{{ data.docs.picked.title }}"/>
 {{#else}}<box tone=muted><col gap=1 align=center><heading level=1>{{ data.docs.picked.icon }}</heading><small><muted>{{ data.docs.picked.ending }}</muted></small></col></box>{{/if}}{{/if}}{{/if}}
 <row gap=2>
-<a href="/api/documents/{{ data.docs.picked.id }}/file?open=1">Open</a>
-<a href="/api/documents/{{ data.docs.picked.id }}/file?download=1">Download</a>
+<button run="documents.act" with="op=read, ids={{ data.docs.picked.id }}" emit="doc-open" label="Open"/>
+<a href="{{ data.docs.picked.fileUrl }}&download=1">Download</a>
 {{#if data.docs.picked.unread}}${mark("read", "{{ data.docs.picked.id }}", "✓ Mark read")}{{#else}}${mark("unread", "{{ data.docs.picked.id }}", "● Mark unread")}{{/if}}
 {{#if data.docs.picked.status == 'failed' or data.docs.picked.status == 'unsupported'}}${mark("reread", "{{ data.docs.picked.id }}", "Read again")}{{/if}}
 {{#if data.docs.picked.status == 'queued' or data.docs.picked.status == 'extracting'}}${mark("skip", "{{ data.docs.picked.id }}", "Skip")}{{/if}}

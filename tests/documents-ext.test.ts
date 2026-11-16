@@ -327,7 +327,7 @@ test("the screens' templates draw: the Documents screen (grid, list, a PDF and a
     const r = draw(tpl("documents.html"), state, { docs, doc });
     assert.deepEqual(r.errors, [], JSON.stringify(state));
     assert.match(rendered(r), /Add files/);
-    if (state.selected) assert.match(rendered(r), /\/api\/documents\/\d+\/file/);
+    if (state.selected) assert.match(rendered(r), /\/api\/files\/kept\?dir=documents/);
   }
   assert.deepEqual(draw(tpl("documents.html"), {}, {}).errors, [], "an empty screen draws too");
   const settings = await lambda("documents.settings");
