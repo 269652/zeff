@@ -133,7 +133,7 @@
     </box>
     {{/each}}
   </section>
-  <dialog bind="sugedit" title="Suggested entries">
+  <dialog bind="sugedit" reset="s_" title="Suggested entries">
     {{#each data.w.suggestions.items | where('id', state.sugedit)}}
     <col gap=2>
       <small><muted>{{ ref }} · {{ date }} {{ ticket }} {{ target }}</muted></small>
@@ -166,7 +166,7 @@
   </section>
   {{/if}}
 
-  <dialog bind="pauseday" title="Pause">
+  <dialog bind="pauseday" reset="pz_" title="Pause">
     {{#each data.w.table.foot.pause | where('iso', state.pauseday)}}
     <col gap=2>
       <text>{{ label }}</text>
@@ -238,7 +238,7 @@
       </column>
     </datatable>
   </section>
-  <dialog bind="hoursedit" title="Hours">
+  <dialog bind="hoursedit" reset="e_hours" title="Hours">
     {{#each data.w.entryList | where('id', state.hoursedit)}}
     <col gap=2>
       <text>{{ description }}</text>
@@ -249,15 +249,15 @@
     </col>
     {{/each}}
   </dialog>
-  <dialog bind="entryedit" title="Edit this entry" wide=true>
+  <dialog bind="entryedit" reset="ee_" title="Edit this entry" wide=true>
     {{#each data.w.entryList | where('id', state.entryedit)}}
     <let name="grp" value="state | get('ee_group') | default(groupFlag)"/>
     <col gap=2>
       <grid cols=3 gap=2 min=170>
         <input bind="ee_date" type=date label="Date" value="{{ date }}"/>
-        {{#if data.w.form.bookOptions}}<select bind="ee_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
+        {{#if data.w.form.bookOptions}}<select bind="ee_bookon" value="{{ bookOn }}" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
         <input bind="ee_hours" type=number label="Hours" value="{{ hours }}"/>
-        {{#if data.w.form.typeOptions}}<select bind="ee_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>{{#else}}<text tone=warn>…</text>{{/if}}
+        {{#if data.w.form.typeOptions}}<select bind="ee_type" value="{{ typeKey }}" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>{{#else}}<text tone=warn>…</text>{{/if}}
         <input bind="ee_ticket" label="Ticket" value="{{ ticket }}"/>
         <input bind="ee_start" label="Start" value="{{ start }}" placeholder="09:30"/>
       </grid>
@@ -275,23 +275,33 @@
   </dialog>
   <on event="entry-dropped" run="zeiterfassung.entry-op" with="op=drop, state={{ state | tojson }}" then="{{ data.w.dropClear }}" emit="time-changed"/>
   <data name="ctx" lambda="zeiterfassung.entry-detail" with="id={{ state.ctxentry }}" when="{{ state.ctxentry }}"/>
-  <dialog bind="ctxentry" title="Context" wide=true>
+  <dialog bind="ctxentry" reset="cx_, src_" title="Context" wide=true>
     {{#if data.ctx.found}}
     <col gap=2>
       <b>{{ data.ctx.title }}</b>
       <small><muted>{{ data.ctx.created }}</muted></small>
+      {{#if data.ctxdone.ctxdone.message}}<callout tone=good>{{ data.ctxdone.ctxdone.message }}</callout>{{/if}}
       {{#each data.ctx.contexts}}
       <box>
-        <row gap=2 justify=between wrap=true><row gap=2><b>{{ kind }}</b><text>{{ headline }}</text><small><muted>{{ author }} {{ date }}</muted></small></row>
+        <row gap=2 justify=between wrap=true>
+          <row gap=2 wrap=true><b>{{ kind }}</b><text>{{ headline }}</text><small><muted>{{ author }} {{ date }} {{ ticket }}</muted></small>{{#if jira}}<small><muted>{{ jira }}</muted></small>{{/if}}</row>
           <row gap=1>
+            <button run="zeiterfassung.entry-op" with="op=context-move, id={{ data.ctx.id }}, contextId={{ id }}, dir=up" emit="time-changed" label="↑" variant=quiet/>
+            <button run="zeiterfassung.entry-op" with="op=context-move, id={{ data.ctx.id }}, contextId={{ id }}, dir=down" emit="time-changed" label="↓" variant=quiet/>
+            <button action="state" state="ctxedit" value="{{ id }}" label="✎" tip="Edit" variant=quiet/>
             <button run="zeiterfassung.entry-op" with="op=context-unlink, id={{ data.ctx.id }}, contextId={{ id }}" emit="time-changed" label="Unlink" variant=quiet/>
             <button run="zeiterfassung.entry-op" with="op=context-delete, contextId={{ id }}" confirm="Delete this context item?" emit="time-changed" label="✕" variant=quiet/>
           </row>
         </row>
         <markdown value="{{ body }}"/>
         {{#each links}}<button action="url" href="{{ url }}" label="{{ label }}" variant=link/>{{/each}}
+        {{#each files}}<row gap=1 align=center><button action="url" href="{{ url }}" label="📎 {{ name }}" variant=link/><small><muted>{{ size }}</muted></small><button run="zeiterfassung.entry-op" with="op=context-file-delete, fileId={{ id }}" confirm="Delete this file?" emit="time-changed" label="✕" variant=quiet/></row>{{/each}}
+        <upload bind="ctxbusy" run="zeiterfassung.entry-op" with="op=context-file, id={{ data.ctx.id }}, contextId={{ id }}" multiple=true done="Added." emit="time-changed" label="+ Add files"/>
       </box>
       {{/each}}
+      {{#if data.ctx.contexts}}
+      <row gap=2><button run="zeiterfassung.entry-op" with="op=context-sync, id={{ data.ctx.id }}" into="ctxdone" emit="time-changed" confirm="Post these items to their Jira tickets?" label="Sync to Jira" variant=plain/></row>
+      {{/if}}
       {{#if data.ctx.todos}}<section title="From todos" collapsible=true open=false>{{#each data.ctx.todos}}<small>{{ this }}</small>{{/each}}{{#each data.ctx.sources}}<small><muted>{{ this }}</muted></small>{{/each}}{{#each data.ctx.notes}}<small>{{ this }}</small>{{/each}}</section>{{/if}}
       <section title="Add context">
         <col gap=2>
@@ -299,16 +309,53 @@
             <select bind="cx_kind" options="{{ data.ctx.kindOptions | tojson }}" label="Kind"/>
             <input bind="cx_title" label="Headline"/>
             <input bind="cx_author" label="Author"/>
-            <input bind="cx_link" label="Link"/>
+            <input bind="cx_ticket" label="Ticket" value="{{ data.ctx.ticket }}"/>
           </grid>
+          <input bind="cx_links" type=textarea rows=2 label="Links (one per line)"/>
           <input bind="cx_body" type=textarea rows=3 label="Message"/>
-          <row gap=2><button run="zeiterfassung.entry-op" with="op=context-add, id={{ data.ctx.id }}, ctxKind={{ state.cx_kind }}, ctxTitle={{ state.cx_title }}, ctxAuthor={{ state.cx_author }}, ctxLink={{ state.cx_link }}, ctxBody={{ state.cx_body }}" emit="time-changed" then="cx_body=; cx_title=; cx_link=" done="Saved." label="Add" variant=primary/></row>
+          <row gap=2 wrap=true>
+            <button run="zeiterfassung.entry-op" with="op=context-add, id={{ data.ctx.id }}, ctxKind={{ state.cx_kind }}, ctxTitle={{ state.cx_title }}, ctxAuthor={{ state.cx_author }}, ctxLinks={{ state.cx_links }}, ctxBody={{ state.cx_body }}, ctxTicket={{ state.cx_ticket | default(data.ctx.ticket) }}, ctxDate={{ data.ctx.date }}" emit="time-changed" then="cx_body=; cx_title=; cx_links=" done="Context added." label="Add" variant=primary/>
+            <upload bind="ctxbusy" run="zeiterfassung.entry-op" with="op=context-file, id={{ data.ctx.id }}, contextId=0" multiple=true zone=view done="Context added." emit="time-changed" label="+ Files as an item of their own"/>
+          </row>
+        </col>
+      </section>
+      <section title="Link existing">
+        <row gap=2 align=end wrap=true>
+          <select bind="cx_link" options="{{ data.ctx.linkable | tojson }}" search=true label="Context item"/>
+          <button run="zeiterfassung.entry-op" with="op=context-link, id={{ data.ctx.id }}, contextId={{ state.cx_link }}" emit="time-changed" done="Context linked." label="Link" variant=plain/>
+        </row>
+      </section>
+      <section title="Add a source">
+        <col gap=1>
+          <input bind="src_q" label="Search Teams, GitLab, todos and mails — or paste a link" placeholder="!167, T-12, a name, a link …"/>
+          {{#if data.src.hits}}
+          {{#each data.src.hits}}
+          <row gap=2 justify=between align=center><col><small><muted>{{ section }} · {{ meta }}</muted></small><text>{{ text }}</text></col><button run="zeiterfassung.entry-op" with="op=source-add, id={{ data.ctx.id }}, url={{ url }}, ticket={{ data.ctx.ticket }}" emit="time-changed" done="Added." label="+ Add" variant=plain/></row>
+          {{/each}}
+          {{/if}}
         </col>
       </section>
     </col>
     {{/if}}
   </dialog>
-  <dialog bind="entrycopy" title="Copy to another day">
+  <data name="src" lambda="zeiterfassung.source-search" with="q={{ state.src_q }}" when="{{ state.src_q }}" debounce=400/>
+  <dialog bind="ctxedit" reset="ce_" title="Edit context item" wide=true>
+    {{#each data.ctx.contexts | where('id', state.ctxedit)}}
+    <col gap=2>
+      <grid cols=2 gap=2 min=160>
+        <select bind="ce_kind" options="{{ data.ctx.kindOptions | tojson }}" label="Kind"/>
+        <input bind="ce_title" label="Headline" value="{{ title }}"/>
+        <input bind="ce_author" label="Author" value="{{ author }}"/>
+        <input bind="ce_ticket" label="Ticket" value="{{ ticket }}"/>
+        <input bind="ce_date" type=date label="Date" value="{{ dateRaw }}"/>
+      </grid>
+      <input bind="ce_links" type=textarea rows=2 label="Links (one per line)" value="{{ linksText }}"/>
+      <input bind="ce_body" type=textarea rows=4 label="Message" value="{{ body }}"/>
+      <row gap=2><button run="zeiterfassung.entry-op" with="op=context-edit, contextId={{ id }}, ctxKind={{ state.ce_kind | default(kindKey) }}, ctxTitle={{ state.ce_title | default(title) }}, ctxAuthor={{ state.ce_author | default(author) }}, ctxTicket={{ state.ce_ticket | default(ticket) }}, ctxDate={{ state.ce_date | default(dateRaw) }}, ctxLinks={{ state.ce_links | default(linksText) }}, ctxBody={{ state.ce_body | default(body) }}" emit="time-changed" then="ctxedit=" done="Context saved." label="Save" variant=primary/></row>
+    </col>
+    {{/each}}
+  </dialog>
+  <dialog bind="entrycopy" reset="ec_" title="Copy to another day">
     {{#each data.w.entryList | where('id', state.entrycopy)}}
     <col gap=2>
       <text>{{ description }} · {{ hoursText }} h</text>
@@ -317,7 +364,7 @@
     </col>
     {{/each}}
   </dialog>
-  <dialog bind="groupedit" title="Group">
+  <dialog bind="groupedit" reset="gs_" title="Group">
     {{#each data.w.entryList | where('id', state.groupedit)}}
     <col gap=2>
       <text>{{ description }} · {{ hoursText }} h</text>

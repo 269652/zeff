@@ -70,7 +70,7 @@
       </column>
     </datatable>
   </section>
-  <dialog bind="jobedit" title="Edit job">
+  <dialog bind="jobedit" reset="ej_" title="Edit job">
     {{#each data.j.jobs | where('id', state.jobedit)}}
     <let name="ecu" value="state | get('ej_customer') | default(customer)"/>
     <let name="ede" value="state | get('ej_description') | default(description)"/>
@@ -122,14 +122,14 @@
       </column>
     </datatable>
   </section>
-  <dialog bind="projectedit" title="Edit project">
+  <dialog bind="projectedit" reset="ep_" title="Edit project">
     {{#each data.j.projects | where('id', state.projectedit)}}
     <let name="pcu" value="state | get('ep_customer') | default(customer)"/>
     <let name="pde" value="state | get('ep_description') | default(description)"/>
     <col gap=2>
       <grid cols=2 gap=2 min=150>
         <input bind="ep_title" label="Title" value="{{ title }}"/>
-        {{#if data.j.jobOptions}}<select bind="ep_job" options="{{ data.j.jobOptions | tojson }}" search=true label="Job"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
+        {{#if data.j.jobOptions}}<select bind="ep_job" value="{{ jobNumber }}" options="{{ data.j.jobOptions | tojson }}" search=true label="Job"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
         <input bind="ep_customer" label="Customer" value="{{ customer }}"/>
         <input bind="ep_tags" label="Default tags" value="{{ tags }}"/>
       </grid>

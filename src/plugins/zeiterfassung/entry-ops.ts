@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n/server";
 import { setPauses } from "@/lib/pauses";
 import { parseBookOn } from "@/lib/projects-shared";
 import { spanOfHead } from "@/lib/entry-spans";
-import { createContext, deleteContext, unlinkContext } from "@/lib/contexts";
+import { createContext, deleteContext, deleteContextFile, getContextItem, linkContext, reorderEntryContexts, contextsForEntry, unlinkContext, updateContext, addSource } from "@/lib/contexts";
 import { isContextKind, type ContextInput } from "@/lib/contexts-shared";
 
 /**
@@ -22,15 +22,15 @@ const bool = (v: unknown) => v === true || v === "true" || v === "1" || v === "o
 /** A context written in a form (kind, title, author, body, one link, date, ticket) — no files. */
 export const contextOf = (i: Record<string, unknown>, p = "ctx"): ContextInput | null => {
   const body = String(i[`${p}Body`] ?? "");
-  const link = text(i[`${p}Link`]);
+  const links = [...text(i[`${p}Links`]).split(/\s*\n\s*/), text(i[`${p}Link`])].map((x) => x.trim()).filter(Boolean);
   const title = text(i[`${p}Title`]);
-  if (!body.trim() && !link && !title) return null;
+  if (!body.trim() && !links.length && !title) return null;
   return {
     kind: (isContextKind(text(i[`${p}Kind`])) ? text(i[`${p}Kind`]) : "note") as ContextInput["kind"],
     title: title || null,
     author: text(i[`${p}Author`]) || null,
     body,
-    links: link ? [{ url: link, label: null }] : [],
+    links: [...new Set(links)].map((url) => ({ url, label: null })),
     date: text(i[`${p}Date`]) || null,
     ticket: text(i[`${p}Ticket`]) || null,
   };
@@ -110,6 +110,71 @@ export async function entryOp(i: Record<string, unknown>): Promise<{ message: st
     if (!input) throw new Error(t("Write something first."));
     await createContext(input, [], id);
     return { message: t("Saved.") };
+  }
+  if (op === "context-edit") {
+    const input = contextOf(i);
+    const existing = getContextItem(Number(i.contextId));
+    if (!existing) throw new Error(t("Context #{id} not found.", { id: Number(i.contextId) }));
+    await updateContext(existing.id, input ?? { kind: existing.kind, title: null, author: null, body: "", links: [], date: null, ticket: null }, []);
+    return { message: t("Context saved.") };
+  }
+  if (op === "context-file") {
+    // One file the view's upload brought (staged under a token): onto the item, or — with no item picked — as an item of its own on the entry.
+    const { stagedPath } = await import("@/plugins/workspace/uploads-staging");
+    const fs = await import("node:fs");
+    const file = await stagedPath(i.token);
+    const bytes = fs.readFileSync(file);
+    const blob = new File([bytes], text(i.name) || "file", { type: text(i.mime) || "application/octet-stream" });
+    const cid = Number(i.contextId);
+    if (cid > 0) {
+      const c = getContextItem(cid);
+      if (!c) throw new Error(t("Context #{id} not found.", { id: cid }));
+      await updateContext(c.id, { kind: c.kind, title: c.title, author: c.author, body: c.body, links: c.links, date: c.date, ticket: c.ticket }, [blob]);
+    } else {
+      await createContext({ kind: "note", title: blob.name, author: null, body: "", links: [], date: null, ticket: null }, [blob], id);
+    }
+    fs.rmSync(file, { force: true });
+    return { message: t("Context added.") };
+  }
+  if (op === "context-file-delete") {
+    deleteContextFile(Number(i.fileId));
+    return { message: t("Saved.") };
+  }
+  if (op === "context-link") {
+    if (!Number(i.contextId)) throw new Error(t("Pick a context item to link."));
+    linkContext(id, Number(i.contextId));
+    return { message: t("Context linked.") };
+  }
+  if (op === "context-move") {
+    const ids = contextsForEntry(id).map((c) => c.id);
+    const at = ids.indexOf(Number(i.contextId));
+    const to = at + (text(i.dir) === "up" ? -1 : 1);
+    if (at < 0 || to < 0 || to >= ids.length) return { message: "" };
+    [ids[at], ids[to]] = [ids[to], ids[at]];
+    reorderEntryContexts(id, ids);
+    return { message: "" };
+  }
+  if (op === "context-sync") {
+    const { syncContextsToJira } = await import("@/lib/jira/context-sync");
+    const r = await syncContextsToJira(contextsForEntry(id).map((c) => c.id));
+    const parts = [
+      r.posted.length && t("{n} posted", { n: r.posted.length }),
+      r.updated.length && t("{n} updated", { n: r.updated.length }),
+      r.unchanged.length && t("{n} already up to date", { n: r.unchanged.length }),
+      r.files.length && (r.files.length === 1 ? t("1 file attached") : t("{n} files attached", { n: r.files.length })),
+      r.skipped.length && t("{n} without a ticket", { n: r.skipped.length }),
+    ].filter(Boolean);
+    const summary = parts.length ? `${parts.join(", ")}.` : t("Nothing to sync.");
+    if (r.errors.length) throw new Error(t("{summary} Failed: {errors}", { summary, errors: r.errors.join("; ") }));
+    return { message: t("Jira: {summary}", { summary }) };
+  }
+  if (op === "source-add") {
+    const { resolveLinks } = await import("@/lib/context-links");
+    const url = text(i.url);
+    const e = resolveLinks([url])[url];
+    if (!e) throw new Error(t("That isn't a synced Teams message or GitLab item."));
+    addSource(url, e, { entryId: id, ticket: text(i.ticket) || getEntry(id)?.ticket || null });
+    return { message: t("Added.") };
   }
   if (op === "context-unlink") {
     unlinkContext(id, Number(i.contextId));

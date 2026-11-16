@@ -131,6 +131,23 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nowAt: a <tick> draws it again (now is read inside)
     [src, props.rows, schema, state, app.data, flowData, props.data.id, props.data.title, labels, meta, current, texts, blocks, outputs, settings, lang, t, nowAt],
   );
+  // <dialog reset="ee_, ec_">: the fields of a dialog start afresh whenever what opens it changes (another row, closed).
+  const watched = useRef<Record<string, string>>({});
+  const watchList = useMemo(() => {
+    const out: { bind: string; reset: string; value: string }[] = [];
+    const walk = (ns: VNode[]) => ns.forEach((n) => typeof n !== "string" && (n.t === "watch" && out.push({ bind: n.a.bind, reset: n.a.reset, value: n.a.value }), walk(n.c)));
+    walk(r.nodes);
+    return out;
+  }, [r.nodes]);
+  useEffect(() => {
+    for (const w of watchList) {
+      const was = watched.current[w.bind];
+      watched.current[w.bind] = w.value;
+      if (was === undefined || was === w.value) continue;
+      const prefixes = w.reset.split(",").map((x) => x.trim()).filter(Boolean);
+      setOwn((st) => Object.fromEntries(Object.entries(st).filter(([k]) => !prefixes.some((p) => k.startsWith(p)))));
+    }
+  }, [watchList]);
   // <state keep=true>: those names are kept in this browser for this view — written when they change, read when it opens (useState below).
   const kept = useMemo(() => {
     const names: string[] = [];
@@ -585,6 +602,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "theme":
       case "tick":
       case "keep":
+      case "watch":
         return null;
       case "check":
         return <CheckBox key={key} a={a} onChange={(v) => setState(a.bind, v)} />;

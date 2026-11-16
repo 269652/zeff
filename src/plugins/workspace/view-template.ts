@@ -187,7 +187,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   ask: T({ placeholder: "text", suggest: "text", intro: "text" }, true),
   dossier: T({ focus: "text", empty: "text", plain: { oneOf: ["true", "false"] } }, true),
   lookup: T({ source: "text", map: "text", placeholder: "text", unique: "text", language: "text", open: { oneOf: ["true", "false"] } }, true),
-  select: T({ bind: "text", options: "text", label: "text", /** Typed to find (an autocomplete), as wide as there is room. */ search: { oneOf: ["true", "false"] }, /** An event sent once a value is picked (its value in the state): saved at once. */ emit: "text" }, true),
+  select: T({ bind: "text", options: "text", value: "text", label: "text", /** Typed to find (an autocomplete), as wide as there is room. */ search: { oneOf: ["true", "false"] }, /** An event sent once a value is picked (its value in the state): saved at once. */ emit: "text" }, true),
   toggle: T({ bind: "text", label: "text" }, true),
   field: T({ name: "text" }, true),
   part: T(ANY),
@@ -233,7 +233,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   tabset: T({ bind: "text" }),
   tab: T({ id: "text", label: "text", n: "text" }),
   // A dialog (center) or a drawer (side=right), open while state.<bind> is filled.
-  dialog: T({ bind: "text", title: "text", side: { oneOf: ["center", "right"] }, wide: { oneOf: ["true", "false"] } }),
+  dialog: T({ bind: "text", title: "text", reset: "text", side: { oneOf: ["center", "right"] }, wide: { oneOf: ["true", "false"] } }),
   input: T({ /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text" }, true),
   slider: T({ bind: "text", min: "num", max: "num", step: "num", label: "text", value: "text", unit: "text" }, true),
   calendar: T({ source: "list", date: "list", bind: "text", empty: "text" }),
@@ -1058,7 +1058,8 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
       // (The labels in the user's language: a label the language bundles know.)
       const opts = optionPairs(a.options ?? "").map((o) => ((ctx.data.tr ? [o[0], ctx.data.tr(o[1]), ...o.slice(2)] : o) as typeof o));
       if (!opts.length) return (err(`<${n.name}> needs options="value:Label, …".`), []);
-      if (ctx.state[a.bind] === undefined) ctx.state[a.bind] = opts[0][0];
+      // (value="…": what it starts with, when it is one of the options — an edit form starts with what is being edited.)
+      if (ctx.state[a.bind] === undefined) ctx.state[a.bind] = a.value !== undefined && opts.some((o) => o[0] === a.value) ? a.value : opts[0][0];
       return [{ t: n.name, a: { ...a, options: JSON.stringify(opts), current: ctx.state[a.bind] }, c: [] }];
     }
     case "ask":
@@ -1577,7 +1578,9 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "dialog": {
       if (!a.bind) return (err('<dialog> needs bind="…" (the state that opens it: a button action="state" state="…" value="true").'), []);
       const v = ctx.state[a.bind];
-      return v && v !== "false" ? [{ t: "dialog", a, c: kids() }] : [];
+      // (reset="ee_, ec_": the states with these beginnings are cleared whenever what opens the dialog changes — a form opened for another row starts afresh.)
+      const watch: VNode[] = a.reset ? [{ t: "watch", a: { bind: a.bind, reset: a.reset, value: v ?? "" }, c: [] }] : [];
+      return v && v !== "false" ? [...watch, { t: "dialog", a, c: kids() }] : watch;
     }
     case "drop": {
       if (!a.bind) return (err('<drop> needs bind="…" (the state that gets the value of what was dropped).'), []);
