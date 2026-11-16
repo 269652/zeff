@@ -1,4 +1,5 @@
 import { evalFormula } from "../formula";
+import { stdlibFilters } from "./stdlib";
 
 /**
  * The expressions of a flow: {{ steps.search.hits[0].id }}, {{ input.q | trim | default('…') }}, {{ steps.n.count > 3 and not
@@ -139,6 +140,9 @@ export const FLOW_FILTERS: Record<string, { what: string; fn: (v: unknown, ...a:
   replace: { what: "replace('a', 'b')", fn: (v, a, b) => text(v).split(text(a)).join(text(b)) },
   stripHtml: { what: "a text without its HTML tags", fn: (v) => text(v).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() },
 };
+
+// The typed standard library (stdlib.ts) joins the filters; a name the filters had before stays theirs.
+for (const [name, def] of Object.entries(stdlibFilters)) if (!(name in FLOW_FILTERS)) FLOW_FILTERS[name] = def;
 
 /** An expression in the formulas' language whose names are the run's paths. */
 function toFormula(expr: string): string {

@@ -3,7 +3,9 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { dataDir } from "@/db";
-import { checkedUrl, flowAction } from "../flows/actions";
+import { checkedUrl } from "../flows/actions";
+import { resolveAction } from "../flows/capabilities";
+import { ensureDeclared } from "../flows/declare";
 import type { FlowPermissions } from "../flows/types";
 import { getLookupConfig } from "@/plugins/lookups/config";
 import { getPlugin } from "@/lib/ext/registry";
@@ -167,12 +169,16 @@ async function proxyFetch(m: LambdaManifest, req: { url: string; method?: string
 async function proxyCall(m: LambdaManifest, name: string, input: unknown, plugin?: string) {
   if (!(m.zeff ?? []).includes(name)) throw new Error(`This lambda may not call “${name}” — name it in lambda.json's "zeff".`);
   if (name === "web.browse") return browse(m, input, plugin);
-  const a = flowAction(name);
+  // (a kernel action by its row, a core.* primitive, or a capability declared in the database — the lambda's own grants bind it)
+  ensureDeclared();
+  const a = resolveAction(name, async () => {
+    throw new Error("A lambda can't run a capability that is a program of flow nodes — use one that wraps a primitive, or call a flow.");
+  });
   if (!a) throw new Error(`There is no Zeff function “${name}”.`);
   if (a.writes) throw new Error(`“${name}” changes something — a lambda only reads; a flow can write what it returns.`);
   // (an external plugin's lambda reads its own plugin's stores — it never writes: store.put is refused above)
   const own = plugin?.startsWith("ext:") ? ((getPlugin(plugin.slice(4))?.manifest.contributes as { stores?: { name: string }[] } | undefined)?.stores ?? []).map((x) => `${plugin.slice(4)}.${x.name}`) : [];
-  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}) };
+  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}), ...(m.sql?.length ? { sql: m.sql } : {}), ...(m.sqlMaxRows ? { sqlMaxRows: m.sqlMaxRows } : {}) };
   return a.run((input && typeof input === "object" ? input : {}) as Record<string, unknown>, {
     flow: `lambda:${m.name}`,
     runId: null,

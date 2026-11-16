@@ -80,8 +80,8 @@ export function registerFlowTools(server: McpServer, h: Helpers): void {
     },
     async () =>
       h.run(async () => {
-        const { actionCatalog } = await import("./actions");
-        const actions = actionCatalog()
+        const { declaredCatalog } = await import("./declare");
+        const actions = declaredCatalog()
           .map((a) => `- ${a.name} — ${a.summary} Input: ${a.input.map((f) => `${f.name}${f.required ? "*" : ""} (${f.type}${f.options ? `: ${f.options.join("|")}` : ""})`).join(", ") || "none"}. Gives: ${a.output}.${a.needs?.length ? ` Needs: ${a.needs.join(", ")}.` : ""}`)
           .join("\n");
         const { lookupSources } = await import("../lookups");

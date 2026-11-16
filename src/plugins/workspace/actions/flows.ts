@@ -113,9 +113,9 @@ export async function cancelFlowRunAction(runId: number) {
 /** What a flow's nodes can call: the actions with their inputs, and the filters of the expressions. */
 export async function flowCatalogAction() {
   return run(async () => {
-    const { actionCatalog } = await import("../flows/actions");
+    const { declaredCatalog } = await import("../flows/declare");
     const { FLOW_FILTERS } = await import("../flows/expr");
-    return { actions: actionCatalog(), filters: Object.fromEntries(Object.entries(FLOW_FILTERS).map(([k, v]) => [k, v.what])) };
+    return { actions: declaredCatalog(), filters: Object.fromEntries(Object.entries(FLOW_FILTERS).map(([k, v]) => [k, v.what])) };
   });
 }
 
