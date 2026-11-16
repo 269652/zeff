@@ -1,0 +1,206 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { setupTempData } from "./helpers";
+import { repoPlugin, skipWithoutRepo } from "./plugins-repo";
+
+setupTempData();
+
+/**
+ * The Code tab's port (zeff-plugins/plugins/work-ext): its lambda `work.screen` gives what the screen draws from the kernel's reads (work.session-list /
+ * work.session-open) — the same sessions, grouped and sorted as the built-in sidebar does (session-groups.ts) —, what changes something is a flow that needs
+ * "api", and the screen (views/work.html) draws without an error. Never starts a worker: the runs here are rows and log files only.
+ */
+
+const skip = skipWithoutRepo("work-ext");
+type Row = { id: number; title: string; ticket: string; dot: string; ago: string; selected: boolean; archived: boolean; active: boolean; todoId: number };
+type Group = { key: string; heading: string; ticket: string; n: number; rows: Row[] };
+type Line = { k: string; text: string; answer: string; bad: boolean };
+type Screen = {
+  mode: string;
+  groups: Group[];
+  total: number;
+  archivedCount: number;
+  running: number;
+  ticketPage?: { title: string; sessions: { id: number }[] };
+  session?: { found: boolean; runId: number; title: string; statusText: string; active: boolean; turns: { runId: number; ask: string; lines: Line[]; cut: string }[]; canReplyLive: boolean; asks: unknown[]; error: string };
+};
+
+let made: ReturnType<typeof build> | null = null;
+const world = () => (made ??= build());
+async function build() {
+  const plugins = fs.mkdtempSync(path.join(os.tmpdir(), "zeff-work-ext-"));
+  process.env.ZEFF_PLUGINS_DIR = plugins;
+  fs.cpSync(repoPlugin("work-ext"), path.join(plugins, "work-ext"), { recursive: true });
+  const state = await import("@/plugins/state");
+  for (const id of ["workspace", "todos", "work"]) state.setInstalled(id as never, true);
+  await import("@/plugins/contributions");
+  const reg = await import("@/lib/ext/registry");
+  reg.scanPlugins(true);
+  reg.setEnabled("work-ext", true);
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("work-ext"), "work.package.json"), "utf8"));
+  const r = await (await import("@/plugins/workspace/package-life")).installTracked(pkg, null, { allow: true });
+  const lambdas = await import("@/plugins/workspace/lambdas/store");
+  const { runLambda } = await import("@/plugins/workspace/lambdas/run");
+  const call = async <T>(name: string, event: Record<string, unknown>): Promise<T> => {
+    const l = lambdas.getLambda(name);
+    assert.ok(l, `${name} is there`);
+    const run = await runLambda(l!, event);
+    assert.ok(run.ok, run.ok ? "" : run.error);
+    return run.result as T;
+  };
+  // Sessions: a todo each with a finished run (a log with the worker's words and a tool call), one still queued, one failed, and one on another ticket.
+  const { addSessionTodo } = await import("@/lib/todos/store");
+  const { createRun, updateRun } = await import("@/lib/work/store");
+  const { logPath } = await import("@/lib/work/log");
+  const mk = (ticket: string, text: string, status: string, at: string) => {
+    const todo = addSessionTodo({ ticket, text });
+    assert.ok("id" in todo, "the todo is made");
+    const run = createRun({ ticket, todoId: (todo as { id: number }).id, mode: "instruct", provider: "claude", model: null, permissionMode: null, repo: null, prompt: text });
+    updateRun(run.id, { status, startedAt: at, finishedAt: status === "done" || status === "failed" ? at : null, error: status === "failed" ? "boom" : null });
+    return { run: run.id, todo: (todo as { id: number }).id };
+  };
+  const now = new Date();
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600e3).toISOString();
+  const a = mk("PROJ-1", "Fix the login", "done", hoursAgo(1));
+  const b = mk("PROJ-2", "Write the docs", "failed", hoursAgo(30));
+  const c = mk("", "A question about the repo", "queued", hoursAgo(0.1));
+  fs.mkdirSync(path.dirname(logPath(a.run)), { recursive: true });
+  fs.writeFileSync(
+    logPath(a.run),
+    [
+      { type: "system", subtype: "init", session_id: "s1", model: "sonnet", cwd: "C:/x", permissionMode: "auto" },
+      { type: "assistant", message: { content: [{ type: "text", text: "I fixed it." }] } },
+      { type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "npm test" } }] } },
+      { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "all green" }] } },
+      { type: "result", subtype: "success", result: "done", total_cost_usd: 0.5 },
+    ]
+      .map((e) => JSON.stringify(e))
+      .join("\n") + "\n",
+  );
+  return { allowed: r.allowed, call, a, b, c };
+}
+
+test("the screen's lambda lists the sessions as the built-in's sidebar: one per todo, grouped by time, the tickets, the queued one first by priority", { skip }, async () => {
+  const { call, a, b, c } = await world();
+  const { sessionTickets } = await import("@/lib/work/sessions");
+  const built = sessionTickets().flatMap((t) => t.sessions.map((s) => s.id)).sort();
+  const screen = await call<Screen>("work.screen", {});
+  assert.equal(screen.mode, "new");
+  assert.deepEqual(screen.groups.flatMap((g) => g.rows.map((r) => r.id)).sort(), built);
+  assert.deepEqual(built, [a.run, b.run, c.run].sort());
+  // (Newest: by time — the two recent ones today or earlier, the 30-hour-old one never in "Today" unless it is.)
+  assert.ok(screen.groups.every((g) => g.heading), "every group has a heading by time");
+  assert.ok(screen.groups.some((g) => g.rows.some((r) => r.id === b.run)));
+  const byTicket = await call<Screen>("work.screen", { sort: "ticket" });
+  assert.deepEqual(byTicket.groups.map((g) => g.ticket).sort(), ["No ticket", "PROJ-1", "PROJ-2"].sort());
+  const byPriority = await call<Screen>("work.screen", { sort: "priority" });
+  assert.equal(byPriority.groups[0].rows[0].id, c.run, "what works comes first");
+  const alpha = await call<Screen>("work.screen", { sort: "alpha" });
+  assert.deepEqual(alpha.groups[0].rows.map((r) => r.title), ["A question about the repo", "Fix the login", "Write the docs"]);
+  const found = await call<Screen>("work.screen", { q: "docs" });
+  assert.deepEqual(found.groups.flatMap((g) => g.rows.map((r) => r.id)), [b.run]);
+  // The red and the green dot.
+  const dots = Object.fromEntries(screen.groups.flatMap((g) => g.rows).map((r) => [r.id, r.dot]));
+  assert.equal(dots[a.run], "🟢");
+  assert.equal(dots[b.run], "🔴");
+});
+
+test("a session's page: the conversation lines as the log reads them, the state, the cost; a ticket's page; a missing session", { skip }, async () => {
+  const { call, a, b } = await world();
+  const s = await call<Screen>("work.screen", { sel: `run:${a.run}` });
+  assert.equal(s.mode, "session");
+  assert.equal(s.session!.found, true);
+  assert.equal(s.session!.title, "Fix the login");
+  assert.equal(s.session!.active, false);
+  const lines = s.session!.turns.flatMap((t) => t.lines);
+  assert.ok(lines.some((l) => l.k === "say" && l.text === "I fixed it."));
+  assert.ok(lines.some((l) => l.k === "tool" && l.text.includes("npm test")));
+  assert.equal(s.session!.canReplyLive, false);
+  assert.ok(s.groups.flatMap((g) => g.rows).find((r) => r.id === a.run)!.selected);
+  const failed = await call<Screen>("work.screen", { sel: `run:${b.run}` });
+  assert.equal(failed.session!.error, "boom");
+  const ticket = await call<Screen>("work.screen", { sel: "ticket:proj-1" });
+  assert.equal(ticket.mode, "ticket");
+  assert.deepEqual(ticket.ticketPage!.sessions.map((x) => x.id), [a.run]);
+  const none = await call<Screen>("work.screen", { sel: "run:99999" });
+  assert.equal(none.session!.found, false);
+});
+
+test("what changes something is a flow with the permission api: archive and delete a session, stop a queued run; the dry run touches nothing", { skip }, async () => {
+  const { a, b, c, allowed } = await world();
+  assert.deepEqual([...allowed].sort(), ["work.archive", "work.delete", "work.live", "work.send", "work.start", "work.stop"]);
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const { sessionTickets } = await import("@/lib/work/sessions");
+  const ids = () => sessionTickets().flatMap((t) => t.sessions.map((s) => s.id));
+  assert.equal((await engine.runFlow("work.archive", { todo: b.todo, archived: "true" }, { dry: true })).status, "done");
+  assert.ok(ids().includes(b.run));
+  assert.equal((await engine.runFlow("work.archive", { todo: b.todo, archived: "true" })).status, "done");
+  assert.ok(!ids().includes(b.run), "archived: out of the list");
+  assert.ok(sessionTickets({ archived: true }).flatMap((t) => t.sessions).some((s) => s.id === b.run && s.archived), "…and back with the archived ones");
+  assert.equal((await engine.runFlow("work.archive", { todo: b.todo, archived: "false" })).status, "done");
+  assert.ok(ids().includes(b.run));
+  // A working (queued) session is not deleted; stopping it takes it out of the queue.
+  assert.equal((await engine.runFlow("work.delete", { todo: c.todo })).status, "failed");
+  assert.equal((await engine.runFlow("work.stop", { run: c.run })).status, "done");
+  assert.equal((await engine.runFlow("work.delete", { todo: c.todo })).status, "done");
+  assert.ok(!ids().includes(c.run));
+  assert.equal((await engine.runFlow("work.delete", { todo: a.todo })).status, "done");
+  assert.ok(!ids().includes(a.run));
+});
+
+test("the screen's template draws without an error: new, a session (idle and asking), a ticket, an empty list", { skip }, async () => {
+  const { call, b } = await world();
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work.html"), "utf8");
+  const draw = (x: unknown, state: Record<string, string>) =>
+    renderView(template, { rows: [], props: [], titleName: "Code", state: { ...state }, app: {}, data: { x, started: { runId: 1 } }, db: { id: 1, title: "Code" } } as never);
+  assert.deepEqual(draw(await call("work.screen", {}), { sel: "" }).errors, []);
+  assert.deepEqual(draw(await call("work.screen", { sel: `run:${b.run}` }), { sel: `run:${b.run}` }).errors, []);
+  assert.deepEqual(draw(await call("work.screen", { sel: "ticket:PROJ-2" }), { sel: "ticket:PROJ-2" }).errors, []);
+  assert.deepEqual(draw(await call("work.screen", { sel: "run:99999" }), { sel: "run:99999" }).errors, []);
+  assert.deepEqual(draw(await call("work.screen", { q: "nothing-matches-this" }), { q: "nothing-matches-this" }).errors, []);
+  // A live session asking: a permission, a plan, a question — shaped as the lambda gives them.
+  const asking = {
+    mode: "session",
+    groups: [],
+    total: 0,
+    archivedCount: 0,
+    running: 1,
+    labels: { nothing: "", newTitle: "", newHint: "", showArchived: "" },
+    session: {
+      found: true,
+      runId: 7,
+      title: "T",
+      statusText: "waits for your answer",
+      active: true,
+      status: "running",
+      tone: "plain",
+      elevated: false,
+      ticket: "ABC-1",
+      todoRef: "T-1",
+      todoId: 1,
+      cost: "$0.10",
+      side: [{ todoId: 2, ref: "T-2", text: "side", active: true }],
+      turns: [{ runId: 7, ref: "W-7", ask: "do it", cut: "3 earlier lines are cut.", lines: [{ i: 0, k: "say", text: "hi", answer: "", bad: false, diff: "" }, { i: 1, k: "tool", text: "Edit  a.ts", answer: "", bad: false, diff: "- a\n+ b" }, { i: 2, k: "out", text: "bad", answer: "", bad: true, diff: "" }, { i: 3, k: "ask", text: "ok?", answer: "yes", bad: false, diff: "" }] }],
+      kind: "session",
+      busy: true,
+      queuedLabel: "1 message(s) wait their turn.",
+      modes: [{ id: "default", label: "Ask", hint: "asks" }],
+      asks: [
+        { requestId: "r1", tool: "Bash", plan: false, question: false, title: "It wants to use Bash", description: "", detail: "npm test", planText: "", always: true, questions: [], oneQuestion: false, bypass: false },
+        { requestId: "r2", tool: "ExitPlanMode", plan: true, question: false, title: "Its plan — go ahead?", description: "", detail: "", planText: "# Plan", always: false, questions: [], oneQuestion: false, bypass: true },
+        { requestId: "r3", tool: "AskUserQuestion", plan: false, question: true, title: "It asks you", description: "", detail: "", planText: "", always: false, questions: [{ question: "Which?", header: "", options: [{ requestId: "r3", label: "A", description: "", json: '{"Which?":"A"}' }] }], oneQuestion: true, bypass: false },
+      ],
+      permission: null,
+      canReplyLive: true,
+      error: "",
+      placeholder: "Reply …",
+    },
+  };
+  assert.deepEqual(draw(asking, { sel: "run:7" }).errors, []);
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("work-ext"), "work.package.json"), "utf8")) as { items: { schema?: { views: { template: string }[] } }[] };
+  assert.equal(pkg.items.find((i) => i.schema)?.schema?.views[0].template, template);
+});

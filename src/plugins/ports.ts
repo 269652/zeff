@@ -41,6 +41,8 @@ export const PORTS: Port[] = [
   { builtin: "knowledge", plugin: "knowledge-ext", switch: async () => (await import("./knowledge/to-plugin")).switchKnowledgeToPlugin() },
   // (People: only its AI steps — the extraction, the overviews, placing contacts, matching names — are the port's; the people, their screens and widgets stay Zeff's, so the built-in stays on)
   { builtin: "people", plugin: "people-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true }) },
+  // (Code: only the screens are the port's so far — the built-in Code tab stays on beside them until the port is 1:1; the engine stays the kernel's)
+  { builtin: "work", plugin: "work-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("work", { port: "work-ext", flow: "work.start", minutes: async () => 0, keepBuiltin: true }) },
   { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
 ];
 

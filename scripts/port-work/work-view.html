@@ -1,0 +1,171 @@
+<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/>
+<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}" every=2 debounce="300"/>
+<on event="work-changed" action="reload"/>
+<on event="work-started" action="state" state="sel" value="run:{{ data.started.runId }}"/>
+<on event="work-gone" action="state" state="sel" value=""/>
+<on event="send-live" run="work.live" with="run={{ data.x.session.runId }}, do=send, text={{ state.msg }}" then="msg=" emit="work-changed"/>
+<on event="send-msg" run="work.send" with="run={{ data.x.session.runId }}, text={{ state.msg }}" then="msg=" emit="work-changed"/>
+{{#if not data.x}}<muted>Loading …</muted>{{#else}}
+<row gap=3 wrap=false align=start>
+<col width=300 gap=2>
+<row gap=2 align=center>
+<button action="state" state="sel" value="" label="+ New" variant="{{ state.sel == '' ? 'primary' : 'plain' }}" tip="New session"/>
+<grow/>
+<input bind="q" placeholder="Search sessions…"/>
+</row>
+<row gap=2 align=center><small><muted>Sort</muted></small><tabs bind="sort" options="newest:Newest, priority:Priority, ticket:Ticket, alpha:A–Z"/></row>
+<col gap=1 scroll=75>
+{{#each data.x.groups}}
+<section title="{{ heading }}{{ ticket }}" aside="{{ n }}" collapsible=true open=true>
+{{#if ticketKey}}<button action="state" state="sel" value="ticket:{{ ticketKey }}" label="{{ ticket }} {{ summary }}" variant=quiet tip="{{ summary }}"/>{{/if}}
+{{#each rows}}
+<row gap=1 align=center>
+<button action="state" state="sel" value="run:{{ id }}" label="{{ dot }} {{ title }}{{ ticket ? '  ' + ticket : '' }}" variant="{{ selected ? 'primary' : 'quiet' }}" tip="{{ tip }}"/>
+<grow/>
+<small><muted>{{ ago }}</muted></small>
+<menu label="⋯" tip="Session menu">
+<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=plain/>
+<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=danger disabled="{{ active }}"/>
+</menu>
+</row>
+{{/each}}
+</section>
+{{/each}}
+{{#if not data.x.total}}<small><muted>{{ data.x.labels.nothing }}</muted></small>{{/if}}
+</col>
+<row gap=2 align=center>
+<a href="/settings/time#work">Code settings</a>
+<grow/>
+{{#if data.x.archivedCount}}<toggle bind="archived" label="{{ data.x.labels.showArchived }}"/>{{/if}}
+</row>
+</col>
+<col fill=true gap=3>
+{{#if data.x.mode == 'new'}}
+<col gap=3 align=center>
+<heading level=1>{{ data.x.labels.newTitle }}</heading>
+<muted>{{ data.x.labels.newHint }}</muted>
+<input bind="newticket" placeholder="Ticket (optional, like ABC-123)"/>
+<input bind="newmsg" rows=4 placeholder="What should the worker do?"/>
+<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ state.newticket }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+</col>
+{{/if}}
+{{#if data.x.mode == 'ticket'}}
+<col gap=3>
+<heading level=2>{{ data.x.ticketPage.title }}</heading>
+{{#if data.x.ticketPage.url}}<a href="{{ data.x.ticketPage.url }}">open ↗</a>{{/if}}
+{{#if data.x.ticketPage.summary}}<text>{{ data.x.ticketPage.summary }}</text>{{/if}}
+{{#if data.x.ticketPage.facts}}<small><muted>{{ data.x.ticketPage.facts }}</muted></small>{{/if}}
+<b>{{ data.x.ticketPage.sessionsLabel }}</b>
+{{#each data.x.ticketPage.sessions}}
+<row gap=3 align=center>
+<mono>{{ ref }}</mono>
+<button action="state" state="sel" value="run:{{ id }}" label="{{ title }}" variant=quiet/>
+<grow/>
+<small>{{ status }}</small><small><muted>{{ at }}</muted></small>
+</row>
+{{/each}}
+<input bind="newmsg" rows=3 placeholder="New session — what should we work on?"/>
+<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ data.x.ticketPage.ticket }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+</col>
+{{/if}}
+{{#if data.x.mode == 'session'}}
+{{#if not data.x.session.found}}<text tone=warn>{{ data.x.session.error }}</text>{{#else}}
+<col gap=2>
+<row gap=3 align=center>
+<col fill=true gap=1>
+<heading level=2>{{ data.x.session.title }}</heading>
+<row gap=2 wrap=true align=center>
+<text tone="{{ data.x.session.tone }}"><b>{{ data.x.session.active ? '● ' : '' }}{{ data.x.session.statusText }}</b></text>
+{{#if data.x.session.elevated}}<text tone=bad><b>{{ data.x.session.elevatedLabel }}</b></text>{{/if}}
+{{#if data.x.session.ticket}}<button action="state" state="sel" value="ticket:{{ data.x.session.ticket }}" label="{{ data.x.session.ticket }}" variant=link/>{{#else}}<small><muted>{{ data.x.session.noTicket }}</muted></small>{{/if}}
+{{#if data.x.session.cardSummary}}<small><muted>{{ data.x.session.cardSummary }}</muted></small>{{/if}}
+{{#if data.x.session.branch}}<small><mono>⎇ {{ data.x.session.branch }}</mono></small>{{/if}}
+{{#if data.x.session.todoRef}}<a href="/t/{{ data.x.session.todoId }}">{{ data.x.session.todoRef }}</a>{{/if}}
+{{#if data.x.session.cost}}<small><muted>{{ data.x.session.cost }}</muted></small>{{/if}}
+</row>
+{{#if data.x.session.side}}<row gap=2 wrap=true>{{#each data.x.session.side}}<a href="/t/{{ todoId }}">{{ active ? '● ' : '' }}{{ ref }} {{ text }}</a>{{/each}}</row>{{/if}}
+</col>
+<a href="/api/work/{{ data.x.session.runId }}/prompt">Prompt</a>
+{{#if data.x.session.active}}<button run="work.stop" with="run={{ data.x.session.runId }}" emit="work-changed" label="⏹ Stop" variant=danger/>{{/if}}
+</row>
+<col gap=2 scroll=65 end=true>
+{{#each data.x.session.turns}}
+{{#if ask}}<box tone=muted><b>You</b><text pre=true>{{ ask }}</text></box>{{/if}}
+{{#if cut}}<small><muted>{{ cut }}</muted></small>{{/if}}
+{{#each lines}}
+{{#if k == 'say'}}<markdown value="{{ text }}"/>{{/if}}
+{{#if k == 'you'}}<box tone=muted><b>You</b><text pre=true>{{ text }}</text></box>{{/if}}
+{{#if k == 'tool'}}<small><mono>▸ {{ text }}</mono></small>{{#if diff}}<text pre=true tone=muted>{{ diff }}</text>{{/if}}{{/if}}
+{{#if k == 'out'}}<small><text pre=true tone="{{ bad ? 'bad' : 'muted' }}">{{ text }}</text></small>{{/if}}
+{{#if k == 'ask'}}<small><text tone="{{ bad ? 'bad' : 'warn' }}">? {{ text }}{{#if answer}} → {{ answer }}{{/if}}</text></small>{{/if}}
+{{#if k == 'shell'}}<small><text pre=true tone="{{ bad ? 'bad' : 'muted' }}">{{ text }}</text></small>{{/if}}
+{{#if k == 'note'}}<small><muted>{{ text }}</muted></small>{{/if}}
+{{#if k == 'deny'}}<small><text tone=bad>⛔ {{ text }}</text></small>{{/if}}
+{{#if k == 'end'}}<small><text tone="{{ bad ? 'bad' : 'good' }}">■ {{ text }}</text></small>{{/if}}
+{{#if k == 'raw'}}<small><text pre=true tone=muted>{{ text }}</text></small>{{/if}}
+{{#if k == 'start'}}<small><muted>{{ text }}</muted></small>{{/if}}
+{{/each}}
+{{/each}}
+{{#if data.x.session.error}}<text tone=bad>{{ data.x.session.error }}</text>{{/if}}
+</col>
+{{#each data.x.session.asks}}
+<box tone=warn title="{{ title }}">
+{{#if description}}<text>{{ description }}</text>{{/if}}
+{{#if detail}}<text pre=true>{{ detail }}</text>{{/if}}
+{{#if plan}}
+<markdown value="{{ planText }}"/>
+<row gap=2 wrap=true>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=acceptEdits" emit="work-changed" label="Yes, and accept its edits" variant=primary/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=auto" emit="work-changed" label="Yes, auto mode"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=default" emit="work-changed" label="Yes, ask for each step"/>
+{{#if bypass}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, then=bypassPermissions" emit="work-changed" label="Yes, without any checks" variant=danger/>{{/if}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, message=Not like this — keep planning." emit="work-changed" label="No, keep planning"/>
+</row>
+{{/if}}
+{{#if question}}
+{{#each questions}}
+<b>{{ question }}</b>
+<row gap=2 wrap=true>{{#each options}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, answers={{ json }}" emit="work-changed" label="{{ label }}" tip="{{ description }}"/>{{/each}}</row>
+{{/each}}
+{{#if not oneQuestion}}<small><muted>Several questions at once: answer them in the built-in Code tab.</muted></small>{{/if}}
+{{/if}}
+{{#if not plan}}{{#if not question}}
+<row gap=2 wrap=true>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow" emit="work-changed" label="Allow" variant=primary/>
+{{#if always}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=allow, always=true" emit="work-changed" label="Allow always"/>{{/if}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny" emit="work-changed" label="Deny"/>
+<button run="work.live" with="run={{ data.x.session.runId }}, do=answer, requestId={{ requestId }}, behavior=deny, interrupt=true" emit="work-changed" label="Deny and stop"/>
+</row>
+{{/if}}{{/if}}
+</box>
+{{/each}}
+{{#if data.x.session.permission}}
+<box tone=warn title="{{ data.x.session.permission.title }}">
+{{#if data.x.session.permission.detail}}<text pre=true>{{ data.x.session.permission.detail }}</text>{{/if}}
+<row gap=2 wrap=true>{{#each data.x.session.permission.options}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer-option, option={{ id }}" emit="work-changed" label="{{ name }}"/>{{/each}}</row>
+</box>
+{{/if}}
+{{#if data.x.session.modes}}
+<row gap=2 wrap=true align=center>
+<small><muted>Mode</muted></small>
+{{#each data.x.session.modes}}<button run="work.live" with="run={{ data.x.session.runId }}, do=mode, mode={{ id }}" emit="work-changed" label="{{ label }}" tip="{{ hint }}" variant=quiet/>{{/each}}
+</row>
+{{/if}}
+{{#if data.x.session.queuedLabel}}<small><muted>{{ data.x.session.queuedLabel }}</muted></small>{{/if}}
+<col dock=bottom gap=1>
+<input bind="msg" rows=3 placeholder="{{ data.x.session.placeholder }}" enter="{{ data.x.session.canReplyLive ? 'send-live' : 'send-msg' }}"/>
+<row gap=2 align=center>
+{{#if data.x.session.canReplyLive}}
+<button run="work.live" with="run={{ data.x.session.runId }}, do=send, text={{ state.msg }}" then="msg=" emit="work-changed" label="Send" variant=primary disabled="{{ not state.msg }}"/>
+{{#if data.x.session.busy}}<button run="work.live" with="run={{ data.x.session.runId }}, do=interrupt" emit="work-changed" label="Interrupt"/>{{/if}}
+{{#else}}
+<button run="work.send" with="run={{ data.x.session.runId }}, text={{ state.msg }}" then="msg=" emit="work-changed" label="Send" variant=primary disabled="{{ not state.msg }}"/>
+{{/if}}
+</row>
+</col>
+</col>
+{{/if}}
+{{/if}}
+</col>
+</row>
+{{/if}}
