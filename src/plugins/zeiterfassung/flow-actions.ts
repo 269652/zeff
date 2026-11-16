@@ -215,6 +215,46 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "time.day",
+    group: "time",
+    label: "The day (or the week) drafted for booking",
+    summary: "End of day: the day's finished meetings not booked yet, the agents' open suggestions and the tickets worked on, as lines to take over (input date: an earlier day, default today; week: a week key or \"current\" for the whole week, day by day). Each line names the view states its edits live in (kh hours, kj job, kd words, ki ticked, ks separate).",
+    input: [f("date", "text"), f("week", "text")],
+    output: "{ mode, title, intro, days: [{ date, head, sub, rows: [{ k, kh, kj, kd, ki, ks, kind, include, hours, description, from, jobOptions … }] }] }",
+    run: async (i) => {
+      const { dayScreen } = await import("./day-data");
+      return dayScreen({ date: text(i.date), week: text(i.week) });
+    },
+  },
+  {
+    name: "time.day-book",
+    group: "time",
+    label: "Book the day as the lines stand",
+    summary: "Books a day's lines as you took them over (input date; state: the view's state as JSON — the lines' edits by their names, a line without an edit as proposed): meetings as calendar entries (each once), suggestions accepted, tickets as entries, parallel work grouped. Output { message, created } — created can be taken back with time.day-undo; a line that fails is named in the error.",
+    input: [f("date", "date", { required: true }), f("state", "text")],
+    output: "{ ok, message, created }",
+    writes: true,
+    run: async (i) => {
+      const { bookFromState } = await import("./day-data");
+      const raw = text(i.state).trim();
+      const r = await bookFromState(text(i.date), raw ? (JSON.parse(raw) as Record<string, unknown>) : {});
+      return { ok: true, message: r.message, created: JSON.stringify(r.created) };
+    },
+  },
+  {
+    name: "time.day-undo",
+    group: "time",
+    label: "Take a day's booking back",
+    summary: "Deletes the entries a time.day-book created (input created: its answer), only those still as booked. Output { ok, message }.",
+    input: [f("created", "text", { required: true })],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { undoFromText } = await import("./day-data");
+      return { ok: true, ...(await undoFromText(text(i.created))) };
+    },
+  },
+  {
     name: "time.entry-add",
     group: "time",
     label: "Book time",

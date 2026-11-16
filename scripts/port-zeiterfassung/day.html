@@ -1,0 +1,46 @@
+<data name="f" lambda="zeiterfassung.day" with="date={{ state.fdate }}, week={{ state.fweek }}" when="{{ state.view == 'day' }}"/>
+<on event="day-changed" action="reload"/>
+{{#if data.f}}
+<col gap=3>
+  {{#if data.fbooked.fbooked.message}}
+  <callout tone=good>
+    <row gap=2 align=center justify=between wrap=true>
+      <text>{{ data.fbooked.fbooked.message }}</text>
+      {{#if data.fbooked.fbooked.created}}<button run="zeiterfassung.day-undo" with="created={{ data.fbooked.fbooked.created }}" into="fundone" emit="day-changed" done="Taken back." label="Undo" variant=plain/>{{/if}}
+    </row>
+  </callout>
+  {{/if}}
+  <row gap=2 align=center wrap=true justify=between>
+    <col><heading level=2>{{ data.f.title }}</heading><small><muted>{{ data.f.intro }}</muted></small></col>
+    <row gap=2>
+      {{#if data.f.mode == 'week'}}<button action="state" state="fweek" value="" label="End of day" variant=plain/>{{#else}}<button action="state" state="fweek" value="current" label="The whole week →" variant=plain/>{{/if}}
+    </row>
+  </row>
+  {{#each data.f.days}}
+  <section title="{{ head }}" aside="{{ sub }}">
+    {{#if lines}}
+    <col gap=2>
+      {{#each lines}}
+      <let name="inc" value="state | get(ki) | default(include)"/>
+      <box tone="{{ inc == '1' ? 'plain' : 'muted' }}">
+        <row gap=2 align=center wrap=true>
+          <button action="state" state="{{ ki }}" value="{{ inc == '1' ? '0' : '1' }}" label="{{ inc == '1' ? '☑' : '☐' }}" tip="Book {{ description }}" variant=quiet/>
+          <small><muted>{{ kindLabel }}</muted></small>
+          <input bind="{{ kh }}" type=number label="Hours" value="{{ hours }}" placeholder="h"/>
+          {{#if kind == 'suggestion'}}<small><muted>{{ jobText }}</muted></small>{{#else}}<select bind="{{ kj }}" options="{{ jobOptions | tojson }}" label="Job"/>{{/if}}
+          <input bind="{{ kd }}" label="Description" value="{{ description }}"/>
+        </row>
+        <row gap=3 wrap=true align=center>
+          <small><muted>{{#if ticket}}{{ ticket }} · {{/if}}{{ from }}</muted></small>
+          {{#if isGroup}}<small>Group: the day's work goes under it</small>{{/if}}
+          {{#if itemize}}<let name="sep" value="state | get(ks) | default(standalone)"/><button action="state" state="{{ ks }}" value="{{ sep == '1' ? '0' : '1' }}" label="{{ sep == '1' ? '☐' : '☑' }} {{ itemize }}" variant=quiet/>{{/if}}
+        </row>
+      </box>
+      {{/each}}
+      <row gap=2 justify=end><button run="zeiterfassung.day-book" with="date={{ date }}, state={{ state | tojson }}" into="fbooked" emit="day-changed" label="Book the ticked rows" variant=primary/></row>
+    </col>
+    {{#else}}<text tone=muted>{{ empty }}</text>{{/if}}
+  </section>
+  {{/each}}
+</col>
+{{#else}}<text tone=muted>…</text>{{/if}}

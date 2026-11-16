@@ -273,3 +273,54 @@ test("the port's analysis is the built-in's: the same totals, split by type, wee
     assert.deepEqual(r.errors, [], JSON.stringify(state));
   }
 });
+
+test("end of day: the day drafted as the built-in has it, booked as the lines stand in the view's state, taken back again", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { proposeDay } = await import("@/lib/feierabend");
+  const { suggestEntry } = await import("@/lib/work/suggestions");
+  const { listEntries } = await import("@/lib/entries");
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { todayIso } = await import("@/lib/week");
+  const today = todayIso();
+  suggestEntry({ date: today, hours: 2, description: "Agentenarbeit", jobNumber: "100001", ticket: "ABC-9" });
+  suggestEntry({ date: today, hours: 1, description: "Zweite Zeile", jobNumber: "100002" });
+  const builtin = await proposeDay();
+  const port = await run("zeiterfassung.day", {});
+  assert.equal(port.days.length, 1);
+  assert.deepEqual(port.days[0].lines.map((l: any) => [l.kind, l.description, l.hours]), builtin.rows.map((r) => [r.kind, r.description, r.hours ?? ""]));
+  assert.equal(port.days[0].target, String(builtin.target));
+  const lines = port.days[0].lines as any[];
+  const first = lines.find((l) => l.description === "Agentenarbeit");
+  const second = lines.find((l) => l.description === "Zweite Zeile");
+  const before = listEntries({ from: today, to: today }).length;
+  // the first line taken over with other hours and words, the second left out
+  const state = { [first.kh]: "3", [first.kd]: "Neu gesagt", [second.ki]: "0" };
+  const booked = await runFlow("zeiterfassung.day-book", { date: today, state: JSON.stringify(state) });
+  assert.equal(booked.status, "done", JSON.stringify(booked));
+  assert.match(String((booked.output as any).message), /1 booked \(3 h\)/);
+  const entries = listEntries({ from: today, to: today });
+  assert.equal(entries.length, before + 1);
+  const entry = entries.find((e) => e.description === "Neu gesagt")!;
+  assert.equal(entry.hours, 3);
+  assert.equal(entries.some((e) => e.description === "Zweite Zeile"), false, "the line left out is not booked");
+  const created = (await run("zeiterfassung.day", {})).days[0].lines.length;
+  assert.equal(created, lines.length - 1, "the booked suggestion is no line any more");
+  // taking it back: from what the booking said it created
+  const stamps = JSON.stringify([{ id: entry.id, updatedAt: entry.updatedAt }]);
+  const undone = await runFlow("zeiterfassung.day-undo", { created: stamps });
+  assert.equal(undone.status, "done");
+  assert.match(String((undone.output as any).message), /1 taken back/);
+  assert.equal(listEntries({ from: today, to: today }).length, before);
+  const none2 = await runFlow("zeiterfassung.day-book", { date: today, state: JSON.stringify({ [second.ki]: "0", [first.ki]: "0" }) });
+  assert.equal(none2.status, "failed", "nothing ticked");
+  assert.match(String(none2.error), /Nothing ticked to book/);
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const f = await run("zeiterfassung.day", { week: "current" });
+  const d = renderView(template, { rows: [], props: [], titleName: "Name", state: { view: "day", [second.ki]: "1" }, app: {}, data: { f }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  assert.deepEqual(d.errors, []);
+  assert.match(JSON.stringify(d.nodes), /zeiterfassung\.day-book/);
+});

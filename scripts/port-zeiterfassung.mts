@@ -25,6 +25,7 @@ fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; timeoutMs: number }> = {
   "zeiterfassung.jobs": { label: "Time tracking: jobs and projects", what: "The jobs and the projects as the Jobs and Projects pages list them, with the job options of a form.", zeff: ["time.jobs"], timeoutMs: 30000 },
   "zeiterfassung.schedule": { label: "Time tracking: the schedule settings", what: "The weekly hours, the default break, the flex-time job and the absences with their words.", zeff: ["time.schedule"], timeoutMs: 30000 },
+  "zeiterfassung.day": { label: "Time tracking: end of day", what: "The day or the week drafted for booking: the meetings, the agents' suggestions and the tickets worked on, each line to take over.", zeff: ["time.day"], timeoutMs: 120000 },
   "zeiterfassung.analysis": { label: "Time tracking: the analysis", what: "The analysis of the booked time — the cards, the split by type, hours by job, the weeks, the Jira metrics where tickets are synced, tags and top tickets.", zeff: ["time.analysis"], timeoutMs: 60000 },
   "zeiterfassung.week": { label: "Time tracking: the week's report", what: "The weekly report's figures and words for a week — the booked card, hours per job and day, the closing steps, the suggestions, what was done today, the report, the entries.", zeff: ["time.week"], timeoutMs: 60000 },
   "zeiterfassung.month": { label: "Time tracking: the month's report", what: "The monthly report's figures and words for a month — the booked card, the calendar, hours per job and week, by type and tag, what each job's time went to.", zeff: ["time.month"], timeoutMs: 60000 },
@@ -34,22 +35,16 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
   write(`lambdas/${name}/lambda.json`, JSON.stringify({ name, label: l.label, what: l.what, kind: "function", zeff: l.zeff, timeoutMs: l.timeoutMs, memoryMb: 256 }, null, 2) + "\n");
 }
 
+const TABS = ["month", "analysis", "day", "jobs", "settings"];
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
   '<state name="view" value="week" keep=true/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
-  '<tabs bind="view" options="week:Week, month:Month, analysis:Analysis, jobs:Jobs, settings:Settings"/>',
-  "{{#if state.view == 'month'}}",
-  part("month.html"),
-  "{{#else}}{{#if state.view == 'analysis'}}",
-  part("analysis.html"),
-  "{{#else}}{{#if state.view == 'jobs'}}",
-  part("jobs.html"),
-  "{{#else}}{{#if state.view == 'settings'}}",
-  part("settings.html"),
-  "{{#else}}",
+  '<tabs bind="view" options="week:Week, month:Month, analysis:Analysis, day:End of day, jobs:Jobs, settings:Settings"/>',
+  // one branch per tab, the week the one left over
+  ...TABS.flatMap((tab) => [`{{#if state.view == '${tab}'}}`, part(`${tab}.html`), "{{#else}}"]),
   part("week.html"),
-  "{{/if}}{{/if}}{{/if}}{{/if}}",
+  ...TABS.map(() => "{{/if}}"),
 ].join("\n");
 write("views/report.html", report);
 
@@ -76,6 +71,8 @@ const flow = (id: string, name: string, title: string, description: string, acti
 });
 const i = (...names: string[]) => Object.fromEntries(names.map((n) => [n, `{{ input.${n} }}`]));
 const FLOWS = [
+  flow("f11", "zeiterfassung.day-book", "Book the day", "The day's lines booked as you took them over (input date, state: the view's state as JSON). Run by the End of day tab.", "time.day-book", i("date", "state")),
+  flow("f12", "zeiterfassung.day-undo", "Take the day's booking back", "Takes back what a booking of the day created, as far as it is still as booked (input created). Run by the End of day tab.", "time.day-undo", i("created")),
   flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment")),
   flow("f9", "zeiterfassung.flex-book", "Book the missing hours on the flex-time job", "The missing hours of the given days (input dates) booked on the flex-time job. Run by the report.", "time.flex-book", i("dates")),
   flow("f10", "zeiterfassung.absence", "Add or delete an absence", "An absence added (startDate, endDate, type, hours, note, repeatUntil) or deleted (input delete: its id). Run by the Settings tab.", "time.absence", i("delete", "startDate", "endDate", "type", "hours", "note", "repeatUntil")),
