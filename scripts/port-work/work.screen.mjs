@@ -4,7 +4,7 @@ import { groupSessions, priorityOf, stamp, tFor } from "./lib.mjs";
  * What the Code screen shows (views/work.html reads it as data.x): the session list (grouped and sorted like the built-in's sidebar), and — by what is picked —
  * a session's conversation, a ticket's page or the new-session page. The kernel's reads work.session-list and work.session-open do the looking (the engine's own);
  * this shapes it for the view language: every line already a row of text, every ask already its buttons.
- * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail }
+ * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail, cprov, cmode, cmodel, ceffort, crepo, cws }
  */
 const DOT = { running: "🔵", queued: "⚪", done: "🟢", failed: "🔴", cancelled: "⚪", interrupted: "🟠" };
 
@@ -66,6 +66,47 @@ export async function handler(event, context) {
       showArchived: t("Show archived ({n})", { n: list.archivedCount }),
     },
   };
+
+  // ── the message box's options (the new-session page, a ticket's page): provider, mode, model, effort, repo, where it works
+  if (!run) {
+    const c = await zeff.call("work.composer", { tickets: ticketArg ?? "" });
+    const prov = c.providers.some((p) => p.id === event?.cprov) ? String(event.cprov) : c.defaultProvider;
+    const ch = c.choices[prov];
+    const pick = (list, want, def) => (list.some((x) => x.id === want) ? want : def);
+    const mode = ch ? pick(ch.modes, event?.cmode, ch.defaultMode) : "";
+    const model = ch && ch.models.some((m) => m.value === event?.cmodel) ? String(event.cmodel) : "";
+    const efforts = ["", "low", "medium", "high", "xhigh", "max"].filter((e) => {
+      const m = ch?.models.find((x) => x.value === model);
+      return e === "" || !m?.efforts || m.efforts.includes(e);
+    });
+    const effort = efforts.includes(String(event?.ceffort ?? "")) && event?.ceffort ? String(event.ceffort) : ch?.defaultEffort ?? "";
+    const inferred = ticketArg ? (c.ticketRepos[ticketArg] ?? "") : "";
+    const repo = c.repos.some((r) => r.path === event?.crepo) ? String(event.crepo) : inferred;
+    const ws = ["worktree", "branch", "checkout"].includes(String(event?.cws)) ? String(event.cws) : "";
+    out.composer = {
+      provider: prov,
+      live: !!ch,
+      providers: c.providers.map((p) => ({ id: p.id, label: p.label, sel: p.id === prov })),
+      modes: (ch?.modes ?? []).map((m) => ({ id: m.id, label: t(m.label), hint: t(m.hint), sel: m.id === mode })),
+      mode,
+      models: (ch?.models ?? []).map((m) => ({ value: m.value, label: m.label || t("Default (the CLI's)"), sel: m.value === model })),
+      model,
+      showEffort: !!ch?.effort,
+      efforts: efforts.map((e) => ({ value: e, label: e || t("The model's default"), sel: e === effort })),
+      effort,
+      admin: !!ch?.admin,
+      repos: [{ path: "", name: inferred ? t("As Zeff infers it") : t("None"), sel: !repo }, ...c.repos.map((r) => ({ path: r.path, name: r.name, sel: r.path === repo }))],
+      repo,
+      workspaces: [
+        { id: "", label: t("As set in the Code settings"), sel: !ws },
+        { id: "worktree", label: t("A worktree of its own"), sel: ws === "worktree" },
+        { id: "branch", label: t("A branch"), sel: ws === "branch" },
+        { id: "checkout", label: t("In the checkout"), sel: ws === "checkout" },
+      ],
+      workspace: ws,
+      labels: { options: t("Options"), provider: t("Backend"), mode: t("Mode"), model: t("Model"), effort: t("Effort"), repo: t("Repo"), where: t("Where it works"), branch: t("Branch (optional)") },
+    };
+  }
 
   // ── a ticket's page
   if (!run && ticketArg !== undefined) {

@@ -25,7 +25,7 @@ fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 // The texts of the screen's data in the languages the packs have: every t("…") of the lambda.
 const KEYS: string[] = [];
-for (const m of ["work.screen.mjs", "work.panes.mjs"].map((f) => fs.readFileSync(path.join(SRC, f), "utf8")).join(" ").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
+for (const m of ["work.screen.mjs", "work.panes.mjs", "work.settings.mjs"].map((f) => fs.readFileSync(path.join(SRC, f), "utf8")).join(" ").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
   const k = JSON.parse('"' + m[1] + '"');
   if (!KEYS.includes(k)) KEYS.push(k);
 }
@@ -41,7 +41,8 @@ const lib = await build({
 const STRINGS = ${JSON.stringify(strings)};
 setPluginStrings((lang) => STRINGS[lang] ?? {});
 export const tFor = (lang) => translator(isLang(lang) ? lang : "en");
-export { groupSessions, priorityOf, stamp } from "@/components/work/session-groups";`,
+export { groupSessions, priorityOf, stamp } from "@/components/work/session-groups";
+export { modeText } from "@/components/work/mode-text";`,
     resolveDir: ROOT,
     loader: "ts",
     sourcefile: "work-port.ts",
@@ -60,7 +61,13 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "work.screen": {
     label: "Code: what the screen shows",
     what: "The sessions list (grouped and sorted), and by what is picked a session's conversation with its asks, a ticket's page or the new-session page — shaped from the engine's reads.",
-    zeff: ["work.session-list", "work.session-open"],
+    zeff: ["work.session-list", "work.session-open", "work.composer"],
+    timeoutMs: 30000,
+  },
+  "work.settings": {
+    label: "Code: the settings",
+    what: "The workers' and live sessions' settings and the repos, as the settings screen shows them.",
+    zeff: ["work.settings"],
     timeoutMs: 30000,
   },
   "work.panes": {
@@ -99,6 +106,7 @@ const flow = (id: string, name: string, title: string, description: string, acti
 });
 
 const template = fs.readFileSync(path.join(SRC, "work-view.html"), "utf8");
+const settingsTemplate = fs.readFileSync(path.join(SRC, "work-settings-view.html"), "utf8");
 write(
   "work.package.json",
   JSON.stringify(
@@ -124,7 +132,7 @@ write(
           },
           rows: [{ id: "r1", title: "Code", cells: {}, content: { type: "doc", content: [{ type: "paragraph" }] } }],
         },
-        flow("i3", "work.start", "Start a session", "A new session (a new todo and a worker on it): input instruction, ticket, repoId, provider. Output { runId }.", "work.session-start", { instruction: "{{ input.instruction }}", ticket: "{{ input.ticket }}", repoId: "{{ input.repoId }}", provider: "{{ input.provider }}" }),
+        flow("i3", "work.start", "Start a session", "A new session (a new todo and a worker on it): input instruction, ticket, repoId, provider, repoPath, branch, workspace, mode, model, effort, elevated. Output { runId }.", "work.session-start", { instruction: "{{ input.instruction }}", ticket: "{{ input.ticket }}", repoId: "{{ input.repoId }}", provider: "{{ input.provider }}", repoPath: "{{ input.repoPath }}", branch: "{{ input.branch }}", workspace: "{{ input.workspace }}", mode: "{{ input.mode }}", model: "{{ input.model }}", effort: "{{ input.effort }}", elevated: "{{ input.elevated }}" }),
         flow("i4", "work.send", "Send a message into a session", "Your next message in a session's conversation (input run, text). Output { runId }.", "work.session-send", { run: "{{ input.run }}", text: "{{ input.text }}" }),
         flow("i5", "work.live", "Do something in a live session", "Send, answer an ask, interrupt, switch the mode (input run, do, text, requestId, behavior, always, message, interrupt, then, answers, mode, option).", "work.session-live", {
           run: "{{ input.run }}",
@@ -140,6 +148,23 @@ write(
           mode: "{{ input.mode }}",
           option: "{{ input.option }}",
         }),
+        {
+          id: "i10",
+          parent: "i1",
+          kind: "database",
+          title: "Code settings",
+          icon: "⚙️",
+          schema: {
+            titleName: "Code settings",
+            properties: [],
+            views: [{ id: "vwork2", name: "Code settings", type: "app", filter: { op: "and", rules: [] }, sorts: [], hidden: [], app: "template", template: settingsTemplate }],
+          },
+          rows: [{ id: "r2", title: "Code settings", cells: {}, content: { type: "doc", content: [{ type: "paragraph" }] } }],
+        },
+        flow("i11", "work.setting", "Change a Code setting", "One setting changed (input scope: work | claude, field, value). Output { message }.", "work.settings-save", { scope: "{{ input.scope }}", field: "{{ input.field }}", value: "{{ input.value }}" }),
+        flow("i12", "work.repo-save", "Add or change a repo", "A repo for workers (input id, name, path, gitlabProject, boards, tickets, instructions, delivery).", "work.repo-save", { id: "{{ input.id }}", name: "{{ input.name }}", path: "{{ input.path }}", gitlabProject: "{{ input.gitlabProject }}", boards: "{{ input.boards }}", tickets: "{{ input.tickets }}", instructions: "{{ input.instructions }}", delivery: "{{ input.delivery }}" }),
+        flow("i13", "work.repo-delivery", "How a repo's work is delivered", "A repo's delivery only: mr | direct (input id, delivery).", "work.repo-save", { id: "{{ input.id }}", part: "delivery", delivery: "{{ input.delivery }}" }),
+        flow("i14", "work.repo-delete", "Remove a repo", "A repo off the list; its folder is not touched (input id).", "work.repo-delete", { id: "{{ input.id }}" }),
         flow("i9", "work.git", "Commit, push, merge request, dev servers", "In a session's folder: input run, do (commit | push | mr | proc-start | proc-stop), message, title, name. Output { message, url }.", "work.session-git", { run: "{{ input.run }}", do: "{{ input.do }}", message: "{{ input.message }}", title: "{{ input.title }}", name: "{{ input.name }}" }),
         flow("i6", "work.stop", "Stop a session's run", "A run stopped or taken out of the queue (input run).", "work.session-stop", { run: "{{ input.run }}" }),
         flow("i7", "work.archive", "Archive a session", "A session out of the list, or back (input todo, archived: true | false).", "work.session-archive", { todo: "{{ input.todo }}", archived: "{{ input.archived }}" }),
@@ -152,6 +177,7 @@ write(
 );
 
 write("views/work.html", template);
+write("views/work-settings.html", settingsTemplate);
 const old = fs.existsSync(path.join(dir, "zeff-plugin.json")) ? (JSON.parse(fs.readFileSync(path.join(dir, "zeff-plugin.json"), "utf8")) as { version?: string }) : {};
 write(
   "zeff-plugin.json",

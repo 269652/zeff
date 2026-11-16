@@ -190,11 +190,147 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "work.composer",
+    group: "work",
+    label: "What the message box offers",
+    summary: "The Code tab's message box: the installed backends (provider, whether live) with their modes, models, effort, administrator choice and defaults, the repos (id, name, path), and each ticket's repo as Zeff infers it.",
+    input: [f("tickets", "list", { help: "Tickets to infer a repo for." })],
+    output: "{ defaultProvider, providers: [{ id, label, live }], choices: { <provider>: { modes: [{ id, label, hint, tone }], defaultMode, models: [{ value, label }], effort, defaultEffort, admin } }, repos: [{ id, name, path }], ticketRepos: { <ticket>: path } }",
+    run: async (i) => {
+      need();
+      const { composerOptions } = await import("@/lib/work/composer-options");
+      const { listRepos, repoForTicket } = await import("@/lib/repos");
+      const c = await composerOptions();
+      const keys = (Array.isArray(i.tickets) ? i.tickets : String(i.tickets ?? "").split(",")).map((x) => String(x).trim().toUpperCase()).filter(Boolean).slice(0, 100);
+      const ticketRepos: Record<string, string> = {};
+      for (const k of keys) {
+        const m = repoForTicket(k);
+        if (m) ticketRepos[k] = m.repo.path;
+      }
+      return { ...c, repos: listRepos().map((r) => ({ id: r.id, name: r.name, path: r.path })), ticketRepos };
+    },
+  },
+  {
+    name: "work.settings",
+    group: "work",
+    label: "The Code settings",
+    summary:
+      "The workers' settings (how many at once, reserved pools, permission mode, Copilot mode, where code work happens, model, house rules, the copied instructions), the live Claude sessions' settings, the models of the chosen provider, the repos (with their folder state, boards, tickets, delivery) and the choices for them (GitLab projects, Jira boards), whether Admin sessions is installed.",
+    input: [],
+    output: "{ settings, claude, preferred, defaultModel, models, pools, repos, choices, limits: { maxParallel, maxReserved }, admin }",
+    run: async () => {
+      need();
+      const { workSettingsData } = await import("@/lib/work/view");
+      const { aiChoice } = await import("@/lib/ai");
+      const { claudeSessionSettings } = await import("@/lib/work/store");
+      const { MAX_PARALLEL, MAX_RESERVED } = await import("@/lib/work/slots");
+      const { listRepos, repoChoices } = await import("@/lib/repos");
+      const copilot = aiChoice().provider === "copilot" ? await (await import("@/plugins/copilot-cli/cli")).copilotModels() : [];
+      const d = workSettingsData(copilot);
+      return { settings: d.settings, claude: claudeSessionSettings(), preferred: d.preferred, defaultModel: d.defaultModel, models: d.models, pools: d.pools, repos: listRepos(), choices: repoChoices(), limits: { maxParallel: MAX_PARALLEL, maxReserved: MAX_RESERVED }, admin: isInstalled("work-elevated") };
+    },
+  },
+  {
+    name: "work.settings-save",
+    group: "work",
+    label: "Change a Code setting",
+    summary:
+      "One setting changed, the rest kept: scope = work (field: parallel | permissionMode | copilotMode | isolation | model | instructions | agentInstructionCode | agentInstructionOther | reserved:<source>) or claude (field: live | mode | autoMode | effort | allowBypass | askTimeoutMin); value as text (true/false for switches). Checked as the Settings page checks it. Needs the “api” permission.",
+    input: [f("scope", "text", { required: true }), f("field", "text", { required: true }), f("value", "text")],
+    output: "{ message }",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { getWorkSettings, claudeSessionSettings } = await import("@/lib/work/store");
+      const { saveWorkSettingsAction, saveClaudeSessionSettingsAction } = await import("./server-actions");
+      const field = String(i.field ?? "");
+      const value = String(i.value ?? "");
+      const fd = new FormData();
+      if (i.scope === "claude") {
+        const c = { ...claudeSessionSettings(), [field]: field === "live" || field === "allowBypass" ? bool(value) : field === "askTimeoutMin" ? Number(value) || 0 : value } as Record<string, unknown>;
+        for (const k of ["mode", "autoMode", "effort", "askTimeoutMin"]) fd.set(k, String(c[k] ?? ""));
+        if (c.live) fd.set("live", "on");
+        if (c.allowBypass) fd.set("allowBypass", "on");
+        const r = await saveClaudeSessionSettingsAction(null, fd);
+        if (!r?.ok) throw new Error(r?.error ?? t("Didn't work."));
+        return { message: r.message ?? t("Saved.") };
+      }
+      if (i.scope !== "work") throw new Error(t("Unknown action."));
+      const s = getWorkSettings();
+      const cur: Record<string, string> = { parallel: String(s.parallel), permissionMode: s.permissionMode, copilotMode: s.copilotMode, isolation: s.isolation, model: s.model, instructions: s.instructions, agentInstructionCode: s.agentInstructions.code, agentInstructionOther: s.agentInstructions.other };
+      for (const [src, n] of Object.entries(s.reserved)) cur[`reserved:${src}`] = String(n);
+      cur[field] = value;
+      for (const [k, v] of Object.entries(cur)) fd.set(k, v);
+      const r = await saveWorkSettingsAction(null, fd);
+      if (!r?.ok) throw new Error(r?.error ?? t("Didn't work."));
+      return { message: r.message ?? t("Saved.") };
+    },
+  },
+  {
+    name: "work.repo-save",
+    group: "work",
+    label: "Add or change a repo",
+    summary: "A repo for workers: new, or the one with id changed (part = delivery changes only the delivery). name, path, gitlabProject, boards (ids, comma separated), tickets (keys), instructions, delivery mr | direct. Needs the “api” permission.",
+    input: [f("id", "number"), f("part", "text"), f("name", "text"), f("path", "text"), f("gitlabProject", "text"), f("boards", "text"), f("tickets", "text"), f("instructions", "text"), f("delivery", "text")],
+    output: "{ message }",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { saveRepoAction } = await import("./server-actions");
+      const { listRepos } = await import("@/lib/repos");
+      const id = int(i.id);
+      const was = id ? listRepos().find((r) => r.id === id) : undefined;
+      if (id && !was) throw new Error(t("That repo isn't there any more."));
+      const fd = new FormData();
+      if (id) fd.set("id", String(id));
+      const delivery = String(i.delivery ?? "") === "direct" ? "direct" : String(i.delivery ?? "") === "mr" ? "mr" : (was?.delivery ?? "mr");
+      if (was && i.part === "delivery") {
+        fd.set("name", was.name);
+        fd.set("path", was.path);
+        fd.set("gitlabProject", was.gitlabProject ?? "");
+        for (const b of was.boards) fd.append("boards", String(b));
+        fd.set("tickets", was.tickets.join(","));
+        fd.set("instructions", was.instructions);
+      } else {
+        fd.set("name", String(i.name ?? ""));
+        fd.set("path", String(i.path ?? ""));
+        fd.set("gitlabProject", String(i.gitlabProject ?? ""));
+        for (const b of String(i.boards ?? "").split(/[\s,;]+/).filter(Boolean)) fd.append("boards", b);
+        fd.set("tickets", String(i.tickets ?? ""));
+        fd.set("instructions", String(i.instructions ?? ""));
+      }
+      fd.set("delivery", delivery);
+      const r = await saveRepoAction(null, fd);
+      if (!r?.ok) throw new Error(r?.error ?? t("Didn't work."));
+      return { message: r.message ?? t("Saved.") };
+    },
+  },
+  {
+    name: "work.repo-delete",
+    group: "work",
+    label: "Remove a repo",
+    summary: "A repo taken off the list (its folder is not touched). Needs the “api” permission.",
+    input: [f("id", "number", { required: true })],
+    output: "{}",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      (await import("@/lib/repos")).deleteRepo(int(i.id));
+      return {};
+    },
+  },
+  {
     name: "work.session-start",
     group: "work",
     label: "Start a session",
     summary: "A new session (a new todo and a worker on it, like the Code tab's message box): instruction, ticket, repoId, provider. Needs the flow's “api” permission. Never in a dry run.",
-    input: [f("instruction", "text", { required: true }), f("ticket", "text"), f("repoId", "number"), f("provider", "text")],
+    input: [f("instruction", "text", { required: true }), f("ticket", "text"), f("repoId", "number"), f("provider", "text"), f("repoPath", "text"), f("branch", "text"), f("workspace", "text", { help: "worktree | branch | checkout" }), f("mode", "text"), f("model", "text"), f("effort", "text"), f("elevated", "boolean")],
     output: "{ runId }",
     writes: true,
     run: async (i, ctx) => {
@@ -202,7 +338,12 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       need();
       if (ctx.dryRun) return { dryRun: true };
       const { startSessionAction } = await import("./server-actions");
-      const r = await startSessionAction({ instruction: String(i.instruction ?? ""), ticket: String(i.ticket ?? ""), repoId: int(i.repoId) || undefined, provider: String(i.provider ?? "") || undefined });
+      const r = await startSessionAction({ instruction: String(i.instruction ?? ""), ticket: String(i.ticket ?? ""), repoId: int(i.repoId) || undefined, provider: String(i.provider ?? "") || undefined,
+        repoPath: String(i.repoPath ?? "") || undefined,
+        branch: String(i.branch ?? "") || undefined,
+        workspace: String(i.workspace ?? "") || undefined,
+        session: { ...(i.mode ? { permissionMode: String(i.mode) } : {}), ...(i.model ? { model: String(i.model) } : {}), ...(i.effort ? { effort: String(i.effort) as never } : {}), ...(bool(i.elevated) ? { elevated: true } : {}) },
+      });
       if (!r.ok) throw new Error(r.error);
       return { runId: r.runId };
     },

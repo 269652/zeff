@@ -1,5 +1,5 @@
-<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="commitmsg" value=""/>
-<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}" every=2 debounce="300"/>
+<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
+<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}" every=2 debounce="300"/>
 <data name="panes" lambda="work.panes" with="run={{ data.x.session.runId }}" when="{{ data.x.session.runId }}" every=5/>
 <on event="work-changed" action="reload"/>
 <on event="work-started" action="state" state="sel" value="run:{{ data.started.runId }}"/>
@@ -47,7 +47,21 @@
 <muted>{{ data.x.labels.newHint }}</muted>
 <input bind="newticket" placeholder="Ticket (optional, like ABC-123)"/>
 <input bind="newmsg" rows=4 placeholder="What should the worker do?"/>
-<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ state.newticket }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+<section title="{{ data.x.composer.labels.options }}" collapsible=true open=false>
+<col gap=2>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.provider }}</muted></small>{{#each data.x.composer.providers}}<button action="state" state="cprov" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+{{#if data.x.composer.live}}
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.mode }}</muted></small>{{#each data.x.composer.modes}}<button action="state" state="cmode" value="{{ id }}" label="{{ label }}" tip="{{ hint }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.model }}</muted></small>{{#each data.x.composer.models}}<button action="state" state="cmodel" value="{{ value }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+{{#if data.x.composer.showEffort}}<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.effort }}</muted></small>{{#each data.x.composer.efforts}}<button action="state" state="ceffort" value="{{ value }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>{{/if}}
+{{#if data.x.composer.admin}}<toggle bind="celev" label="As administrator"/>{{/if}}
+{{/if}}
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.repo }}</muted></small>{{#each data.x.composer.repos}}<button action="state" state="crepo" value="{{ path }}" label="{{ name }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.where }}</muted></small>{{#each data.x.composer.workspaces}}<button action="state" state="cws" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+<input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/>
+</col>
+</section>
+<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ state.newticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
 </col>
 {{/if}}
 {{#if data.x.mode == 'ticket'}}
@@ -66,7 +80,21 @@
 </row>
 {{/each}}
 <input bind="newmsg" rows=3 placeholder="New session — what should we work on?"/>
-<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ data.x.ticketPage.ticket }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
+<section title="{{ data.x.composer.labels.options }}" collapsible=true open=false>
+<col gap=2>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.provider }}</muted></small>{{#each data.x.composer.providers}}<button action="state" state="cprov" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+{{#if data.x.composer.live}}
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.mode }}</muted></small>{{#each data.x.composer.modes}}<button action="state" state="cmode" value="{{ id }}" label="{{ label }}" tip="{{ hint }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.model }}</muted></small>{{#each data.x.composer.models}}<button action="state" state="cmodel" value="{{ value }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+{{#if data.x.composer.showEffort}}<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.effort }}</muted></small>{{#each data.x.composer.efforts}}<button action="state" state="ceffort" value="{{ value }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>{{/if}}
+{{#if data.x.composer.admin}}<toggle bind="celev" label="As administrator"/>{{/if}}
+{{/if}}
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.repo }}</muted></small>{{#each data.x.composer.repos}}<button action="state" state="crepo" value="{{ path }}" label="{{ name }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+<row gap=1 wrap=true align=center><small><muted>{{ data.x.composer.labels.where }}</muted></small>{{#each data.x.composer.workspaces}}<button action="state" state="cws" value="{{ id }}" label="{{ label }}" variant="{{ sel ? 'primary' : 'plain' }}"/>{{/each}}</row>
+<input bind="cbranch" placeholder="{{ data.x.composer.labels.branch }}"/>
+</col>
+</section>
+<button run="work.start" with="instruction={{ state.newmsg }}, ticket={{ data.x.ticketPage.ticket }}, provider={{ data.x.composer.provider }}, mode={{ data.x.composer.mode }}, model={{ data.x.composer.model }}, effort={{ data.x.composer.effort }}, repoPath={{ data.x.composer.repo }}, workspace={{ data.x.composer.workspace }}, branch={{ state.cbranch }}, elevated={{ state.celev }}" into="started" then="newmsg=" emit="work-started" label="Start" variant=primary disabled="{{ not state.newmsg }}"/>
 </col>
 {{/if}}
 {{#if data.x.mode == 'session'}}

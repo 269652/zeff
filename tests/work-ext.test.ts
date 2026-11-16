@@ -131,7 +131,7 @@ test("a session's page: the conversation lines as the log reads them, the state,
 
 test("what changes something is a flow with the permission api: archive and delete a session, stop a queued run; the dry run touches nothing", { skip }, async () => {
   const { a, b, c, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["work.archive", "work.delete", "work.git", "work.live", "work.send", "work.start", "work.stop"]);
+  assert.deepEqual([...allowed].sort(), ["work.archive", "work.delete", "work.git", "work.live", "work.repo-delete", "work.repo-delivery", "work.repo-save", "work.send", "work.setting", "work.start", "work.stop"]);
   const engine = await import("@/plugins/workspace/flows/engine");
   const { sessionTickets } = await import("@/lib/work/sessions");
   const ids = () => sessionTickets().flatMap((t) => t.sessions.map((s) => s.id));
@@ -241,4 +241,73 @@ test("the panes: a session's changes as the built-in's diff reads them (a change
   const withProcs = { ...panes, procs: [{ name: "web", running: true, url: "http://localhost:3000", showUrl: true, log: "ready", dot: "🟢" }, { name: "api", running: false, url: "", showUrl: false, log: "", dot: "⚪" }] };
   for (const pane of ["chat", "changes", "preview"])
     assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code", state: { sel: `run:${a.run}`, pane }, app: {}, data: { x, panes: withProcs, gitresult: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], pane);
+});
+
+test("the message box's options: providers, modes, repos as the built-in's composer offers them; a ticket's repo is inferred", { skip }, async () => {
+  const { call } = await world();
+  const { composerOptions } = await import("@/lib/work/composer-options");
+  const built = await composerOptions();
+  type C = { provider: string; providers: { id: string; sel: boolean }[]; modes: { id: string }[]; repos: { path: string; sel: boolean }[]; workspaces: { id: string }[]; live: boolean };
+  const screen = await call<{ composer: C }>("work.screen", {});
+  assert.deepEqual(screen.composer.providers.map((p) => p.id), built.providers.map((p) => p.id));
+  assert.equal(screen.composer.provider, built.defaultProvider);
+  assert.deepEqual(screen.composer.modes.map((m) => m.id), (built.choices[built.defaultProvider]?.modes ?? []).map((m) => m.id));
+  assert.deepEqual(screen.composer.workspaces.map((w) => w.id), ["", "worktree", "branch", "checkout"]);
+  assert.ok(screen.composer.repos[0].sel, "no repo picked: the first, as Zeff infers it");
+});
+
+test("the settings: read as the Settings page reads them, one setting changed at a time and checked, repos added, switched to direct delivery and removed", { skip }, async () => {
+  const { call } = await world();
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const { getWorkSettings, claudeSessionSettings } = await import("@/lib/work/store");
+  type S = { parallel: number; permission: { id: string; sel: boolean }[]; claude: { live: boolean; mode: { id: string; sel: boolean }[] }; repos: { id: number; name: string; delivery: string }[]; models: { sel: boolean }[] };
+  const s = await call<S>("work.settings", {});
+  assert.equal(s.parallel, getWorkSettings().parallel);
+  assert.equal(s.permission.find((p) => p.sel)?.id, getWorkSettings().permissionMode);
+  assert.equal(s.claude.live, claudeSessionSettings().live);
+  assert.ok(s.models.filter((m) => m.sel).length === 1);
+  // A change keeps the rest.
+  const before = getWorkSettings();
+  assert.equal((await engine.runFlow("work.setting", { scope: "work", field: "parallel", value: "3" })).status, "done");
+  assert.equal(getWorkSettings().parallel, 3);
+  assert.equal(getWorkSettings().permissionMode, before.permissionMode);
+  assert.equal((await engine.runFlow("work.setting", { scope: "work", field: "parallel", value: "99" })).status, "failed", "out of range: refused");
+  assert.equal((await engine.runFlow("work.setting", { scope: "work", field: "isolation", value: "checkout" })).status, "done");
+  assert.equal(getWorkSettings().isolation, "checkout");
+  assert.equal((await engine.runFlow("work.setting", { scope: "work", field: "instructions", value: "Run the tests." })).status, "done");
+  assert.equal(getWorkSettings().instructions, "Run the tests.");
+  assert.equal((await engine.runFlow("work.setting", { scope: "claude", field: "mode", value: "plan" })).status, "done");
+  assert.equal(claudeSessionSettings().mode, "plan");
+  assert.equal((await engine.runFlow("work.setting", { scope: "claude", field: "mode", value: "bypassPermissions" })).status, "failed", "bypass isn't allowed yet");
+  assert.equal((await engine.runFlow("work.setting", { scope: "claude", field: "allowBypass", value: "true" })).status, "done");
+  assert.equal((await engine.runFlow("work.setting", { scope: "claude", field: "askTimeoutMin", value: "10" })).status, "done");
+  assert.equal(claudeSessionSettings().askTimeoutMin, 10);
+  assert.equal((await engine.runFlow("work.setting", { scope: "work", field: "parallel", value: "5" }, { dry: true })).status, "done");
+  assert.equal(getWorkSettings().parallel, 3, "a dry run changes nothing");
+  // Repos.
+  const { execFileSync } = await import("node:child_process");
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "zeff-work-repo2-"));
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  assert.equal((await engine.runFlow("work.repo-save", { name: "Nowhere", path: path.join(repo, "nope") })).status, "failed", "not a git repo");
+  const added = await engine.runFlow("work.repo-save", { name: "Mine", path: repo, tickets: "ABC-1, abc-2" });
+  assert.equal(added.status, "done", added.error ?? undefined);
+  const { listRepos } = await import("@/lib/repos");
+  const mine = listRepos().find((r) => r.name === "Mine")!;
+  assert.deepEqual(mine.tickets, ["ABC-1", "ABC-2"]);
+  assert.equal(mine.delivery, "mr");
+  assert.equal((await engine.runFlow("work.repo-delivery", { id: mine.id, delivery: "direct" })).status, "done");
+  const after = listRepos().find((r) => r.id === mine.id)!;
+  assert.equal(after.delivery, "direct");
+  assert.deepEqual(after.tickets, ["ABC-1", "ABC-2"], "only the delivery changed");
+  const shown = await call<S>("work.settings", {});
+  assert.equal(shown.repos.find((r) => r.id === mine.id)?.delivery, "direct");
+  assert.equal((await engine.runFlow("work.repo-delete", { id: mine.id })).status, "done");
+  assert.ok(!listRepos().some((r) => r.id === mine.id));
+  // The settings template draws.
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work-settings.html"), "utf8");
+  const withRepo = { ...shown, repos: [{ id: 1, name: "R", path: "C:/r", ok: true, state: "on main", gitlabProject: "", boardsText: "", boards: "no boards", tickets: "", instructions: "", delivery: "mr", mr: true, direct: false }], pools: [{ source: "learn", label: "Reserved for Learn", n: 1, more: 2, less: 0, hint: "x" }] };
+  for (const state of [{}, { instred: "1", instr: "x" }, { agented: "1" }, { repoedit: "1" }])
+    assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: { ...state }, app: {}, data: { s: withRepo, result: { message: "Saved." } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(state));
+  assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: null }, db: { id: 1, title: "Code settings" } } as never).errors, []);
 });
