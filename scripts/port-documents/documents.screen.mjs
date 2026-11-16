@@ -22,7 +22,7 @@ export async function handler(event, context) {
   const q = String(event?.q ?? "").trim().slice(0, 300);
   const limit = Math.min(1000, Math.max(PAGE, Number(event?.limit) || PAGE));
   const { rows } = await z.call("sql.query", {
-    sql: "select d.id, d.name, d.mime, d.size, d.kind, d.status, d.error, d.compiled, d.concepts, d.summary, d.created_at, (s.doc_id is null) as unread from documents d left join document_seen s on s.doc_id = d.id order by d.created_at desc",
+    sql: "select d.id, d.name, d.file, d.mime, d.size, d.kind, d.status, d.error, d.compiled, d.concepts, d.summary, d.created_at, (s.doc_id is null) as unread from documents d left join document_seen s on s.doc_id = d.id order by d.created_at desc",
     limit: 5000,
   });
   let origins = {};
@@ -64,6 +64,7 @@ export async function handler(event, context) {
     const day = d.created_at.slice(0, 10) === today ? d.created_at.slice(11, 16) : new Date(d.created_at).toLocaleDateString(lang);
     return {
       id: d.id,
+      fileUrl: `/api/files/kept?dir=documents&file=${encodeURIComponent(d.file)}&name=${encodeURIComponent(d.name)}`,
       title: d.name,
       icon: kindInfo(d.kind).icon,
       kind: d.kind,
@@ -100,7 +101,9 @@ export async function handler(event, context) {
     hasMore: shown.length > limit,
     nextLimit: limit + PAGE,
     unreadIds: shown.filter((d) => d.unread).map((d) => d.id),
-    checkedCount: docs.filter((d) => checked.has(d.id)).length,
+    // (only the ticks of what is shown count: those of another scope neither show nor act)
+    checkedCount: shown.filter((d) => checked.has(d.id)).length,
+    checkedIds: shown.filter((d) => checked.has(d.id)).map((d) => d.id),
     markAll: scope === "inbox" && inbox > 0,
     emptyIcon: scope === "inbox" ? "🎉" : "🗂️",
     emptyText: scope === "inbox" ? t("Nothing new — everything is read.") : w ? t("Nothing matches.") : t("No documents here yet."),

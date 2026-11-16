@@ -60,6 +60,9 @@ export function todosViewTemplate(): string {
 <data name="day" lambda="todos.day" with="day={{ state.recapday }}" every="5" when="{{ state.part == 'recap' }}"/>
 <data name="today" lambda="todos.heute" when="{{ state.part == 'today' }}"/>
 <data name="p" lambda="todos.panel" with="id={{ state.panel }}" when="{{ state.panel }}"/>
+<state name="aq" value=""/><state name="abusy" value=""/>
+<data name="pick" lambda="documents.attach-list" with="q={{ state.aq }}" when="{{ state.panel }}" debounce="250"/>
+<on event="attached" action="reload"/>
 <on event="todos-changed" action="reload"/>
 {{#if state.part == 'todos' and state.scope != 'activity' and not data.x}}<muted>Loading …</muted>{{#else}}
 <col gap=3>
@@ -256,6 +259,23 @@ ${today}
 <col gap=1>{{#each data.p.planned}}{{#if path}}<small><b>{{ path }}</b></small>{{/if}}{{#each steps}}<small>→ {{ text }} <muted>({{ kind }})</muted></small>{{/each}}{{/each}}</col>
 </section>
 {{/if}}
+<section title="Attach a document" collapsible=true>
+<col gap=2>
+<row gap=2 align=center>
+<col fill=true><search bind="aq" placeholder="Search the documents …"/></col>
+<upload bind="abusy" run="documents.add" with="todo={{ state.panel }}" multiple=true label="Upload new …" done="Attached — being read …" emit="attached"/>
+</row>
+<small><muted>An attached document is context for this todo.</muted></small>
+{{#each data.pick.items}}
+<row gap=2 align=start wrap=false>
+<text>{{ icon }}</text>
+<col fill=true><b>{{ title }}</b> <small><muted>{{ sizeText }}</muted></small><small><muted>{{ text }}</muted></small></col>
+<button run="documents.attach" with="todo={{ state.panel }}, doc={{ id }}" done="Attached." emit="attached" label="Attach"/>
+</row>
+{{/each}}
+{{#if data.pick.items}}{{#else}}<small><muted>{{ data.pick.count ? 'Nothing matches.' : 'No documents yet — upload one.' }}</muted></small>{{/if}}
+</col>
+</section>
 {{#if data.p.nSources}}
 <section title="Context" aside="{{ data.p.nSources }}" collapsible=true open=true>
 <col gap=2>
