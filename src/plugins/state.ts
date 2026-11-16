@@ -36,8 +36,6 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   know: { port: "know-ext", steps: [] },
   // (open loops: the port's lambdas work them out — loops/query.ts reads their answer; your word and the closings are its flows)
   loops: { port: "loops-ext", steps: [] },
-  // (News: the port's flow fetches, filters, tags and discovers — its page is the plugin's view; the settings page, the Today page's news and the Workspace database of what you kept stay the kernel's and read the same tables)
-  news: { port: "news-ext", steps: ["news"] },
   // (Documents: the port's flows go through the documents for todos, match them to the todos, read in your local folders and read what waits — plugins/documents/port.ts; the screen, uploads, the settings page and the knowledge server's abstracts stay the built-in's)
   documents: { port: "documents-ext", steps: ["localdocs", "doctodos", "docrelations"] },
   // (Calendar: the port's page, flows and AI steps — the model, the readers, the settings page and the plugin API stay the kernel's; its steps calendartodos and calendarrelations run the port's flows — lib/calendar/todos.ts calendarTodosVia, sync/registry.ts)
@@ -188,8 +186,8 @@ export function setInstalled(id: PluginId, installed: boolean): PluginId[] {
  * Plugins that went, as you had set them (the plugins table): Kanban and Notes are the Workspace's now — their choice goes to it
  * where the Workspace has none of its own; Keep write is gone. Their rows go. Once per account (lib/once-done). How many rows went.
  */
-export const RETIRED_PLUGINS_ONCE = "plugins.retiredIds@1";
-const RETIRED: Record<string, PluginId | null> = { kanban: "workspace", notes: "workspace", "keep-write": null };
+export const RETIRED_PLUGINS_ONCE = "plugins.retiredIds@2";
+const RETIRED: Record<string, PluginId | null> = { kanban: "workspace", notes: "workspace", "keep-write": null, news: null };
 export function rewriteRetiredPlugins(): number {
   const rows = getDb().select().from(schema.plugins).all();
   const has = new Set(rows.map((r) => r.id));

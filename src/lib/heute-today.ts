@@ -5,7 +5,7 @@
  */
 import type { TodoView } from "@/lib/todos/shared";
 import { dayOf, stampOf } from "@/lib/calendar/ir-shared";
-import { isInstalled, onlyThroughPort } from "@/plugins/state";
+import { isInstalled } from "@/plugins/state";
 
 export type TodayAppointment = { id: number; title: string; start: string; end: string; allDay: boolean; location: string; tomorrow: boolean; online: boolean; people: { id: number; name: string }[]; href: string; /** A proposal (the day plan's block …): shown dashed, nothing planned with it. */ proposed?: boolean };
 export type TodayPromise = { id: number; personId: number; personName: string; text: string; due: string; mine: boolean; overdue: boolean };
@@ -68,21 +68,21 @@ async function learned(since: string): Promise<TodayLearned[]> {
     .map((c) => ({ id: c.id, personId: c.personId, personName: c.personName, text: c.text }));
 }
 
-/** The news since `since`: how many, and the best few not seen yet (with the funnel: what the AI let through). */
-async function news(since: string): Promise<TodayNews | null> {
-  if (!isInstalled("news")) return null;
-  // (the plugin stands in for the built-in: its lambda's last answer — since yesterday —, asked again in the background after five minutes)
-  if (onlyThroughPort("news")) return (await import("@/lib/ext/snapshots")).lambdaSnapshot<TodayNews>("news-ext", "news.today", {}, 5);
-  const { countNewSince, listItems } = await import("@/plugins/news/store");
-  const count = countNewSince(since);
-  const top = listItems({ view: "foryou", maxAgeDays: 1, limit: 3 })
-    .filter((i) => !i.seen)
-    .map((i) => ({ id: i.id, title: i.title, url: i.url, source: i.sourceName }));
-  return { count, top };
+/** The news since yesterday: how many, and the best few not seen yet — what the News plugin's lambda `news.today` last said (lib/ext/snapshots.ts; asked again in the background after five minutes). Without the plugin: none. */
+async function news(): Promise<TodayNews | null> {
+  const { isEnabled } = await import("@/lib/ext/registry");
+  let on = false;
+  try {
+    on = isEnabled("news-ext");
+  } catch {
+    // no plugins folder: no news
+  }
+  if (!on) return null;
+  return (await import("@/lib/ext/snapshots")).lambdaSnapshot<TodayNews>("news-ext", "news.today", {}, 5);
 }
 
 export async function todayData(now: Date = new Date()): Promise<TodayData> {
   const today = dayOf(now);
   const since = new Date(now.getTime() - 864e5).toISOString();
-  return { appointments: await appointments(now), due: await dueTodos(today), promises: await promises(today), learned: await learned(since), news: await news(since) };
+  return { appointments: await appointments(now), due: await dueTodos(today), promises: await promises(today), learned: await learned(since), news: await news() };
 }

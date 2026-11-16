@@ -31,7 +31,6 @@ export const PORTS: Port[] = [
   { builtin: "google-drive", plugin: "google-drive-ext", switch: async () => (await import("./google-drive/to-plugin")).switchGoogleDriveToPlugin() },
   { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },
   { builtin: "questions", plugin: "questions-ext", switch: async () => (await import("./plain-port")).switchPlainToPlugin("questions", "questions-ext") },
-  { builtin: "news", plugin: "news-ext", switch: async () => (await import("./news/to-plugin")).switchNewsToPlugin() },
   { builtin: "loops", plugin: "loops-ext", switch: async () => (await import("./loops/to-plugin")).switchLoopsToPlugin() },
   { builtin: "know", plugin: "know-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("know", { port: "know-ext", flow: "know.summarize", minutes: async () => 0 }) },
   { builtin: "auto-actions", plugin: "auto-actions-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("auto-actions", { port: "auto-actions-ext", flow: "autoactions.review", minutes: async () => (await import("@/lib/runs/store")).getBoardSettings().autoMinutes }) },

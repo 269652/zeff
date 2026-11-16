@@ -24,12 +24,10 @@ import { syncSettings as googleCalendar } from "./google-calendar/sync-settings"
 import { syncSettings as googleDrive } from "./google-drive/sync-settings";
 import { onlyThroughPort, PROVIDED_BY } from "./state";
 import { flowByName, listFlows, setSyncFlowMinutes } from "./workspace/flows/store";
-import { syncSettings as news } from "./news/sync-settings";
 
 /** Each plugin's settings module for the Sync settings page — the plugins that bring a sync. */
 const modules = (): Partial<Record<PluginId, PluginSyncSettings>> => ({
   documents,
-  news,
   todos,
   knowledge,
   "auto-actions": autoActions,

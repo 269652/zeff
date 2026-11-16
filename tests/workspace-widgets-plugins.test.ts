@@ -10,7 +10,7 @@ setupTempData();
  */
 async function world() {
   const { setInstalled } = await import("@/plugins/state");
-  for (const id of ["workspace", "work", "todos", "people", "news", "outlook-mail", "teams", "mail-client"]) setInstalled(id, true);
+  for (const id of ["workspace", "work", "todos", "people", "outlook-mail", "teams", "mail-client"]) setInstalled(id, true);
   await import("@/plugins/contributions");
   return await import("@/plugins/workspace/widgets");
 }
@@ -19,8 +19,8 @@ const list = (d: { kind: string; items?: { id: string; text: string; badge?: str
 test("every plugin's widgets are registered with a plugin that is installed — and carry the one thing that makes them worth it", async () => {
   const x = await world();
   const ids = x.widgetCatalog().map((w) => w.id);
-  for (const id of ["mail.unread", "people.upcoming", "work.runs", "news.top", "workspace.routines"]) assert.ok(ids.includes(id), `${id} is there`);
-  for (const w of x.widgetCatalog().filter((w) => ["mail.unread", "people.upcoming", "work.runs", "news.top", "workspace.routines"].includes(w.id))) assert.ok(w.actions, `${w.id} has an action`);
+  for (const id of ["mail.unread", "people.upcoming", "work.runs", "workspace.routines"]) assert.ok(ids.includes(id), `${id} is there`);
+  for (const w of x.widgetCatalog().filter((w) => ["mail.unread", "people.upcoming", "work.runs", "workspace.routines"].includes(w.id))) assert.ok(w.actions, `${w.id} has an action`);
 });
 
 test("unread: the newest unread messages (who, what, when) with the count — or the inboxes with theirs; read again from the widget", async () => {
@@ -83,29 +83,6 @@ test("workers: queued and running runs of Code with their todo — stop takes on
   const after = await x.widgetAct("work.runs", "stop", { id: String(run.id) }, { hours: 3 });
   assert.equal(getRun(run.id)!.status, "cancelled");
   assert.ok(!list(after).some((i) => i.id === String(run.id) && i.actions?.some((a) => a.id === "stop")), "a stopped run offers no stop");
-});
-
-test("news: the best of what is new — saved, liked or hidden right there", async () => {
-  const x = await world();
-  const n = await import("@/plugins/news/store");
-  const src = n.addSource({ name: "Heise", url: "https://heise.example/rss2" });
-  n.addItems({ id: src.id, name: "Heise" }, [
-    { guid: "w1", url: "https://heise.example/w1", title: "Eine wichtige Meldung für das Widget", summary: "Text", publishedAt: new Date().toISOString() },
-    { guid: "w2", url: "https://heise.example/w2", title: "Noch eine Meldung für das Widget", summary: "Text", publishedAt: new Date().toISOString() },
-  ]);
-  const d = await x.widgetData("news.top", { limit: 5 });
-  const items = list(d);
-  assert.ok(items.length >= 2);
-  const first = items.find((i) => /wichtige Meldung/.test(i.text))!;
-  assert.deepEqual(first.actions?.map((a) => a.id).sort(), ["hide", "like", "save"]);
-  assert.equal(first.href, "https://heise.example/w1");
-  await x.widgetAct("news.top", "save", { id: first.id }, { limit: 5 });
-  assert.equal(n.getItem(Number(first.id))!.state, "saved");
-  await x.widgetAct("news.top", "like", { id: first.id }, { limit: 5 });
-  assert.equal(n.getItem(Number(first.id))!.vote, 1);
-  const second = items.find((i) => /Noch eine/.test(i.text))!;
-  const after = await x.widgetAct("news.top", "hide", { id: second.id }, { limit: 5 });
-  assert.ok(!list(after).some((i) => i.id === second.id), "hidden: no longer on the list");
 });
 
 test("routines: yours with how they last ended — run one from the widget", async () => {

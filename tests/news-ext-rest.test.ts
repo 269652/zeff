@@ -41,8 +41,8 @@ function world(): Promise<void> {
     reg.scanPlugins(true);
     reg.setEnabled("news-ext", true);
     // (the built-in makes its tables on first use; the plugin's stores adopt them)
-    const store = await import("@/plugins/news/store");
-    store.listSources();
+    const { ensureAdoptedTables } = await import("@/lib/ext/adopted-tables");
+    assert.equal(ensureAdoptedTables("news_items"), true);
     const { getSqlite } = await import("@/db");
     const d = getSqlite();
     const src = (name: string) => Number(d.prepare("insert into news_sources (name, url, created_at, category) values (?, ?, ?, 'Tech')").run(name, `https://${name.toLowerCase()}.example/feed`, ago(5)).lastInsertRowid);
@@ -156,10 +156,6 @@ test("'N new' counts what came in since the page loaded; Today's line counts sin
   assert.equal(today.count, 6);
   assert.ok(today.top.length >= 1 && today.top.length <= 3);
   assert.ok(!today.top.some((i) => i.title === "Headline 6"), "not what was seen");
-  // the built-in's own line says the same
-  const { countNewSince, listItems } = await import("@/plugins/news/store");
-  assert.equal(countNewSince(ago(30)), today.count);
-  assert.deepEqual(listItems({ view: "foryou", maxAgeDays: 1, limit: 3 }).filter((i) => !i.seen).map((i) => i.title), today.top.map((i) => i.title));
 });
 
 test("the widget lists the best new items with buttons; its flow saves, likes or hides what it names", { skip }, async () => {
@@ -197,9 +193,9 @@ test("what was seen on screen goes in through the page's flow (a comma list of i
 
 test("the news you kept are a source with their text and tags, in the built-in's own shape", { skip }, async () => {
   const records = await ask<{ ref: string; title: string; updatedAt: string; dataType: string; typed: { id: string; value: unknown }[] }[]>("news.kept", {});
-  const { keptItems } = await import("@/plugins/news/store");
-  const built = keptItems(500);
-  assert.deepEqual(records.map((r) => r.ref).sort(), built.map((i) => `news:${i.id}`).sort());
+  const { getSqlite } = await import("@/db");
+  const kept = getSqlite().prepare("select id from news_items where state = 'saved' or (vote = 1 and state != 'hidden')").all() as { id: number }[];
+  assert.deepEqual(records.map((r) => r.ref).sort(), kept.map((i) => `news:${i.id}`).sort());
   const mine = records.find((r) => r.title === "Headline 7")!;
   assert.equal(mine.dataType, "news");
   assert.equal(mine.updatedAt, "saved:0");
@@ -215,4 +211,33 @@ test("the end of the feed starts the search for new feeds (the flow keeps its ow
   assert.ok(flowByName("news.auto-find"));
   const r = await runFlow("news.auto-find", {}, { trigger: { kind: "manual" } });
   assert.notEqual(r.status, "failed", r.error ?? "");
+});
+
+test("the News page and its settings are reached through the plugin: /news makes the Workspace page once with the plugin's template; the old built-in app view is converted", { skip }, async () => {
+  const { newsApp } = await import("@/plugins/workspace/news-app");
+  const id = await newsApp();
+  assert.ok(id, "the page is made");
+  assert.equal(await newsApp(), id, "once");
+  const w = await import("@/plugins/workspace/store");
+  const d = w.getDatabase(id!)!;
+  assert.equal(d.schema.dataType, "news");
+  assert.equal(d.schema.views[0].app, "template");
+  assert.ok(d.schema.views[0].template?.includes("news.screen"));
+  // made while News was the built-in: its app view `news` is given the template
+  w.updateSchema(id!, { ...d.schema, views: [{ ...d.schema.views[0], app: "news", template: undefined }] });
+  assert.equal(await newsApp(), id);
+  assert.equal(w.getDatabase(id!)!.schema.views[0].app, "template");
+  const life = await import("@/plugins/workspace/package-life");
+  void life;
+  assert.ok(w.search("News settings", 10).some((h) => h.title === "News settings" && h.kind === "database"), "the settings database of the package is found");
+});
+
+test("an account that had the built-in keeps its data: the retired plugin row goes, the tables stay as they were", { skip }, async () => {
+  const { getDb, schema } = await import("@/db");
+  const { rewriteRetiredPlugins } = await import("@/plugins/state");
+  getDb().insert(schema.plugins).values({ id: "news", installed: false, changedAt: new Date().toISOString() } as never).run();
+  assert.ok(rewriteRetiredPlugins() >= 1);
+  assert.ok(!getDb().select().from(schema.plugins).all().some((r) => r.id === "news"));
+  const { getSqlite } = await import("@/db");
+  assert.equal((getSqlite().prepare("select count(*) n from news_items").get() as { n: number }).n >= 7, true);
 });

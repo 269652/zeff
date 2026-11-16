@@ -1,6 +1,6 @@
 /**
  * Checks a list of news feeds against the live internet and writes the ones that work as the stock catalog
- * (src/plugins/news/catalog-data.ts). Run it when feeds should be added or the list gone stale:
+ * (scripts/port-news/core/catalog-data.ts). Run it when feeds should be added or the list gone stale:
  *
  *   node --import tsx scripts/news-catalog.mts <candidates.txt>...      candidate lines: Category|Name|URL|lang
  *   node --import tsx scripts/news-catalog.mts --recheck                 checks the catalog as it is, drops the dead
@@ -10,14 +10,14 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { parseFeed } from "../src/plugins/news/feed";
+import { parseFeed } from "./port-news/core/feed";
 
 type Row = { category: string; name: string; url: string; lang: string };
-const OUT = path.join(process.cwd(), "src", "plugins", "news", "catalog-data.ts");
+const OUT = path.join(process.cwd(), "scripts", "port-news", "core", "catalog-data.ts");
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 async function existing(): Promise<Row[]> {
-  const { CATALOG } = await import("../src/plugins/news/catalog-data");
+  const { CATALOG } = await import("./port-news/core/catalog-data");
   return CATALOG.map((c) => ({ category: c.category, name: c.name, url: c.url, lang: c.lang }));
 }
 

@@ -22,7 +22,6 @@ export const APP_VIEWS: AppView[] = [
   { id: "cases", plugin: "cases", dataType: "cases", label: "Overview", icon: "📁" },
   { id: "debts", plugin: "finances", dataType: "debts", label: "Overview", icon: "💶" },
   { id: "agenda", plugin: "agenda", dataType: "agenda", label: "Agenda", icon: "📒" },
-  { id: "news", plugin: "news", dataType: "news", label: "News", icon: "📰" },
   { id: "jira", plugin: "jira", dataType: "jira", label: "Jira", icon: "🎫" },
   { id: "gitlab", plugin: "gitlab", dataType: "gitlab", label: "GitLab", icon: "🦊" },
 ];

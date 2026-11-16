@@ -7,6 +7,7 @@
  * your data stays where it is, nothing is copied. Server only.
  */
 import { getSqlite } from "@/db";
+import { ensureAdoptedTables } from "./adopted-tables";
 import { getPlugin } from "./registry";
 
 type Column = { name: string; type: "text" | "integer" | "real" | "json" };
@@ -89,7 +90,11 @@ function ensure(s: { decl: StoreDecl; table: string }): void {
   const db = getSqlite();
   const have = (db.prepare(`pragma table_info(${ident(s.table)})`).all() as { name: string }[]).map((c) => c.name);
   if (s.decl.adopts) {
-    if (!have.length) throw new Error(`The table “${s.table}” isn't there (yet).`);
+    if (!have.length) {
+      // (a built-in that has left Zeff: its tables are made here — adopted-tables.ts)
+      if (!ensureAdoptedTables(s.table)) throw new Error(`The table “${s.table}” isn't there (yet).`);
+      return ensure(s);
+    }
     const missing = s.decl.columns.filter((c) => !have.includes(c.name)).map((c) => c.name);
     if (missing.length) throw new Error(`The table “${s.table}” has no column ${missing.join(", ")}.`);
     return;
