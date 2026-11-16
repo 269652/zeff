@@ -1,0 +1,71 @@
+<data name="a" lambda="zeiterfassung.analysis" with="weeks={{ state.aweeks }}, tickets={{ state.atickets }}, split={{ state.asplit }}" when="{{ state.view == 'analysis' }}"/>
+{{#if data.a}}
+<col gap=3>
+  <row gap=2 align=center wrap=true justify=between>
+    <col><heading level=2>Analysis</heading><small><muted>{{ data.a.intro }}</muted></small></col>
+    <row gap=2 align=center wrap=true>
+      <row gap=1>
+        <button action="state" state="atickets" value="" label="Everyone" variant="{{ data.a.mine ? 'plain' : 'primary' }}" tip="Jira metrics for everyone's tickets, or only the tickets you booked time on in this range"/>
+        <button action="state" state="atickets" value="mine" label="Mine" variant="{{ data.a.mine ? 'primary' : 'plain' }}"/>
+      </row>
+      <row gap=1 wrap=true>
+        {{#each data.a.ranges}}<button action="state" state="aweeks" value="{{ weeks }}" label="{{ label }}" variant="{{ weeks == data.a.weeks ? 'primary' : 'plain' }}"/>{{/each}}
+      </row>
+    </row>
+  </row>
+  {{#if data.a.hasData}}
+  <grid cols=5 gap=3 min=150>
+    {{#each data.a.cards}}<tile label="{{ label }}" value="{{ value }}" tone="{{ tone }}"/>{{/each}}
+  </grid>
+  {{#if data.a.jiraCards}}<grid cols=4 gap=3 min=150>{{#each data.a.jiraCards}}<tile label="{{ label }}" value="{{ value }}" tone="{{ tone }}" tip="{{ hint }}"/>{{/each}}</grid>{{/if}}
+  {{#if data.a.ticketCards}}<grid cols=4 gap=3 min=150>{{#each data.a.ticketCards}}<tile label="{{ label }}" value="{{ value }}" tone="{{ tone }}" tip="{{ hint }}"/>{{/each}}</grid>{{/if}}
+
+  <grid cols=2 gap=3 min=320>
+    <section title="Time split by type">
+      <row gap=4 align=center wrap=true>
+        <chart kind=pie source="data.a.typeSplit" group="label" value="hours"/>
+        <col gap=1>
+          {{#each data.a.typeSplit}}<row gap=2 align=center><dot color="{{ color }}"/><text>{{ label }}</text><b>{{ hoursText }}</b><small><muted>{{ pct }}</muted></small></row>{{/each}}
+        </col>
+      </row>
+    </section>
+    <section title="Hours by job">
+      {{#each data.a.jobItems}}<row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.a.jobItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>{{/each}}
+    </section>
+  </grid>
+
+  <section title="Weekly hours & tickets" aside="{{ data.a.weekLegend }}">
+    <chart kind=column source="data.a.weekRows" group="week" value="hours" series="type"/>
+    <row gap=2 wrap=true>{{#each data.a.weekBadges}}<small><muted>{{ week }} {{ total }} h {{ badge }}</muted></small>{{/each}}</row>
+  </section>
+
+  {{#if data.a.ticketCards}}
+  <grid cols=2 gap=3 min=320>
+    <section title="Performance" aside="resolution time · lower is better">
+      <chart kind=line source="data.a.performance" group="week" value="days"/>
+      <small><muted>Avg days from a ticket opening to its resolution, by the week it was resolved.</muted></small>
+    </section>
+    <section title="Parallelism" aside="tickets open at once">
+      <chart kind=line source="data.a.parallel" group="week" value="tickets"/>
+      <small><muted>Number of tickets in flight (opened but not yet resolved) during each week.</muted></small>
+    </section>
+  </grid>
+  {{/if}}
+  {{#if data.a.datesHint}}<callout tone=info>Reaction time and parallelism need ticket opened dates. Re-sync on the Jira tab to backfill them.</callout>{{/if}}
+
+  <grid cols=2 gap=3 min=320>
+    <section title="Hours by">
+      <row gap=1>
+        <button action="state" state="asplit" value="" label="Tag" variant="{{ data.a.split == 'type' ? 'plain' : 'primary' }}"/>
+        <button action="state" state="asplit" value="type" label="Type" variant="{{ data.a.split == 'type' ? 'primary' : 'plain' }}"/>
+      </row>
+      {{#if data.a.splitItems}}{{#each data.a.splitItems}}<row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.a.splitItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>{{/each}}{{#else}}<text tone=muted>{{ data.a.splitEmpty }}</text>{{/if}}
+    </section>
+    <section title="Top tickets by hours">
+      {{#if data.a.ticketItems}}{{#each data.a.ticketItems}}<row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.a.ticketItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>{{/each}}{{#else}}<text tone=muted>No tickets.</text>{{/if}}
+    </section>
+  </grid>
+  <small><muted>{{ data.a.foot }}</muted></small>
+  {{#else}}<text tone=muted>{{ data.a.empty }}</text>{{/if}}
+</col>
+{{#else}}<text tone=muted>…</text>{{/if}}
