@@ -38,7 +38,7 @@ async function seed() {
 }
 
 test("bank: a statement read — Revolut's export or any CSV with a date, an amount and a text; the same booking never twice; pending ones not yet", async () => {
-  const { parseStatement } = await import("@/plugins/revolut/statement");
+  const { parseStatement } = await import("@/plugins/revolut/core");
   const rows = parseStatement(REVOLUT);
   assert.equal(rows.length, 3, "the pending transfer waits until it is completed");
   assert.deepEqual(rows.map((r) => [r.date, r.amount, r.text]), [
@@ -60,7 +60,7 @@ test("bank: a statement read — Revolut's export or any CSV with a date, an amo
   assert.deepEqual(revDe.map((r) => [r.date, r.amount, r.counterparty]), [["2026-03-24", -64.06, "Ulrike Nathanael"]]);
 
   await seed();
-  const { importStatement } = await import("@/plugins/revolut/statement");
+  const { importStatement } = await import("@/lib/bank/statements");
   const { listTransactions } = await import("@/plugins/cases/bank");
   const r = await importStatement(REVOLUT, "Revolut");
   assert.equal(r.added, 3);
@@ -70,7 +70,7 @@ test("bank: a statement read — Revolut's export or any CSV with a date, an amo
 
 test("bank: a payment out matched to its transfer and its case — the todo done with a note, the case's paid and open follow; the rest unmatched", async () => {
   await seed();
-  await (await import("@/plugins/revolut/statement")).importStatement(REVOLUT, "Revolut"); // (read by the first test already: not twice — here so this one runs on its own too)
+  await (await import("@/lib/bank/statements")).importStatement(REVOLUT, "Revolut"); // (read by the first test already: not twice — here so this one runs on its own too)
   const { matchPayments, paymentsOf } = await import("@/plugins/cases/bank");
   const r = matchPayments();
   assert.equal(r.matched, 1, "the 11,52 € — the 23,10 € at Rewe and the salary are no case's");
@@ -102,7 +102,7 @@ test("debts: one overview of every creditor — case number, who for, total, ope
   await seed();
   // Its own state, whatever ran before: the 11,52 € paid (read and matched once — again nothing), so that case is done
   // and no debt any more; a third one running, without an instalment.
-  await (await import("@/plugins/revolut/statement")).importStatement(REVOLUT, "Revolut");
+  await (await import("@/lib/bank/statements")).importStatement(REVOLUT, "Revolut");
   const { debtOverview, matchPayments } = await import("@/plugins/cases/bank");
   matchPayments();
   const { ensureCase, updateCase, caseByKey } = await import("@/plugins/cases/store");
@@ -135,7 +135,7 @@ test("bank: a statement that comes in as a document (a CSV from your Drive folde
   const csv = "Art,Produkt,Datum des Beginns,Datum des Abschlusses,Beschreibung,Betrag,Gebühr,Währung,Status,Kontostand\nTransfer,Giro,2026-10-21 09:00:00,2026-10-21 09:00:01,To Nathanael Dienstkonto,-300.00,0.00,EUR,ABGESCHLOSSEN,100.00\n";
   addDocument("account-statement_2026-10_de-de.csv", Buffer.from(csv), "text/csv");
   addDocument("Einkaufsliste.csv", Buffer.from("Ding,Menge\nMilch,1\n"), "text/csv");
-  const { importStatementDocuments } = await import("@/plugins/revolut/statement");
+  const { importStatementDocuments } = await import("@/lib/bank/statements");
   const { listTransactions } = await import("@/plugins/cases/bank");
   const before = listTransactions().length;
   const r = await importStatementDocuments();
@@ -156,7 +156,7 @@ test("revolut: a statement among the documents is kept as a note, not as its tex
   assert.match(text, /Kontoauszug/);
   assert.match(text, /3 Buchungen/, "the pending one isn't a booking yet");
   assert.doesNotMatch(text, /Nathanael|Rewe|Gehalt/, "none of its bookings");
-  const { statementNote } = await import("@/plugins/revolut/statement");
+  const { statementNote } = await import("@/lib/bank/statements");
   // An ordinary list or letter: none.
   assert.equal(await statementNote("Einkaufsliste.csv", "Ding,Menge\nMilch,1\n"), null);
   assert.equal(await statementNote("Brief.txt", "Sehr geehrter Herr Roessler, am 23.02.2026 haben wir 76,50 € erhalten."), null);

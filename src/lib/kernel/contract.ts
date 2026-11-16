@@ -72,7 +72,7 @@ export const KERNEL_CONTRACT = {
   },
 
   /** What a plugin's manifest may bring (`contributes` in zeff-plugin.json, lib/ext/manifest.ts). */
-  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "oauth", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
+  manifestContributes: ["aiTasks", "apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "knowledgeDocs", "lambdas", "language", "locales", "lookups", "metrics", "oauth", "pageNav", "personFormulas", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
 
   /** What a server function or a Notebook cell may ask Zeff for (`zeff.*` in Python and Node.js; notebook/zeff-access.ts). */
   functionCalls: ["add_row", "ai", "api", "call", "database", "databases", "delete_row", "meta", "metric", "metrics", "output", "outputs", "publish", "table", "tables", "update_row"],
@@ -81,7 +81,7 @@ export const KERNEL_CONTRACT = {
   widgetCalls: ["ai", "bus.last", "chat.begin", "chat.send", "chat.state", "db.add", "db.list", "db.rows", "db.schema", "db.update", "emit", "flow.list", "flow.run", "fn.call", "meta.read", "meta.run", "open", "page.get", "page.set", "publish", "state.get", "state.set", "toast", "values.get", "values.list"],
 
   /** How code reads and changes Zeff's structure (`zeff.meta`, `meta.read` / `meta.run`; workspace/meta.ts). */
-  metaOps: ["block.delete", "block.save", "blocks.list", "database.alter", "database.create", "flow.delete", "flow.save", "flows.list", "page.archive", "page.create", "page.delete", "page.update", "plugin.delete", "plugin.save", "plugins.list", "schema", "tree"],
+  metaOps: ["block.delete", "block.save", "blocks.list", "database.alter", "database.create", "flow.delete", "flow.save", "flows.list", "page.archive", "page.create", "page.delete", "page.read", "page.update", "plugin.delete", "plugin.save", "plugins.list", "schema", "tree"],
 
   /** The steps a flow is made of (workspace/flows/types.ts). The actions a step runs come through `workspace.flowActions`. */
   flowNodes: ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail", "fn", "apply", "while", "tx"],
