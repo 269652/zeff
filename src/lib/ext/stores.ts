@@ -58,6 +58,8 @@ export const ADOPTABLE_PREFS: Record<string, string[]> = {
 /** The built-ins' sources their ports may stand in for (a source's `replaces`), by the port's plugin id: the databases that read it go on. */
 export const REPLACEABLE_SOURCES: Record<string, string[]> = {
   "cases-ext": ["cases"],
+  // (the document inbox: the rows of the documents, their Unread box taken back by the flow documents.pull)
+  "documents-ext": ["documents"],
   "finances-ext": ["recurring", "debts"],
   // (News: the news you saved or liked, as a source of the databases)
   "news-ext": ["news"],

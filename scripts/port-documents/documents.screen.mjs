@@ -22,9 +22,20 @@ export async function handler(event, context) {
   const q = String(event?.q ?? "").trim().slice(0, 300);
   const limit = Math.min(1000, Math.max(PAGE, Number(event?.limit) || PAGE));
   const { rows } = await z.call("sql.query", {
-    sql: "select d.id, d.name, d.file, d.mime, d.size, d.kind, d.status, d.error, d.compiled, d.concepts, d.summary, d.created_at, (s.doc_id is null) as unread from documents d left join document_seen s on s.doc_id = d.id order by d.created_at desc",
+    sql: "select d.id, d.name, d.file, substr(d.text, 1, 300) as head, d.mime, d.size, d.kind, d.status, d.error, d.compiled, d.concepts, d.summary, d.created_at, (s.doc_id is null) as unread from documents d left join document_seen s on s.doc_id = d.id order by d.created_at desc",
     limit: 5000,
   });
+  // What waits for your confirmation, where a document of a local folder lies, what is being read.
+  const held = new Set((await z.call("sql.query", { sql: "select doc_id from doc_gate where state = 'pending'", limit: 5000 })).rows.map((r) => r.doc_id));
+  const folders = (await z.call("pref.get", { key: "documents:folders" })).value;
+  const folderPath = new Map((Array.isArray(folders) ? folders : []).map((f) => [f.id, f.path]));
+  const local = new Map();
+  for (const r of (await z.call("sql.query", { sql: "select doc_id, rel, folder_id, missing_at from doc_local_files where doc_id is not null", limit: 5000 })).rows) {
+    const folder = folderPath.get(r.folder_id) ?? "";
+    local.set(r.doc_id, { shown: [String(folder).split(/[\\/]/).filter(Boolean).pop() ?? folder, ...String(r.rel).split(/[\\/]/)].filter(Boolean).join(" › "), missing: !!r.missing_at });
+  }
+  const busy = (await z.call("sql.query", { sql: "select status, count(*) as n from documents where status in ('queued', 'extracting') group by status", limit: 5 })).rows;
+  const reading = { now: busy.find((r) => r.status === "extracting")?.n ?? 0, waiting: busy.find((r) => r.status === "queued")?.n ?? 0 };
   let origins = {};
   try {
     origins = (await z.call("documents.origins", { ids: rows.map((r) => r.id) })).origins ?? {};
@@ -34,7 +45,7 @@ export async function handler(event, context) {
   const docs = rows.map((r) => {
     const o = origins[r.id];
     const from = o ? `${o.from}${o.subject ? ` — ${o.subject}` : ""}`.trim() : "";
-    return { ...r, unread: !!r.unread, compiled: !!r.compiled, from };
+    return { ...r, unread: !!r.unread, compiled: !!r.compiled, from, held: held.has(r.id) };
   });
   const facts = (d) => ({ unread: d.unread, kind: d.kind, status: d.status, added: d.created_at, from: d.from });
   const nav = docNav(docs.map(facts), t, now);
@@ -70,6 +81,10 @@ export async function handler(event, context) {
       kind: d.kind,
       kindLabel: t(kindInfo(d.kind).label),
       ending: EXT(d.name),
+      tip: String(d.summary || d.head || "").replace(/\s+/g, " ").trim().slice(0, 300),
+      held: d.held,
+      localShown: local.get(d.id)?.shown ?? "",
+      localMissing: !!local.get(d.id)?.missing,
       isImage: d.kind === "image",
       isPdf: d.kind === "pdf",
       isAudio: d.kind === "audio",
@@ -108,5 +123,8 @@ export async function handler(event, context) {
     emptyIcon: scope === "inbox" ? "🎉" : "🗂️",
     emptyText: scope === "inbox" ? t("Nothing new — everything is read.") : w ? t("Nothing matches.") : t("No documents here yet."),
     picked,
+    reading,
+    heldCount: docs.filter((d) => d.held).length,
+    heldIds: docs.filter((d) => d.held).map((d) => d.id),
   };
 }

@@ -98,6 +98,7 @@ export function externalSources(): WorkspaceSource[] {
         icon: s.icon,
         hint: s.hint,
         noNewRows: s.noNewRows,
+        ...(s.pull ? { pull: async (_db: number, rows: { cells: Record<string, unknown> }[]) => void (await (await import("./flows/engine")).runFlow(s.pull!, { rows: rows.map((r) => ({ cells: r.cells })) })) } : {}),
         ...(s.lockedFields.length ? { lockedFields: s.lockedFields } : {}),
         read: async () => {
           let v: unknown;

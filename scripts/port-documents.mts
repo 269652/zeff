@@ -57,6 +57,8 @@ export { diffFolder, scanSummary } from "@/plugins/documents/folders-core";
 export { wordsOf, matchWhere } from "@/plugins/documents/search-core";
 export { kindOf, safeName, READABLE_EXTS, MAX_DOCUMENT_BYTES } from "@/plugins/documents/shared";
 export { DOC_KINDS_NAV, docNav, inScope } from "@/plugins/documents/nav";
+/** A short stamp of a few values (what a source record says it was when a row was read). */
+export const stamp = (parts) => { const s = JSON.stringify(parts); let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); };
 export { batchByChars } from "@/lib/ai/batch";
 export { plain } from "@/lib/plain-text";
 import { setPluginStrings, translator, isLang } from "@/lib/i18n/shared";
@@ -88,7 +90,7 @@ const LAMBDAS: L[] = [
   { name: "documents.read-result", label: "Documents: what came of reading", what: "What happened to a document that was read: ready with its text, waiting for the slow reading or for your confirmation, unreadable, failed.", zeff: ["sql.query"], timeoutMs: 60000, memoryMb: 128, lib: true },
   { name: "documents.search", label: "Documents: search", what: "The documents holding every word you typed — in their whole text, not only the name.", zeff: ["sql.query"], timeoutMs: 60000, memoryMb: 128, lib: true },
   { name: "documents.text", label: "Documents: a document's text", what: "A document's whole text and its summary.", zeff: ["sql.query"], timeoutMs: 20000, memoryMb: 128 },
-  { name: "documents.screen", label: "Documents: the screen", what: "The documents of the scope asked for, searched and sorted, the scopes with their counts, and the one picked.", zeff: ["sql.query", "documents.origins"], timeoutMs: 60000, memoryMb: 256, lib: true },
+  { name: "documents.screen", label: "Documents: the screen", what: "The documents of the scope asked for, searched and sorted, the scopes with their counts, and the one picked.", zeff: ["sql.query", "pref.get", "documents.origins"], timeoutMs: 60000, memoryMb: 256, lib: true },
   { name: "documents.act-plan", label: "Documents: what a button does", what: "What marking read or unread, deleting, reading again, skipping, restarting the reading or confirming documents means — as statements for the flow.", zeff: ["sql.query"], timeoutMs: 60000, memoryMb: 128, lib: true },
   { name: "documents.add-plan", label: "Documents: a file added", what: "What adding a file means: a new document waiting to be read, or the one kept already — as statements for the flow.", zeff: ["sql.query"], timeoutMs: 60000, memoryMb: 128, lib: true },
   { name: "documents.folder-plan", label: "Documents: a change to the local folders", what: "A folder added, its mode set or the folder removed — the folders to keep, as a value for the flow.", zeff: ["pref.get"], timeoutMs: 30000, memoryMb: 128, lib: true },
@@ -97,6 +99,8 @@ const LAMBDAS: L[] = [
   { name: "documents.abstracts-plan", label: "Documents: what the knowledge server compiles", what: "The read documents the knowledge server has not compiled yet — their page ids.", zeff: ["sql.query"], timeoutMs: 30000, memoryMb: 128 },
   { name: "documents.abstracts-result", label: "Documents: the abstracts", what: "The abstracts the knowledge server made, kept with the documents — as statements for the flow.", zeff: [], timeoutMs: 30000, memoryMb: 128 },
   { name: "documents.knowledge-docs", label: "Documents: pages for the knowledge server", what: "The documents as pages for the knowledge server (space Zeff · Documents).", zeff: ["sql.query"], timeoutMs: 120000, memoryMb: 256 },
+  { name: "documents.source", label: "Documents: the document inbox", what: "The documents as records of the Workspace (the document inbox databases): kind, state, added, size, unread, compiled, from, concepts, abstract and text.", zeff: ["sql.query", "documents.origins"], timeoutMs: 120000, memoryMb: 256, lib: true },
+  { name: "documents.pull-plan", label: "Documents: the Unread box of a row", what: "Which documents the document inbox says you have seen or not — as statements for the flow.", zeff: ["sql.query"], timeoutMs: 60000, memoryMb: 128, lib: true },
   { name: "documents.report", label: "Documents: what a step says", what: "How a step went, in a sentence, in your language.", zeff: [], timeoutMs: 20000, memoryMb: 128, lib: true },
 ];
 for (const l of LAMBDAS) {
@@ -364,6 +368,20 @@ const abstractsFlow = {
   triggers: [{ kind: "manual" }, { kind: "schedule", everyMinutes: 10 }],
 };
 
+const pullFlow = {
+  name: "documents.pull",
+  title: "Take back the Unread box of the document inbox",
+  description: "A document ticked off (or on) in a row of the document inbox is seen (unread) — run before each read of the inbox (input rows).",
+  inputs: [{ name: "rows", type: "json" }],
+  nodes: [
+    invoke("plan", "documents.pull-plan", { rows: "{{ input.rows }}" }),
+    { id: "wrote", kind: "if", when: "{{ steps.plan.statements }}", then: [exec("write", "{{ steps.plan.statements }}")], else: [] },
+    { id: "done", kind: "return", value: { ok: true, seen: "{{ steps.plan.seen }}", unread: "{{ steps.plan.unread }}" } },
+  ],
+  requested: { store: STORES },
+  triggers: [{ kind: "manual" }],
+};
+
 const settingsDb = {
   id: "i11",
   parent: "i1",
@@ -397,6 +415,7 @@ write(
         page("i10", "i1", "Save the audio transcriber", "📄", settingFlow),
         page("i13", "i1", "Attach a document to a todo", "📄", attachFlow),
         page("i14", "i1", "Fetch the documents' abstracts", "📄", abstractsFlow),
+        page("i15", "i1", "Take back the Unread box of the document inbox", "📄", pullFlow),
         settingsDb,
       ],
     },
@@ -426,6 +445,7 @@ write(
         lambdas: "lambdas",
         workspacePackages: ["documents.package.json"],
         appViews: [{ id: "documents-ext", dataType: "documents", label: "Documents", icon: "🗂", template: "views/documents.html" }],
+        sources: [{ id: "documents", label: "Documents", icon: "📄", hint: "The documents you dropped in or mail attachments brought — with their abstract, where they came from and whether you have seen them (Unread).", lambda: "documents.source", replaces: "documents", noNewRows: false, pull: "documents.pull" }],
         knowledgeDocs: [{ id: "documents", lambda: "documents.knowledge-docs", args: {}, everyMinutes: 30, replaces: "documents" }],
         stores: [
           { name: "documents", adopts: "documents", key: "id", columns: [col("id", "integer"), col("name"), col("mime"), col("size", "integer"), col("sha256"), col("kind"), col("status"), col("error"), col("file"), col("text"), col("summary"), col("concepts"), col("compiled", "integer"), col("created_at"), col("updated_at")] },
