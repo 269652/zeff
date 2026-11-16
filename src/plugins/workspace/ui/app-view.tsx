@@ -65,7 +65,6 @@ const MODULES: Record<string, () => Promise<ViewAppModule>> = {
   chat: () => import("@/plugins/mail-client/ui/view-parts").then((m) => m.CHAT),
   inbox: () => import("@/plugins/mail-client/ui/view-parts").then((m) => m.INBOX),
   calendar: () => import("@/plugins/calendar/ui/view-parts").then((m) => m.default),
-  documents: () => import("@/plugins/documents/ui/view-parts").then((m) => m.default),
   cases: () => import("@/plugins/cases/ui/view-parts").then((m) => m.default),
   debts: () => import("@/plugins/finances/ui/view-parts").then((m) => m.default),
   agenda: () => import("@/plugins/agenda/ui/view-parts").then((m) => m.default),

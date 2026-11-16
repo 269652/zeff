@@ -19,53 +19,6 @@ const run = (fn: () => Promise<string | void> | string | void): Promise<ActionSt
     return { message: message || undefined };
   });
 
-/** A document and its file deleted — todos that kept it let go of it. */
-export async function deleteDocumentAction(id: number): Promise<ActionState> {
-  return run(async () => {
-    (await import("./store")).deleteDocument(Number(id));
-    return t("Document deleted.");
-  });
-}
-
-/** Read it again (it failed, or a transcriber / the Claude CLI came since). */
-export async function reprocessDocumentAction(id: number): Promise<ActionState> {
-  return run(async () => {
-    const { getDocument, setStatus } = await import("./store");
-    if (!getDocument(Number(id))) throw new Error(t("This document doesn't exist (any more)."));
-    setStatus(Number(id), "queued");
-    // Poppler (a scanned PDF's reader) that failed to install is tried again.
-    (await import("./poppler")).forgetPopplerFailure();
-    (await import("./process")).startProcessing();
-    return t("Reading it again …");
-  });
-}
-
-/** Reading restarted: the run in flight is stopped, what hung is let go of, the rest is read afresh. */
-export async function restartReadingAction(): Promise<ActionState> {
-  return run(async () => {
-    (await import("./poppler")).forgetPopplerFailure();
-    (await import("./process")).restartReading();
-    return t("Reading restarted.");
-  });
-}
-
-/** Waiting documents are picked up (nothing was working on them). */
-export async function startReadingAction(): Promise<ActionState> {
-  return run(async () => {
-    (await import("./process")).startProcessing();
-    return t("Reading started.");
-  });
-}
-
-/** One document skipped: reading it is stopped (or it isn't read); "Read again" brings it back. */
-export async function skipDocumentAction(id: number): Promise<ActionState> {
-  return run(async () => {
-    if (!(await import("./store")).getDocument(Number(id))) throw new Error(t("This document doesn't exist (any more)."));
-    (await import("./process")).skipDocument(Number(id));
-    return t("Skipped.");
-  });
-}
-
 /** A document attached to a todo, by hand: it shows in its context, and goes into what the AI reads about it. */
 export async function attachDocumentAction(todoId: number, docId: number): Promise<ActionState> {
   return run(async () => {
@@ -78,11 +31,9 @@ export async function attachDocumentAction(todoId: number, docId: number): Promi
   });
 }
 
-/** The documents, newest first (the attach picker loads them when it opens) — with abstracts, once the knowledge server compiled them. */
+/** The documents, newest first (the attach picker loads them when it opens). */
 export async function listDocumentsAction(): Promise<DocView[]> {
   if (off()) return [];
-  const { pullAbstracts } = await import("./process");
-  await pullAbstracts();
   return (await import("./store")).listDocuments();
 }
 
@@ -119,79 +70,4 @@ export async function searchDocumentsAction(q: string): Promise<DocHit[]> {
     .sort((a, b) => Number(b.d.kind === "image") - Number(a.d.kind === "image") || b.hits - a.hits || a.i - b.i)
     .slice(0, 8)
     .map(({ d }) => ({ id: d.id, ref: d.ref, name: d.name, kind: d.kind, size: d.size, abstract: d.abstract.slice(0, 120) }));
-}
-
-/** The audio transcriber: the command that turns a recording into text — {file} and {dir} filled in. */
-export async function saveDocumentSettingsAction(v: { transcriber: string; autoInstall: boolean }): Promise<ActionState> {
-  return run(async () => {
-    const { setPref } = await import("@/lib/prefs");
-    setPref("plugin:documents", { transcriber: String(v.transcriber ?? "").trim().slice(0, 500), autoInstall: v.autoInstall !== false });
-    return t("Saved.");
-  });
-}
-
-/** The documents app's search: the ids of the documents holding every word typed — in their whole text, not only the name. */
-export async function documentsMatchingAction(q: string): Promise<number[]> {
-  if (off()) return [];
-  return (await import("./fulltext")).documentsMatching(String(q ?? "").slice(0, 300));
-}
-
-/** A document's whole text and its summary, for its detail. */
-export async function documentTextAction(id: number): Promise<{ text: string; summary: string } | null> {
-  if (off()) return null;
-  return (await import("./fulltext")).documentText(Number(id));
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Local folders (folders.ts) and documents waiting for your confirmation (gate.ts)
-// ---------------------------------------------------------------------------------------------------------------------
-
-/** A folder of this computer read in from now on — "auto": the AI goes on by itself; "confirm": it waits for you. */
-export async function addFolderAction(path: string, mode: "auto" | "confirm"): Promise<ActionState> {
-  return run(async () => {
-    const f = (await import("./folders")).addFolder(String(path ?? ""), mode === "confirm" ? "confirm" : "auto");
-    // Read in at once (in the background), not only at the next scheduled run.
-    void (await import("@/lib/sync/registry")).startSync("localdocs");
-    return t("“{path}” is read in now.", { path: f.path });
-  });
-}
-
-export async function setFolderModeAction(id: string, mode: "auto" | "confirm"): Promise<ActionState> {
-  return run(async () => void (await import("./folders")).setFolderMode(String(id), mode === "confirm" ? "confirm" : "auto"));
-}
-
-/** A folder no longer read — its documents stay in Zeff. */
-export async function removeFolderAction(id: string): Promise<ActionState> {
-  return run(async () => {
-    (await import("./folders")).removeFolder(String(id));
-    return t("The folder is no longer read in; its documents stay.");
-  });
-}
-
-/** The folders read in now (not waiting for the schedule). */
-export async function scanFoldersAction(): Promise<ActionState> {
-  return run(async () => {
-    const r = await (await import("@/lib/sync/registry")).syncAndWait("localdocs");
-    return r.lastMessage ?? undefined;
-  });
-}
-
-/** The folder browser: a folder's subfolders (none given: the drives). */
-export async function browseFoldersAction(path: string | null): Promise<{ ok: true; path: string | null; parent: string | null; dirs: { name: string; path: string }[] } | { ok: false; error: string }> {
-  if (off()) return { ok: false, error: off()! };
-  try {
-    return { ok: true, ...(await import("./folders")).browse(path ? String(path) : null) };
-  } catch (e) {
-    return { ok: false, error: errorMessage(e) };
-  }
-}
-
-/** You confirmed them: the AI reads (scans, pictures), compiles and looks at them now. */
-export async function approveDocumentsAction(ids: number[]): Promise<ActionState> {
-  return run(async () => {
-    const list = (Array.isArray(ids) ? ids : []).map(Number).filter(Number.isInteger);
-    const n = (await import("./gate")).approve(list);
-    (await import("./process")).releaseHeld(list);
-    return n === 1 ? t("1 document confirmed.") : t("{n} documents confirmed.", { n });
-  });
 }

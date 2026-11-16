@@ -5,7 +5,6 @@ import { getSqlite } from "@/db";
 import { currentAccount } from "@/db/accounts";
 import { weekFromDate } from "@/lib/week";
 import { collectionItems, knowledgeItems, listCollections } from "@/lib/items";
-import { documentDocs } from "@/plugins/documents/export";
 import { isInstalled } from "@/plugins/state";
 import { pushTo } from "@/lib/collections";
 import { backfillReports } from "@/lib/work/report";
@@ -252,9 +251,6 @@ ${clean(r.body)}` }));
   // Facts the Mail-Durchsicht found in your messages ("Paulas Geburtstag: 16.10.") — each its own page.
   for (const f of all<{ id: number; subject: string; text: string; updated_at: string }>("select id, subject, text, updated_at from facts"))
     docs.push(doc({ id: `zeff:fact:${f.id}`, space: "Zeff · Fakten", title: f.subject, url: "", updatedAt: f.updated_at, author: null, body: `${f.subject}: ${clean(f.text)}` }));
-
-  // The Documents plugin's files (their text read) — compiled to abstracts, searchable, context for todos.
-  if (isInstalled("documents")) docs.push(...documentDocs(zeffUrl));
 
   // The bank statements (the Cases plugin's bank): a page per account and month — the knowledge keeps your income from them.
   if (isInstalled("finances")) docs.push(...bankDocs());

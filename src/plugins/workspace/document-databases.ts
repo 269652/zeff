@@ -26,6 +26,16 @@ const byAdded = [{ prop: "docadded", dir: "desc" as const }];
  */
 export async function ensureDocumentDatabases(): Promise<void> {
   if (!isInstalled("workspace") || !isInstalled("documents")) return;
+  // The built-in's screens, steps and settings are gone: the Documents plugin (documents-ext) is what draws and runs them — switched to here when it is in the plugins folder
+  // and not on yet, and the databases' app view of the documents made its own.
+  try {
+    const reg = await import("@/lib/ext/registry");
+    const port = await import("@/plugins/documents/to-plugin");
+    if (!reg.isEnabled("documents-ext") && reg.scanPlugins(true).plugins.some((x) => x.id === "documents-ext")) await port.switchDocumentsToPlugin();
+    else await port.portDocumentViews();
+  } catch (e) {
+    console.error("[documents] the plugin:", e instanceof Error ? e.message : e);
+  }
   const known = documentInbox();
   if (known) {
     mend(known);
@@ -78,7 +88,7 @@ function mend(id: number): void {
     setPref(V2, true);
   }
   const app = appViewsFor("documents")[0];
-  if (app && !next.views.some((v) => v.type === "app" && v.app === app.id)) next = { ...next, views: [{ ...newView(t(app.label), "table"), ...appViewFields(app) }, ...next.views] };
+  if (app && !next.views.some((v) => v.type === "app" && (v.app === app.id || (v.app === "template" && /lambda="documents\.screen"/.test(v.template ?? ""))))) next = { ...next, views: [{ ...newView(t(app.label), "table"), ...appViewFields(app) }, ...next.views] };
   if (next !== cur) {
     updateSchema(id, next);
     // What the database got wrongly (mail rows) goes at the next read: now.

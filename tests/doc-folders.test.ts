@@ -63,18 +63,15 @@ test("a folder that waits for you: the text is read, but nothing with the AI (co
   const f = await import("@/plugins/documents/folders");
   const gate = await import("@/plugins/documents/gate");
   const store = await import("@/plugins/documents/store");
-  const { documentDocs } = await import("@/plugins/documents/export");
   f.addFolder(dir, "confirm");
   await f.scanFolders();
   const id = f.folderFiles(f.listFolders().find((x) => x.path === path.resolve(dir))!.id)[0].docId!;
   store.setExtracted(id, "Vertrag mit Frist");
   assert.equal(gate.isPending(id), true);
-  assert.equal(documentDocs("http://z").some((d) => d.id.endsWith(`:${id}`)), false, "not to the knowledge server");
   assert.equal(store.uncompiledDocuments().includes(id), false);
   assert.equal(store.readableDocuments().some((d) => d.id === id), false, "not for the AI steps");
   gate.approve([id]);
   assert.equal(gate.isPending(id), false);
-  assert.equal(documentDocs("http://z").some((d) => d.id.endsWith(`:${id}`)), true);
   assert.equal(store.readableDocuments().some((d) => d.id === id), true);
 });
 

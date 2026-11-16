@@ -1,29 +1,47 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import fs from "node:fs";
+import path from "node:path";
 import { setupTempData } from "./helpers";
+import { repoPlugin, skipWithoutRepo } from "./plugins-repo";
 
-setupTempData();
+/** The document inbox databases — the documents as a source of the Workspace is the Documents plugin's (documents-ext): its source, its flow that takes the Unread box back, its app view. */
+const dir = setupTempData();
+const skip = skipWithoutRepo("documents-ext");
+process.env.ZEFF_PLUGINS_DIR = path.join(dir, "plugins");
 
-test("the documents are a source; the database holds every document, the inbox view the unread ones, and opening or ticking one takes it out", async () => {
+async function plugin() {
   const st = await import("@/plugins/state");
   st.setInstalled("workspace", true);
   st.setInstalled("documents", true);
+  fs.cpSync(repoPlugin("documents-ext"), path.join(dir, "plugins", "documents-ext"), { recursive: true });
+  await import("@/plugins/contributions");
+  const reg = await import("@/lib/ext/registry");
+  reg.scanPlugins(true);
+  if (!reg.isEnabled("documents-ext")) await (await import("@/plugins/documents/to-plugin")).switchDocumentsToPlugin();
+}
+
+test("the documents are a source; the database holds every document, the inbox view the unread ones, and opening or ticking one takes it out", { skip }, async () => {
+  await plugin();
   const { getSqlite } = await import("@/db");
   const { addDocument } = await import("@/plugins/documents/store");
   const seen = await import("@/plugins/documents/seen");
   // A document from before (older than a week) counts as seen - one of the last days would be unread.
   const old = addDocument("old.txt", Buffer.from("alt")).doc;
   getSqlite().prepare("update documents set created_at = ? where id = ?").run(new Date(Date.now() - 30 * 864e5).toISOString(), old.id);
+  seen.markSeen([old.id]);
   assert.equal(seen.isUnread(old.id), false);
   const store = await import("@/plugins/workspace/store");
   const { ensureDocumentDatabases, documentInbox } = await import("@/plugins/workspace/document-databases");
-  const { runPipeline } = await import("@/plugins/workspace/pipeline");
+  const pipeline = await import("@/plugins/workspace/pipeline");
+  // (a change says "refresh" and the inbox reads again a moment later: the test reads after that)
+  const runPipeline: typeof pipeline.runPipeline = async (id, o) => (await new Promise((r) => setTimeout(r, 2200)), pipeline.runPipeline(id, o));
   await ensureDocumentDatabases();
   const inbox = documentInbox()!;
   assert.ok(inbox, "the database is made");
   const schema = store.getDatabase(inbox)!.schema;
   assert.equal(schema.dataType, "documents");
-  assert.deepEqual([schema.views[0].type, schema.views[0].app], ["app", "documents"], "the documents app is its first view");
+  assert.deepEqual([schema.views[0].type, schema.views[0].app], ["app", "template"], "the documents app (the plugin's view) is its first view");
   assert.deepEqual(schema.views.slice(1, 3).map((v) => v.name), ["Inbox", "All"]);
   const unread = () => store.rowsOf(inbox)!.rows.filter((r) => r.cells.docunread === true).map((r) => r.title).sort();
   const all = () => store.rowsOf(inbox)!.rows.map((r) => r.title).sort();
@@ -63,10 +81,8 @@ test("the documents are a source; the database holds every document, the inbox v
   assert.equal(documentInbox(), null);
 });
 
-test("the first version of the inbox (one table, a filter step on Unread) becomes the documents app, with an Inbox view", async () => {
-  const st = await import("@/plugins/state");
-  st.setInstalled("workspace", true);
-  st.setInstalled("documents", true);
+test("the first version of the inbox (one table, a filter step on Unread) becomes the documents app, with an Inbox view", { skip }, async () => {
+  await plugin();
   const store = await import("@/plugins/workspace/store");
   const { setPref } = await import("@/lib/prefs");
   const { newView, newId } = await import("@/plugins/workspace/model");
@@ -90,10 +106,8 @@ test("the first version of the inbox (one table, a filter step on Unread) become
   assert.equal(store.getDatabase(id)!.schema.views.length, count, "mended once");
 });
 
-test("a document database turned into a mail inbox (View → Inbox: mail and chats as sources, no type) is put right again", async () => {
-  const st = await import("@/plugins/state");
-  st.setInstalled("workspace", true);
-  st.setInstalled("documents", true);
+test("a document database turned into a mail inbox (View → Inbox: mail and chats as sources, no type) is put right again", { skip }, async () => {
+  await plugin();
   const store = await import("@/plugins/workspace/store");
   const { setPref } = await import("@/lib/prefs");
   const { newView, newId, newProperty } = await import("@/plugins/workspace/model");
@@ -119,10 +133,11 @@ test("a document database turned into a mail inbox (View → Inbox: mail and cha
   assert.deepEqual(s.pipeline!.steps.map((x) => (x.kind === "source" ? (x.from === "ext" ? x.ext : x.from) : x.kind)), ["documents"], "only the documents are its source");
   assert.ok(!s.properties.some((p) => p.id.startsWith("comm")), "the mail fields are gone");
   assert.ok(s.properties.some((p) => p.id === "docunread"), "its own fields stay");
-  assert.deepEqual([s.views[0].type, s.views[0].app], ["app", "documents"]);
+  assert.deepEqual([s.views[0].type, s.views[0].app], ["app", "template"]);
 });
 
-test("a document read after its row was made: the row follows by itself (it said waiting while the document was ready long since)", async () => {
+test("a document read after its row was made: the row follows by itself (it said waiting while the document was ready long since)", { skip }, async () => {
+  await plugin();
   const { addDocument, setExtracted } = await import("@/plugins/documents/store");
   const { documentInbox } = await import("@/plugins/workspace/document-databases");
   const store = await import("@/plugins/workspace/store");
