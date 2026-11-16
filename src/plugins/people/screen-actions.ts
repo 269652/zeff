@@ -21,6 +21,28 @@ async function refreshPeopleDatabase(): Promise<void> {
   if (db) (await import("@/plugins/workspace/pipeline")).startPipeline(db, { ai: false });
 }
 
+
+const configOf = (v: unknown): Record<string, string | number | boolean> => {
+  const o = typeof v === "string" ? (() => { try { return JSON.parse(v) as unknown; } catch { return {}; } })() : v;
+  return o && typeof o === "object" && !Array.isArray(o) ? (o as Record<string, string | number | boolean>) : {};
+};
+
+/** One of People's widgets by its id (its data and buttons are the same functions the widget host calls). */
+async function widgetOf(id: string) {
+  const [{ PEOPLE_WIDGETS }, { PERSON_WIDGETS }, { PERSON_DETAIL_WIDGETS }] = await Promise.all([import("./widgets"), import("./widgets-person"), import("./widgets-person-more")]);
+  const w = [...PEOPLE_WIDGETS, ...PERSON_WIDGETS, ...PERSON_DETAIL_WIDGETS].find((x) => x.id === id);
+  if (!w) throw new Error(`No People widget “${id}”.`);
+  return w;
+}
+
+/** One of People's review sources by its id. */
+async function reviewSourceOf(id: string) {
+  const { PEOPLE_REVIEW_OWN } = await import("./review");
+  const s = PEOPLE_REVIEW_OWN.find((x) => x.id === id);
+  if (!s) throw new Error(`No People review source “${id}”.`);
+  return s;
+}
+
 export const SCREEN_FLOW_ACTIONS: FlowAction[] = [
   {
     name: "people.screen-data",
@@ -173,6 +195,62 @@ export const SCREEN_FLOW_ACTIONS: FlowAction[] = [
         href = r.keep ? personHref(r.keep) : db ? `/workspace/${db}` : "/workspace";
       }
       return { gone: !!r.gone, href, message: r.message ?? "" };
+    },
+  },
+  {
+    name: "people.widget",
+    group: "people",
+    label: "What a People widget shows",
+    summary: "The data of one of People's widgets by its id (people.list, people.upcoming, people.owed, people.briefs, people.drifting, people.todos, people.overview, people.promises, people.facts, people.funfacts, people.news, people.rhythm, people.coming) for the settings given: a list, figures or one figure, as the widget host draws it.",
+    input: [f("id", "text", { required: true }), f("config", "json")],
+    output: "the widget's data { kind: list | stats | figure, … }",
+    run: async (i) => {
+      const w = await widgetOf(String(i.id ?? ""));
+      return (await w.data(configOf(i.config))) as unknown as Record<string, unknown>;
+    },
+  },
+  {
+    name: "people.widget-act",
+    group: "people",
+    label: "A button of a People widget",
+    summary: "What a button of one of People's widgets does (a date thought of, a promise kept, a todo ticked or dismissed) — by the widget's id, the action, its payload and the widget's settings. The widget's data after it, where the widget gives it.",
+    input: [f("id", "text", { required: true }), f("action", "text", { required: true }), f("payload", "json"), f("config", "json")],
+    output: "the widget's data after it, or {}",
+    writes: true,
+    run: async (i, ctx) => {
+      if (ctx.dryRun) return {};
+      const w = await widgetOf(String(i.id ?? ""));
+      if (!w.act) throw new Error("This widget has no buttons.");
+      const payload = Object.fromEntries(Object.entries(configOf(i.payload)).map(([k, v]) => [k, String(v)]));
+      return ((await w.act(String(i.action ?? ""), payload, configOf(i.config))) ?? {}) as unknown as Record<string, unknown>;
+    },
+  },
+  {
+    name: "people.review-list",
+    group: "people",
+    label: "What People has you confirm",
+    summary: "What waits for your word in the review queue from People — source: people-claim (what the AI read), people-link (who is connected to what), people-stale (still true?), people-date (dates found), people-followup (follow up?): [{ id, title, detail?, confidence?, href?, actions: [{ id, label, primary? }] }].",
+    input: [f("source", "text", { required: true })],
+    output: "{ entries }",
+    run: async (i) => {
+      const s = await reviewSourceOf(String(i.source ?? ""));
+      return { entries: await s.list() };
+    },
+  },
+  {
+    name: "people.review-act",
+    group: "people",
+    label: "A word on what People has you confirm",
+    summary: "A button of the review queue's People entries: source (people-claim, people-link, people-stale, people-date, people-followup), item (its id) and action (yes or no) — what came of it, in words.",
+    input: [f("source", "text", { required: true }), f("item", "text", { required: true }), f("action", "text", { required: true })],
+    output: "{ message }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (ctx.dryRun) return { message: "" };
+      const s = await reviewSourceOf(String(i.source ?? ""));
+      const message = await s.act(String(i.item ?? ""), String(i.action ?? ""));
+      await refreshPeopleDatabase();
+      return { message: message ?? "" };
     },
   },
 ];

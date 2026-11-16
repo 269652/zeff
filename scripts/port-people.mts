@@ -116,6 +116,100 @@ const doc = { type: "doc", content: [{ type: "paragraph" }] };
 const REQUEST = { write: "all", ai: true };
 const call = (id: string, flow: string, input: Record<string, unknown> = {}) => ({ id, kind: "call", flow, input, onError: "continue" });
 
+// ---- the widgets, and what People has you confirm: the kernel's reads (people.widget, people.review-list) behind lambdas, the buttons through flows
+type WidgetDump = { id: string; label: string; icon: string; description: string; size: string; ttl: number; settings: { key: string; label: string; kind: string; default?: unknown; min?: number; max?: number; options?: { value: string; label: string }[]; hidden?: boolean }[]; acts: boolean };
+const WIDGETS = JSON.parse(fs.readFileSync(path.join(SRC, "widgets.json"), "utf8")) as WidgetDump[];
+const REVIEW = [
+  { id: "claim", source: "people-claim", label: "What the AI read about people" },
+  { id: "link", source: "people-link", label: "Who is connected to what" },
+  { id: "stale", source: "people-stale", label: "Still true?" },
+  { id: "date", source: "people-date", label: "Dates found — are they right?" },
+  { id: "followup", source: "people-followup", label: "Follow up?" },
+];
+const passLambda = (name: string, label: string, what: string, zeff: string[], body: string) => {
+  write(`lambdas/${name}/index.mjs`, body);
+  write(`lambdas/${name}/lambda.json`, JSON.stringify({ name, label, what, kind: "function", zeff, timeoutMs: 120000, memoryMb: 256 }, null, 2) + "\n");
+};
+for (const w of WIDGETS) {
+  const short = w.id.slice("people.".length);
+  passLambda(
+    `people.widget.${short}`,
+    `People widget: ${w.label}`,
+    `The data of the widget "${w.label}" — what the built-in shows, through the kernel's read people.widget.`,
+    ["people.widget"],
+    `/** The widget ${w.id}: its data as the built-in's widget works it out (the kernel's read \`people.widget\`). event: { config }. */\nexport async function handler(event, context) {\n  return await context.zeff.call("people.widget", { id: ${JSON.stringify(w.id)}, config: event?.config ?? {} });\n}\n`,
+  );
+}
+for (const r of REVIEW) {
+  passLambda(
+    `people.review.${r.id}`,
+    `People review: ${r.label}`,
+    `What waits for your word in the review queue — "${r.label}" — through the kernel's read people.review-list.`,
+    ["people.review-list"],
+    `/** The review source ${r.source}: what waits, as the built-in lists it (the kernel's read \`people.review-list\`). */\nexport async function handler(event, context) {\n  return (await context.zeff.call("people.review-list", { source: ${JSON.stringify(r.source)} })).entries;\n}\n`,
+  );
+}
+const EXTRA_ITEMS: unknown[] = [];
+let n = 9;
+for (const w of WIDGETS.filter((x) => x.acts)) {
+  const short = w.id.slice("people.".length);
+  EXTRA_ITEMS.push({
+    id: `i${n++}`,
+    parent: "i1",
+    kind: "page",
+    title: `Widget button: ${w.label}`,
+    icon: "👥",
+    content: doc,
+    flow: {
+      name: `people.widget-act.${short}`,
+      title: `A button of the widget “${w.label}”`,
+      description: `What a button of the widget ${w.id} does (input action, payload, config); the widget's data after it.`,
+      inputs: [],
+      nodes: [
+        { id: "run", kind: "action", action: "people.widget-act", input: { id: w.id, action: "{{ input.action }}", payload: "{{ input.payload }}", config: "{{ input.config }}" } },
+        { id: "done", kind: "return", value: "{{ steps.run }}" },
+      ],
+      requested: REQUEST,
+      triggers: [{ kind: "manual" }],
+    },
+  });
+}
+for (const r of REVIEW) {
+  EXTRA_ITEMS.push({
+    id: `i${n++}`,
+    parent: "i1",
+    kind: "page",
+    title: `Review: ${r.label}`,
+    icon: "👥",
+    content: doc,
+    flow: {
+      name: `people.review-act.${r.id}`,
+      title: `A word on “${r.label}”`,
+      description: `A button of the review queue's “${r.label}” (input item, action: yes or no); what came of it, in words.`,
+      inputs: [],
+      nodes: [
+        { id: "run", kind: "action", action: "people.review-act", input: { source: r.source, item: "{{ input.item }}", action: "{{ input.action }}" } },
+        { id: "done", kind: "return", value: { message: "{{ steps.run.message }}" } },
+      ],
+      requested: REQUEST,
+      triggers: [{ kind: "manual" }],
+    },
+  });
+}
+const widgetDecls = WIDGETS.map((w) => ({
+  id: w.id.slice("people.".length),
+  replaces: w.id,
+  label: w.label.slice(0, 60),
+  icon: w.icon,
+  description: w.description.slice(0, 200),
+  size: w.size,
+  ttl: Math.max(5, w.ttl),
+  settings: w.settings.filter((s) => !s.hidden).map(({ hidden, kind, ...s }) => ({ ...s, kind: ["number", "select", "text", "checkbox"].includes(kind) ? kind : "text" })),
+  lambda: `people.widget.${w.id.slice("people.".length)}`,
+  ...(w.acts ? { actFlow: `people.widget-act.${w.id.slice("people.".length)}` } : {}),
+}));
+const reviewDecls = REVIEW.map((r) => ({ id: r.id, label: r.label, listLambda: `people.review.${r.id}`, actFlow: `people.review-act.${r.id}` }));
+
 write(
   "people.package.json",
   JSON.stringify(
@@ -300,6 +394,7 @@ write(
             triggers: [{ kind: "manual" }],
           },
         },
+        ...EXTRA_ITEMS,
       ],
     },
     null,
@@ -325,7 +420,9 @@ write(
       contributes: {
         lambdas: "lambdas",
         workspacePackages: ["people.package.json"],
-        appViews: [{ id: "people", dataType: "people", label: "Overview", icon: "👥", template: "views/people.html" }],
+        widgets: widgetDecls,
+        reviewSources: reviewDecls,
+        appViews: [{ id: "people", dataType: "people", label: "Overview (plugin)", icon: "👥", template: "views/people.html" }],
         aiTasks: [
           { id: "extract", label: "People: what the messages say", what: "Reads new messages for what they say about the people you keep a profile of: roles, tasks, facts, promises, links." },
           { id: "compile", label: "People: a person's overview", what: "Writes a person's short overview from everything Zeff has on them." },

@@ -231,3 +231,62 @@ test("both templates draw without an error", { skip }, async () => {
   assert.deepEqual(draw(person, { page: { ...page, account: { name: "Anna", iban: "DE89370400440532013000", bic: "COBADEFFXXX" }, canPay: true }, wiki: wikiFull }, { ...pageState, transfer: "true", amount: "12" }).errors, [], "with the knowledge and a transfer");
   assert.deepEqual(draw(person, { page: { ready: false, error: "x" } }, pageState).errors, [], "not a person");
 });
+
+test("the widgets: each lambda gives what the built-in's widget gives; the buttons are flows", { skip }, async () => {
+  const { call, runFlow, anna } = await world();
+  const people = await import("@/plugins/people/store");
+  const { getSqlite } = await import("@/db");
+  getSqlite()
+    .prepare("insert into people_claims (person_id, kind, text, evidence, source_ref, confidence, status, direction, due, created_at) values (?, 'commitment', 'Send the photos', 'q', 'm2', 0.9, 'confirmed', 'mine', '2026-01-01', ?)")
+    .run(anna, ago(2));
+  people.addDate(anna, { kind: "birthday", label: "", day: new Date().getDate(), month: new Date().getMonth() + 1, year: 1980, yearly: true, remindDays: 7, source: "manual", sourceText: "", confirmed: true });
+  const { PEOPLE_WIDGETS } = await import("@/plugins/people/widgets");
+  const { PERSON_WIDGETS } = await import("@/plugins/people/widgets-person");
+  const { PERSON_DETAIL_WIDGETS } = await import("@/plugins/people/widgets-person-more");
+  const all = [...PEOPLE_WIDGETS, ...PERSON_WIDGETS, ...PERSON_DETAIL_WIDGETS];
+  assert.equal(all.length, 13);
+  const dump = JSON.parse(fs.readFileSync(path.join(repoPlugin("people-ext"), "zeff-plugin.json"), "utf8")) as { contributes: { widgets: { id: string; replaces: string; lambda: string; actFlow?: string }[] } };
+  assert.deepEqual(dump.contributes.widgets.map((w) => w.replaces).sort(), all.map((w) => w.id).sort(), "every widget of the built-in is declared");
+  for (const w of all) {
+    const config = { person: "Anna Berg", limit: 10, days: 30, who: "all" };
+    const built = JSON.parse(JSON.stringify(await w.data(config)));
+    const decl = dump.contributes.widgets.find((x) => x.replaces === w.id)!;
+    const port = await call(decl.lambda, { config });
+    assert.deepEqual(port, built, w.id);
+    assert.equal(!!decl.actFlow, !!w.act, `${w.id}: a flow for its buttons`);
+  }
+  // a button: "Kept" on a promise
+  const owed = (await call<{ items: { id: string }[] }>("people.widget.owed", { config: { who: "all" } })).items;
+  assert.ok(owed.length >= 1);
+  const r = await runFlow("people.widget-act.owed", { action: "done", payload: { id: owed[0].id }, config: { who: "all" } });
+  assert.equal(r.status, "done", r.error ?? "");
+  const after = (await call<{ items: { id: string }[] }>("people.widget.owed", { config: { who: "all" } })).items;
+  assert.ok(!after.some((x) => x.id === owed[0].id), "the promise is kept");
+});
+
+test("what People has you confirm: the lambdas list what the built-in lists, the flows decide, and the built-in's sources stand aside", { skip }, async () => {
+  const { call, runFlow, anna } = await world();
+  const { getSqlite } = await import("@/db");
+  const ins = getSqlite().prepare("insert into people_claims (person_id, kind, text, evidence, source_ref, confidence, status, direction, created_at) values (?, 'fact', ?, 'she said', 'm3', 0.7, 'proposed', '', ?)");
+  ins.run(anna, "Plays the cello", ago(1));
+  ins.run(anna, "Hates mushrooms", ago(1));
+  const { PEOPLE_REVIEW_OWN, PEOPLE_REVIEW } = await import("@/plugins/people/review");
+  for (const [short, id] of [["claim", "people-claim"], ["link", "people-link"], ["stale", "people-stale"], ["date", "people-date"], ["followup", "people-followup"]]) {
+    const built = JSON.parse(JSON.stringify(await PEOPLE_REVIEW_OWN.find((x) => x.id === id)!.list()));
+    assert.deepEqual(await call(`people.review.${short}`, {}), built, id);
+    // (the built-in's source lists nothing while the port's are there)
+    assert.deepEqual(await PEOPLE_REVIEW.find((x) => x.id === id)!.list(), [], `${id} stands aside`);
+  }
+  const { reviewSources } = await import("@/lib/review/point");
+  const port = reviewSources.all().flatMap((c) => c.impl).find((x) => x.id === "people-ext-claim");
+  assert.ok(port, "the port's source is in the review queue");
+  const entries = await port!.list();
+  assert.equal(entries.length >= 2, true);
+  const msg = await port!.act(entries[0].id, "yes");
+  assert.equal(typeof msg === "string" || msg === undefined, true);
+  const row = getSqlite().prepare("select status from people_claims where id = ?").get(Number(entries[0].id)) as { status: string };
+  assert.equal(row.status, "confirmed");
+  const r = await runFlow("people.review-act.claim", { item: entries[1].id, action: "no" });
+  assert.equal(r.status, "done", r.error ?? "");
+  assert.equal((getSqlite().prepare("select status from people_claims where id = ?").get(Number(entries[1].id)) as { status: string }).status, "rejected");
+});

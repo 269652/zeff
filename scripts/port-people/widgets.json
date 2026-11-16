@@ -1,0 +1,356 @@
+[
+  {
+    "id": "people.list",
+    "label": "People",
+    "icon": "👥",
+    "description": "People at a glance — your starred ones, the ones picked, or by words — with how to reach them and their next date.",
+    "size": "half",
+    "ttl": 60,
+    "settings": [
+      {
+        "key": "q",
+        "label": "Words (name, alias, mail)",
+        "kind": "text",
+        "default": ""
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 8,
+        "min": 1,
+        "max": 30
+      },
+      {
+        "key": "ids",
+        "label": "ids",
+        "kind": "text",
+        "default": "",
+        "hidden": true
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.upcoming",
+    "label": "Dates coming up",
+    "icon": "🎂",
+    "description": "Birthdays and dates of your people in the next days — tick one off when you have thought of it.",
+    "size": "half",
+    "ttl": 60,
+    "settings": [
+      {
+        "key": "days",
+        "label": "Days ahead",
+        "kind": "number",
+        "default": 14,
+        "min": 1,
+        "max": 90
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 6,
+        "min": 1,
+        "max": 20
+      }
+    ],
+    "acts": true
+  },
+  {
+    "id": "people.owed",
+    "label": "Who owes whom",
+    "icon": "🤝",
+    "description": "The commitments read from your messages: what you owe your people, what they owe you — past its day first; tick one off when it is kept.",
+    "size": "half",
+    "ttl": 60,
+    "settings": [
+      {
+        "key": "who",
+        "label": "Whose",
+        "kind": "select",
+        "default": "all",
+        "options": [
+          {
+            "value": "all",
+            "label": "Both"
+          },
+          {
+            "value": "mine",
+            "label": "What I owe"
+          },
+          {
+            "value": "theirs",
+            "label": "What they owe me"
+          }
+        ]
+      },
+      {
+        "key": "person",
+        "label": "Only with (a name; empty: everyone)",
+        "kind": "text",
+        "default": ""
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 8,
+        "min": 1,
+        "max": 30
+      }
+    ],
+    "acts": true
+  },
+  {
+    "id": "people.briefs",
+    "label": "Meeting briefs",
+    "icon": "🗒️",
+    "description": "Your appointments in the next 24 hours, a line for each person in them: when you last met, what came from them since, what is open between you.",
+    "size": "half",
+    "ttl": 120,
+    "settings": [
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 6,
+        "min": 1,
+        "max": 20
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.drifting",
+    "label": "Drifting apart",
+    "icon": "🌊",
+    "description": "The people you are in touch with less than usual: their usual rhythm over the last 12 months, and how long it has been now — twice that and more.",
+    "size": "half",
+    "ttl": 900,
+    "settings": [
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 6,
+        "min": 1,
+        "max": 20
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.todos",
+    "label": "Todos with a person",
+    "icon": "☑️",
+    "description": "The open todos about a person — on their page by itself; tick one off right here.",
+    "size": "half",
+    "ttl": 30,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 8,
+        "min": 1,
+        "max": 30
+      }
+    ],
+    "acts": true
+  },
+  {
+    "id": "people.overview",
+    "label": "All about a person",
+    "icon": "🧑",
+    "description": "Everything Zeff knows about a person in one place: who they are to you, key facts, what was learned, relations, dates, last contact, open promises and todos, money, tickets, pages, how to reach them.",
+    "size": "full",
+    "ttl": 60,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.promises",
+    "label": "Open promises (both ways)",
+    "icon": "🤝",
+    "description": "What you promised a person and what they promised you, open — past its day first; on their page by itself, empty: everyone. Tick one off when it is kept.",
+    "size": "half",
+    "ttl": 60,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the page's person, else everyone)",
+        "kind": "text",
+        "default": ""
+      },
+      {
+        "key": "who",
+        "label": "Whose",
+        "kind": "select",
+        "default": "all",
+        "options": [
+          {
+            "value": "all",
+            "label": "Both"
+          },
+          {
+            "value": "mine",
+            "label": "What I promised"
+          },
+          {
+            "value": "theirs",
+            "label": "What they promised"
+          }
+        ]
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 10,
+        "min": 1,
+        "max": 40
+      }
+    ],
+    "acts": true
+  },
+  {
+    "id": "people.facts",
+    "label": "Facts about a person",
+    "icon": "💡",
+    "description": "What matters about a person: the key facts, their role, what they look after, what they like — from their summary and what was learned from your messages.",
+    "size": "half",
+    "ttl": 120,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 10,
+        "min": 1,
+        "max": 30
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.funfacts",
+    "label": "Fun facts",
+    "icon": "🎈",
+    "description": "The fun facts about a person — what makes them them.",
+    "size": "half",
+    "ttl": 300,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.news",
+    "label": "News from a person",
+    "icon": "📰",
+    "description": "What is new with a person, the newest first: what was learned lately, their latest messages, the appointments with them.",
+    "size": "half",
+    "ttl": 60,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 8,
+        "min": 1,
+        "max": 30
+      },
+      {
+        "key": "days",
+        "label": "Of the last … days",
+        "kind": "number",
+        "default": 30,
+        "min": 1,
+        "max": 365
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.rhythm",
+    "label": "Your rhythm with a person",
+    "icon": "📈",
+    "description": "How you two are in touch: days in touch this year, how often usually, the last time, who starts, how fast each answers.",
+    "size": "full",
+    "ttl": 300,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      }
+    ],
+    "acts": false
+  },
+  {
+    "id": "people.coming",
+    "label": "Coming up with a person",
+    "icon": "📆",
+    "description": "What is coming up with a person: the next appointments with them, their birthday and the other dates you keep.",
+    "size": "half",
+    "ttl": 120,
+    "header": false,
+    "settings": [
+      {
+        "key": "person",
+        "label": "Person (a name; empty: the person whose page this is)",
+        "kind": "person",
+        "default": ""
+      },
+      {
+        "key": "limit",
+        "label": "How many",
+        "kind": "number",
+        "default": 6,
+        "min": 1,
+        "max": 30
+      }
+    ],
+    "acts": false
+  }
+]

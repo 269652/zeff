@@ -438,7 +438,7 @@ The functions are the plugin's own (`contributes.functions`) and do only what yo
 - **`pageNav`**: entries under pages in the Workspace tree. The function gives
   `[{ "pageId": 12, "entries": [{ "id", "label", "icon"?, "n"?, "group"?, "href"? }] }]`, with the page ids of its own pages (its package's). An entry without `href` opens the page with
   `?nav=<id>`.
-- **`reviewSources`**: things that wait for your word in the review queue, under `label`. `list` gives
+- **`reviewSources`**: things that wait for your word in the review queue, under `label`. Instead of `list` / `act` a source may name a lambda (`listLambda`, it only reads) and a flow of its package (`actFlow`, called with `{ item, action }`, giving `{ message }`; it may write what its package was allowed). `list` gives
   `[{ "id", "title", "detail"?, "confidence"?, "href"?, "actions": [{ "id", "label", "primary"? }] }]`. An entry without buttons isn't
   shown. A button runs `act` with
   `{ item, action }`, and what it gives (a text) is said.

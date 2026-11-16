@@ -1554,21 +1554,30 @@
                 "maxLength": 60
               },
               "list": {
+                "description": "The plugin function that gives what waits for a word: [{ id, title, detail?, confidence?, href?, actions: [{ id, label, primary? }] }].",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,39}$",
-                "description": "The plugin function that gives what waits for a word: [{ id, title, detail?, confidence?, href?, actions: [{ id, label, primary? }] }]."
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
               },
               "act": {
+                "description": "The plugin function a button runs, called with { item, action }; what it gives (a text) is said.",
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9-]{0,39}$",
-                "description": "The plugin function a button runs, called with { item, action }; what it gives (a text) is said."
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "listLambda": {
+                "description": "Or one of its lambdas (kind function) that gives them — it only reads.",
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$"
+              },
+              "actFlow": {
+                "description": "Or a flow of the plugin's package a button runs, called with { item, action }: the flow may write what its package was allowed. What it returns as `message` (a text) is said.",
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,79}$"
               }
             },
             "required": [
               "id",
-              "label",
-              "list",
-              "act"
+              "label"
             ]
           }
         },
