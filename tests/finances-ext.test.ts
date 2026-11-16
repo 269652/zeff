@@ -144,7 +144,6 @@ test("the port's view data is the built-in's: the debts overview's figures, list
     // (what the port's template needs beyond the built-in's data)
     delete port.balance;
     delete port.monthlyRows;
-    delete port.suggestions; // (the promises the plugin suggests as debts — the built-in's page gets them elsewhere)
     port.debts = (port.debts as Record<string, unknown>[]).map((x) => { const { due: _a, dueText: _b, day: _c, payment: _d, ...rest } = x; return rest; });
     assert.deepEqual(port, builtin, dir2);
   }
@@ -157,9 +156,7 @@ test("the port's view data is the built-in's: the debts overview's figures, list
   const paid = owe.debts.find((d) => !d.manual && d.payment)!;
   assert.ok(own && paid, "an own debt and a case's with an account");
   const find = (nodes: unknown[], tag: string): { a: Record<string, string> }[] => (nodes as ({ t: string; a: Record<string, string>; c: unknown[] } | string)[]).flatMap((n) => (typeof n === "string" ? [] : [...(n.t === tag ? [n] : []), ...find(n.c ?? [], tag)]));
-  // (the plugin's lambda gives each debt its creditor's id; the built-in's data has none — null for the template)
-  const withCreditor = (app: unknown) => { const o = app as { debts?: Record<string, unknown>[] }; return { ...o, debts: (o.debts ?? []).map((d) => ({ creditorId: null, ...d })) }; };
-  const draw = (state: Record<string, string>, app: unknown) => renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data: { app: withCreditor(app) }, db: { id: 1, title: "Debts" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  const draw = (state: Record<string, string>, app: unknown) => renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data: { app }, db: { id: 1, title: "Debts" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
   for (const state of [{}, { edit: String(own.id) }, { paying: String(paid.id) }, { addopen: "1" }, { incomeedit: "1" }] as Record<string, string>[]) {
     const r = draw(state, owe);
     assert.deepEqual(r.errors, [], JSON.stringify(state));

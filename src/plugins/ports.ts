@@ -35,13 +35,13 @@ export const PORTS: Port[] = [
   { builtin: "loops", plugin: "loops-ext", switch: async () => (await import("./loops/to-plugin")).switchLoopsToPlugin() },
   { builtin: "know", plugin: "know-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("know", { port: "know-ext", flow: "know.summarize", minutes: async () => 0 }) },
   { builtin: "auto-actions", plugin: "auto-actions-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("auto-actions", { port: "auto-actions-ext", flow: "autoactions.review", minutes: async () => (await import("@/lib/runs/store")).getBoardSettings().autoMinutes }) },
-  { builtin: "calendar", plugin: "calendar-ext", switch: async () => (await import("./calendar/to-plugin")).switchCalendarToPlugin() },
-  // (People: only its AI steps — the extraction, the overviews, placing contacts, matching names — are the port's; the people, their screens and widgets stay Zeff's, so the built-in stays on)
-  { builtin: "people", plugin: "people-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true }) },
   { builtin: "finances", plugin: "finances-ext", switch: async () => (await import("./finances/to-plugin")).switchFinancesToPlugin() },
   { builtin: "documents", plugin: "documents-ext", switch: async () => (await import("./documents/to-plugin")).switchDocumentsToPlugin() },
-  { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
+  { builtin: "calendar", plugin: "calendar-ext", switch: async () => (await import("./calendar/to-plugin")).switchCalendarToPlugin() },
   { builtin: "knowledge", plugin: "knowledge-ext", switch: async () => (await import("./knowledge/to-plugin")).switchKnowledgeToPlugin() },
+  // (People: only its AI steps — the extraction, the overviews, placing contacts, matching names — are the port's; the people, their screens and widgets stay Zeff's, so the built-in stays on)
+  { builtin: "people", plugin: "people-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true }) },
+  { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

@@ -433,3 +433,130 @@ test("the Studio's capability actions: list, read, save with problems, versions,
   assert.ok((await a.deleteCapabilityAction("dsl.form")).ok);
   assert.ok(!(await a.capabilityAction("dsl.form")).ok);
 });
+
+test("fs guard: Zeff's own data folder is never reachable; a root's limits are its own", async () => {
+  const { s, e } = await world();
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { dataDir } = await import("@/db");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dsl-lim-"));
+  for (let i = 0; i < 5; i++) fs.writeFileSync(path.join(root, `f${i}.txt`), "x".repeat(50));
+  const run = (action: string, input: Record<string, unknown>, perm: unknown) => e.runFlow(s.createFlow({ name: name("lim"), permissions: { fs: perm }, nodes: [{ id: "x", kind: "action", action, input }], output: "{{ steps.x }}" }));
+  assert.equal(((await run("core.fs.list", { path: root }, [{ root, maxEntries: 3 }])).output as { entries: unknown[] }).entries.length, 3);
+  assert.match((await run("core.fs.read-text", { path: path.join(root, "f0.txt") }, [{ root, maxBytes: 10 }])).error ?? "", /at most 10/);
+  assert.equal((await run("core.fs.read-text", { path: path.join(root, "f0.txt") }, [{ root, maxBytes: 100 }])).status, "done");
+  // even a root that contains the data folder doesn't reach into it
+  fs.mkdirSync(dataDir(), { recursive: true });
+  fs.writeFileSync(path.join(dataDir(), "probe.txt"), "private");
+  const r = await run("core.fs.read-text", { path: path.join(dataDir(), "probe.txt") }, [{ root: path.dirname(dataDir()) }]);
+  assert.match(r.error ?? "", /Zeff's own data folder/);
+});
+
+test("the SQL replacements give the same answers as the kernel reads they replace", async () => {
+  const { s, e } = await world();
+  const { setInstalled } = await import("@/plugins/state");
+  for (const id of ["todos", "people"]) setInstalled(id, true);
+  const { declareReadReplacements, READ_REPLACEMENTS } = await import("@/plugins/workspace/flows/declare");
+  const { flowAction } = await import("@/plugins/workspace/flows/actions");
+  const { getSqlite } = await import("@/db");
+  const sq = getSqlite();
+  sq.exec("delete from todos");
+  const todo = sq.prepare("insert into todos (ticket, text, note, status, due, merged_into, created_at) values ('t', ?, ?, ?, ?, ?, ?)");
+  todo.run("Pay rent", "n1", "open", "2026-12-01", null, "2026-11-01T10:00:00Z");
+  todo.run("Call Anna", "", "done", null, null, "2026-11-02T10:00:00Z");
+  todo.run("Merged away", "", "open", null, 1, "2026-11-03T10:00:00Z");
+  todo.run("Zeta", "x", "open", "2026-11-20", null, "2026-11-04T10:00:00Z");
+  sq.exec("create table if not exists people (id integer primary key autoincrement, name text not null, aliases text not null default '[]', note text not null default '', whatsapp text not null default '', emails text not null default '[]', entity_id integer, starred integer not null default 0, created_at text not null, updated_at text not null)");
+  sq.exec("delete from people");
+  const ppl = sq.prepare("insert into people (name, emails, starred, created_at, updated_at) values (?, ?, ?, 'x', 'x')");
+  ppl.run("anna b", '["a@x.de","anna@y.de"]', 0);
+  ppl.run("Zoe", "[]", 1);
+  ppl.run("Bert Ä", '["b@x.de"]', 0);
+  assert.equal(declareReadReplacements().length, READ_REPLACEMENTS.length);
+  assert.equal(declareReadReplacements().length, 0, "idempotent");
+
+  const both = async (kernel: string, input: Record<string, unknown>) => {
+    const k = await flowAction(kernel)!.run(input, { flow: "t", runId: null, dryRun: false, perms: {}, web: async () => new URL("https://x.example.com"), canWrite: () => undefined, may: () => undefined, log: () => undefined });
+    const f = await e.runFlow(s.createFlow({ name: name("rd"), permissions: { sql: ["todos", "people", "emails"] }, nodes: [{ id: "x", kind: "action", action: `read.${kernel}`, input }], output: "{{ steps.x }}" }));
+    assert.equal(f.status, "done", f.error ?? "");
+    return { k: JSON.parse(JSON.stringify(k)), f: f.output };
+  };
+  const cases: [string, Record<string, unknown>][] = [["todos.texts", {}], ["todos.by-ids", { ids: [1, 2, 3, 4, 99] }], ["todos.by-ids", { ids: ["2", "4"] }], ["todos.by-ids", { ids: [] }], ["messages.count", { folder: "nowhere" }], ["people.names", {}], ["people.names", { ids: [1, 3] }], ["people.emails", {}]];
+  for (const [kernel, input] of cases) {
+    const { k, f } = await both(kernel, input);
+    assert.deepEqual(f, k, `${kernel} ${JSON.stringify(input)}`);
+  }
+  // a caller without the table grant gets nothing — the replacement never has more rights than its caller
+  const poor = s.createFlow({ name: name("rdp"), permissions: { sql: ["people"] }, nodes: [{ id: "x", kind: "action", action: "read.todos.texts", input: {} }] });
+  assert.match((await e.runFlow(poor)).error ?? "", /may not read the table “todos”/);
+});
+
+test("lambdas call capabilities: read.* by name, only the tables the manifest grants, never a writing one or a program", async () => {
+  const { setInstalled } = await import("@/plugins/state");
+  for (const id of ["workspace", "lookups", "studio", "todos"]) setInstalled(id, true);
+  await import("@/plugins/contributions");
+  const store = await import("@/plugins/workspace/lambdas/store");
+  const run = await import("@/plugins/workspace/lambdas/run");
+  const { declareReadReplacements } = await import("@/plugins/workspace/flows/declare");
+  const { getSqlite } = await import("@/db");
+  const { saveCapability } = await import("@/plugins/workspace/flows/capabilities");
+  getSqlite().exec("delete from todos");
+  getSqlite().prepare("insert into todos (ticket, text, note, status, created_at) values ('t', 'Pay rent', 'n', 'open', '2026-11-01T10:00:00Z')").run();
+  declareReadReplacements();
+  saveCapability({ name: "dsl.prog", label: "p", input: [], impl: { nodes: [{ id: "r", kind: "return", value: 1 }] } });
+  const lam = (code: string, manifest: Record<string, unknown>) => store.createLambda({ manifest: { name: `dsl.l${++n}`, label: "t", what: "t", kind: "function", ...manifest }, files: { "index.mjs": code } });
+  const call = (names: string[]) => `export async function handler(event, context) { const out = {}; for (const n of ${JSON.stringify(names)}) { try { out[n] = await context.zeff.call(n, n === "read.todos.by-ids" ? { ids: event.ids } : n === "core.pref.set" ? { key: "a.b", value: 1 } : {}); } catch (e) { out[n] = "ERR " + e.message; } } return out; }`;
+  const names = ["read.todos.texts", "read.todos.by-ids", "core.pref.set", "dsl.prog"];
+  // granted: its table
+  const todoId = (getSqlite().prepare("select id from todos").get() as { id: number }).id;
+  const ok = await run.runLambda(lam(call(names), { zeff: names, sql: ["todos"] }), { ids: [todoId] });
+  assert.ok(ok.ok, ok.ok ? "" : ok.error);
+  const r = (ok.ok ? ok.result : {}) as Record<string, unknown>;
+  assert.deepEqual((r["read.todos.texts"] as { todos: { text: string }[] }).todos.map((x) => x.text), ["Pay rent"]);
+  assert.equal((r["read.todos.by-ids"] as { todos: unknown[] }).todos.length, 1);
+  assert.match(String(r["core.pref.set"]), /changes something/);
+  assert.match(String(r.dsl_prog ?? r["dsl.prog"]), /program of flow nodes/);
+  // not granted: nothing readable
+  const no = await run.runLambda(lam(call(["read.todos.texts"]), { zeff: ["read.todos.texts"] }), {});
+  assert.match(String(((no.ok ? no.result : {}) as Record<string, unknown>)["read.todos.texts"]), /may not read the table “todos”/);
+  // not named in the manifest: refused as before
+  const unnamed = await run.runLambda(lam(call(["read.todos.texts"]), { sql: ["todos"] }), {});
+  assert.match(String(((unnamed.ok ? unnamed.result : {}) as Record<string, unknown>)["read.todos.texts"]), /name it in lambda\.json/);
+});
+
+test("more SQL replacements (mail.messages, mail.unread, documents.texts) answer like the kernel reads", async () => {
+  const { s, e } = await world();
+  const { setInstalled } = await import("@/plugins/state");
+  for (const id of ["todos", "people", "documents"]) setInstalled(id, true);
+  const { declareReadReplacements } = await import("@/plugins/workspace/flows/declare");
+  const { flowAction } = await import("@/plugins/workspace/flows/actions");
+  const { getSqlite } = await import("@/db");
+  const sq = getSqlite();
+  sq.exec("delete from emails");
+  const mail = sq.prepare("insert into emails (key, conv_id, folder, from_name, from_email, subject, preview, received_at, unread, synced_at, resolved_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, 'x', ?)");
+  for (let i = 0; i < 9; i++) mail.run(`k${i}`, `c${i}`, i === 3 ? "Archive" : i === 4 ? "WhatsApp" : i === 5 ? "Gesendet" : "Posteingang", i % 2 ? null : `Name ${i}`, `Mixed${i}@X.de`, `Subject ${i}`, i === 2 ? "needle here" : `preview ${i}`, `2026-11-0${i + 1}T10:00:00Z`, i === 7 ? 0 : 1, i === 6 ? "2026-11-09" : null);
+  sq.exec("delete from documents");
+  const doc = sq.prepare("insert into documents (name, sha256, file, summary, text, created_at, updated_at, status) values (?, ?, 'f', ?, ?, ?, ?, ?)");
+  doc.run("Letter", "h1", "sum", "x".repeat(300), "2026-11-01", "2026-11-01", "ready");
+  doc.run("Pending", "h2", "sum", "y", "2026-11-02", "2026-11-02", "queued");
+  declareReadReplacements();
+  const kctx = { flow: "t", runId: null, dryRun: false, perms: {}, web: async () => new URL("https://x.example.com"), canWrite: () => undefined, may: () => undefined, log: () => undefined };
+  const both = async (kernel: string, input: Record<string, unknown>, perms: Record<string, unknown> = { sql: ["emails", "documents"] }) => {
+    const k = await flowAction(kernel)!.run(input, kctx);
+    const f = await e.runFlow(s.createFlow({ name: name("rd2"), permissions: perms, nodes: [{ id: "x", kind: "action", action: `read.${kernel}`, input }], output: "{{ steps.x }}" }));
+    assert.equal(f.status, "done", f.error ?? "");
+    return { k: JSON.parse(JSON.stringify(k)), f: f.output };
+  };
+  const cases: [string, Record<string, unknown>][] = [["mail.messages", {}], ["mail.messages", { contains: "needle" }], ["mail.messages", { contains: "nomatch" }], ["mail.messages", { limit: 3 }], ["mail.unread", {}], ["mail.unread", { limit: 2 }], ["mail.unread", { limit: 0 }], ["mail.unread", { limit: 500 }], ["documents.texts", {}], ["documents.texts", { chars: 150 }], ["documents.texts", { chars: 5 }]];
+  for (const [kernel, input] of cases) {
+    const { k, f } = await both(kernel, input);
+    assert.deepEqual(f, k, `${kernel} ${JSON.stringify(input)}`);
+  }
+  // more rows than the default cap: the caller raises sqlMaxRows, as the kernel action's 50000 needs
+  sq.exec("delete from emails");
+  sq.exec("with recursive n(i) as (select 1 union all select i + 1 from n where i < 5200) insert into emails (key, conv_id, folder, subject, preview, received_at, unread, synced_at) select 'm' || i, 'c', 'Posteingang', 's', 'p', '2026-11-01', 1, 'x' from n");
+  assert.equal(((await both("mail.messages", {}, { sql: ["emails"], sqlMaxRows: 50000 })).f as { messages: unknown[] }).messages.length, 5200);
+  const capped = await both("mail.messages", {}, { sql: ["emails"] });
+  assert.equal((capped.f as { messages: unknown[] }).messages.length, 5000, "without the grant: the default cap");
+});

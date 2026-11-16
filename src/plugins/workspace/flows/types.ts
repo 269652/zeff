@@ -106,6 +106,8 @@ export type FlowPermissions = {
   sync?: string[];
   /** The plugins' stores it may read and write ("<plugin>.<store>": contributes.stores). */
   store?: string[];
+  /** The sign-ins it may use ("<plugin>.<id>": contributes.oauth) — a token, a call to the service as the user. */
+  oauth?: string[];
   /** The driver lambdas it may run (their names — kind driver: a scraper in the automation Chrome, a desktop app's reader). */
   driver?: string[];
   /** May book money: payments into the ledger, a booking confirming one, what a payment settles (a promise, a debt). */
@@ -114,8 +116,8 @@ export type FlowPermissions = {
   todos?: boolean;
   /** The parts of Zeff's structure it may read or change (read, pages, databases, schema:<id>, blocks, flows, plugins, delete) — the meta.* actions. */
   meta?: string[];
-  /** The sign-ins it may use ("<plugin>.<id>": contributes.oauth) — a token, a call to the service as the user. */
-  oauth?: string[];
+  /** Rows core.sql.query may give at most (default 5000, up to 50000). */
+  sqlMaxRows?: number;
   /** The tables core.sql.exec may insert into, update and delete from. */
   sqlWrite?: string[];
   /** Folders core.fs.* may reach (absolute paths; write: may change files there too). */
@@ -301,14 +303,15 @@ function normalizePermissions(raw: unknown): FlowPermissions {
     ...(o.todos === true ? { todos: true } : {}),
     ...(Array.isArray(o.sync) && o.sync.map(str).filter((x) => SYNC_SOURCES.includes(x)).length ? { sync: [...new Set(o.sync.map(str).filter((x) => SYNC_SOURCES.includes(x)))] } : {}),
     ...(Array.isArray(o.store) && o.store.map(str).filter((x) => STORE_NAME.test(x)).length ? { store: [...new Set(o.store.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
+    ...(Array.isArray(o.oauth) && o.oauth.map(str).filter((x) => STORE_NAME.test(x)).length ? { oauth: [...new Set(o.oauth.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
     ...(Array.isArray(o.driver) && o.driver.map(str).filter((x) => DRIVER_NAME.test(x)).length ? { driver: [...new Set(o.driver.map(str).filter((x) => DRIVER_NAME.test(x)))] } : {}),
     ...(metaOf(o.meta).length ? { meta: metaOf(o.meta) } : {}),
     ...(Array.isArray(o.sql) && o.sql.map(str).some((x) => /^[a-z_][a-z0-9_]*$/i.test(x)) ? { sql: [...new Set(o.sql.map(str).filter((x) => /^[a-z_][a-z0-9_]*$/i.test(x)))] } : {}),
     ...(Array.isArray(o.pref) && o.pref.map(str).some((x) => /^[\w.-]+\*?$/.test(x)) ? { pref: [...new Set(o.pref.map(str).filter((x) => /^[\w.-]+\*?$/.test(x)))] } : {}),
-    ...(Array.isArray(o.oauth) && o.oauth.map(str).filter((x) => STORE_NAME.test(x)).length ? { oauth: [...new Set(o.oauth.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
     ...(Array.isArray(o.sqlWrite) && o.sqlWrite.map(str).some((x) => /^[a-z_][a-z0-9_]*$/i.test(x)) ? { sqlWrite: [...new Set(o.sqlWrite.map(str).filter((x) => /^[a-z_][a-z0-9_]*$/i.test(x)))] } : {}),
     ...(Array.isArray(o.fs) && o.fs.some((x) => typeof obj(x).root === "string" && str(obj(x).root)) ? { fs: o.fs.filter((x) => str(obj(x).root)).slice(0, 8).map((x) => ({ root: str(obj(x).root), ...(obj(x).write === true ? { write: true } : {}), ...(posInt(obj(x).maxEntries) ? { maxEntries: Math.min(5000, posInt(obj(x).maxEntries)!) } : {}), ...(posInt(obj(x).maxBytes) ? { maxBytes: Math.min(10_000_000, posInt(obj(x).maxBytes)!) } : {}) })) } : {}),
     ...(Array.isArray(o.secret) && o.secret.map(str).some((x) => /^[A-Za-z0-9_]+$/.test(x)) ? { secret: [...new Set(o.secret.map(str).filter((x) => /^[A-Za-z0-9_]+$/.test(x)))] } : {}),
+    ...(posInt(o.sqlMaxRows) ? { sqlMaxRows: Math.min(50_000, posInt(o.sqlMaxRows)!) } : {}),
     ...(posInt(o.runTimeoutMs) ? { runTimeoutMs: Math.min(3_600_000, posInt(o.runTimeoutMs)!) } : {}),
     ...(posInt(o.maxSteps) ? { maxSteps: Math.min(20000, posInt(o.maxSteps)!) } : {}),
   };

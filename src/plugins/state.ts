@@ -38,14 +38,14 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   loops: { port: "loops-ext", steps: [] },
   // (News: the port's flow fetches, filters, tags and discovers — its page is the plugin's view; the settings page, the Today page's news and the Workspace database of what you kept stay the kernel's and read the same tables)
   news: { port: "news-ext", steps: ["news"] },
-  // (Calendar: the port's page, flows and AI steps — the model, the readers, the settings page and the plugin API stay the kernel's; its steps calendartodos and calendarrelations run the port's flows — lib/calendar/todos.ts calendarTodosVia, sync/registry.ts)
-  calendar: { port: "calendar-ext", steps: [] },
   // (Documents: the port's flows go through the documents for todos, match them to the todos, read in your local folders and read what waits — plugins/documents/port.ts; the screen, uploads, the settings page and the knowledge server's abstracts stay the built-in's)
   documents: { port: "documents-ext", steps: ["localdocs", "doctodos", "docrelations"] },
-  // (the Explorer: the port's screen is a view of the Workspace, its writes are flows; the disk, the viewer's file route, the watchers and the imports stay the kernel's — fs.* actions, /api/explorer/file)
-  explorer: { port: "explorer-ext", steps: [] },
+  // (Calendar: the port's page, flows and AI steps — the model, the readers, the settings page and the plugin API stay the kernel's; its steps calendartodos and calendarrelations run the port's flows — lib/calendar/todos.ts calendarTodosVia, sync/registry.ts)
+  calendar: { port: "calendar-ext", steps: [] },
   // (Knowledge: the port's lambdas and flows are the chat, the matching of knowledge to todos, the sync and adding; the connection to the knowledge server, the export it reads, the todo panel and the repos' systems stay the kernel's)
   knowledge: { port: "knowledge-ext", steps: [] },
+  // (the Explorer: the port's screen is a view of the Workspace, its writes are flows; the disk, the viewer's file route, the watchers and the imports stay the kernel's — fs.* actions, /api/explorer/file)
+  explorer: { port: "explorer-ext", steps: [] },
 };
 
 /**

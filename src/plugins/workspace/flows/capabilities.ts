@@ -29,7 +29,7 @@ const field = (name: string, type: FieldSpec["type"], extra: Partial<FieldSpec> 
 
 export const prefGranted = (granted: string[] | undefined, key: string): boolean => (granted ?? []).some((g) => (g.endsWith("*") ? key.startsWith(g.slice(0, -1)) : g === key));
 
-const TABLE_REF = /\b(?:from|join)\s+["`[]?([A-Za-z_]\w*)/gi;
+const TABLE_REF = /\b(?:from|join)\s+["`[]?([A-Za-z_]\w*)\b(?!\s*\()/gi; // (a table-valued function like json_each(...) is no table)
 const NEVER = new Set(["ws_flow_secrets"]);
 const MAX_ROWS = 5000;
 const FS_MAX = 1_000_000;
@@ -119,7 +119,7 @@ export const PRIMITIVES: Record<string, Primitive> = {
       for (const t of tables) if (NEVER.has(t) || !granted.has(t)) throw new Error(`This flow may not read the table “${t}” — grant it under the flow's permissions (sql).`);
       const params = Array.isArray(i.params) ? i.params : [];
       if (params.some((p) => p !== null && !["string", "number", "boolean"].includes(typeof p))) throw new Error("sql.query: parameters are texts, numbers, true/false or null.");
-      const limit = Math.max(1, Math.min(MAX_ROWS, Math.floor(Number(i.limit) || 200)));
+      const limit = Math.max(1, Math.min(ctx.perms.sqlMaxRows ?? MAX_ROWS, Math.floor(Number(i.limit) || 200)));
       let stmt;
       try {
         stmt = getSqlite().prepare(sql);

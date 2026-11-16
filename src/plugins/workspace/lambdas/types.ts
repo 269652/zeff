@@ -38,6 +38,10 @@ export type LambdaManifest = {
   web?: string[];
   /** Zeff functions it may call (context.zeff.call): "web.search", "web.read", "ai.extract" … (the flow actions). */
   zeff?: string[];
+  /** Database tables the capabilities it calls may read (sql.query, the read.* capabilities): "todos", "people". Nothing is readable without it. */
+  sql?: string[];
+  /** Rows a sql.query it calls may give at most (default 5000, up to 50000). */
+  sqlMaxRows?: number;
   /** npm packages: name → version range. Installed without their install scripts. */
   dependencies?: Record<string, string>;
   /** A function's output, checked (none: any JSON). */
@@ -82,6 +86,8 @@ export function normalizeManifest(raw: unknown): LambdaManifest {
     ...(list(o.requires).length ? { requires: list(o.requires) } : {}),
     ...(web.length ? { web } : {}),
     ...(list(o.zeff).length ? { zeff: list(o.zeff) } : {}),
+    ...(Number.isFinite(Number(o.sqlMaxRows)) && Number(o.sqlMaxRows) > 0 ? { sqlMaxRows: Math.min(50_000, Math.floor(Number(o.sqlMaxRows))) } : {}),
+    ...(list(o.sql).filter((t) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(t)).length ? { sql: list(o.sql).filter((t) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(t)) } : {}),
     ...(Object.keys(deps).length ? { dependencies: deps } : {}),
     ...(o.output && typeof o.output === "object" ? { output: o.output as JsonSchema } : {}),
     timeoutMs: n(o.timeoutMs, 1000, kind === "driver" ? 600000 : 120000, 20000),

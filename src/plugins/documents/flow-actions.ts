@@ -267,7 +267,7 @@ export const DOCUMENTS_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
-    name: "todos.set-doc-related",
+    name: "todos.set-related",
     group: "todos",
     label: "What the todos are related to",
     summary: "Adds to the todos the things an AI found them related to (what they have stays until you dismiss it): picks: { <todo id>: [ref] }, only refs starting with prefix (\"doc:\"). { changed } — how many todos changed.",

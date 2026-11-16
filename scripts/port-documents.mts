@@ -136,7 +136,7 @@ const relateFlow = {
   inputs: [],
   nodes: [
     invoke("r", "documents.relate", {}),
-    { id: "set", kind: "action", action: "todos.set-doc-related", input: { prefix: "doc:", picks: "{{ steps.r.picks }}" } },
+    { id: "set", kind: "action", action: "todos.set-related", input: { prefix: "doc:", picks: "{{ steps.r.picks }}" } },
     invoke("rep", "documents.report", { kind: "relate", todos: "{{ steps.r.todos }}", batches: "{{ steps.r.batches }}", failed: "{{ steps.r.failed }}", changed: "{{ steps.set.changed }}" }),
     { id: "done", kind: "return", value: ret },
   ],
