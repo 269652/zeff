@@ -437,3 +437,43 @@ test("week editing: a day's break, a whole entry, a copy, a start, parallel work
     assert.deepEqual(d.errors, [], JSON.stringify(state));
   }
 });
+
+test("a job's and a project's own page: entries, booking days on a project, deleting — as the built-in's pages do", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { listJobs, getJobByNumber } = await import("@/lib/jobs");
+  const { listProjects } = await import("@/lib/projects");
+  const { getJobHours, listEntries } = await import("@/lib/entries");
+  const j = getJobByNumber("100001")!;
+  const jd = await run("zeiterfassung.job-detail", { ref: `job:${j.id}` });
+  assert.equal(jd.found, true);
+  assert.equal(jd.entries.length, listEntries({ jobId: j.id, limit: 200 }).length);
+  assert.match(jd.sub, new RegExp(`^${String(getJobHours(j.id)).replace(".", "[.,]")}h booked in`));
+  assert.equal((await run("zeiterfassung.job-detail", { ref: "job:99999" })).found, false);
+  // a project: its days booked, then the page lists them
+  const made = await runFlow("zeiterfassung.project-save", { title: "Training", jobNumber: "100001" });
+  assert.equal(made.status, "done");
+  const p = listProjects({ includeInactive: true }).find((x) => x.title === "Training")!;
+  const booked = await runFlow("zeiterfassung.book-days", { id: p.id, from: "2027-01-04", to: "2027-01-06", hours: "6", fillUp: "", description: "Training", type: "" });
+  assert.equal(booked.status, "done", JSON.stringify(booked));
+  assert.match(String((booked.output as any).message), /Booked 18 h on 3 days/);
+  const pd = await run("zeiterfassung.job-detail", { ref: `project:${p.id}` });
+  assert.equal(pd.entries.length, 3);
+  assert.ok(pd.today && pd.typeOptions.length, "the form's defaults");
+  const none = await runFlow("zeiterfassung.book-days", { id: p.id, from: "2027-01-09", to: "2027-01-10", hours: "6", description: "x" });
+  assert.equal(none.status, "failed", "a weekend: nothing to book");
+  // delete: a job with time is refused, a project goes (its entries stay)
+  assert.equal((await runFlow("zeiterfassung.job-delete", { kind: "job", id: j.id })).status, "failed");
+  assert.equal((await runFlow("zeiterfassung.job-delete", { kind: "project", id: p.id })).status, "done");
+  assert.equal(listProjects({ includeInactive: true }).some((x) => x.id === p.id), false);
+  assert.ok(listJobs().length >= 2);
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  for (const [state, d] of [[{ jd: `job:${j.id}` }, jd], [{ jd: `project:${p.id}` }, pd]] as const) {
+    const r = renderView(template, { rows: [], props: [], titleName: "Name", state: { view: "jobs", ...state }, app: {}, data: { j: await run("zeiterfassung.jobs", {}), d }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+    assert.deepEqual(r.errors, [], JSON.stringify(state));
+  }
+});

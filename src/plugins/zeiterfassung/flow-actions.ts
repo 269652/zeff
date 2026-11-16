@@ -66,6 +66,60 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "time.job-detail",
+    group: "time",
+    label: "One job's or project's page",
+    summary: "What a job's or a project's own page shows (input kind job|project, id): its title, what it has booked, its entries (a job's 200 newest, a project's 500), for a project the job it is on and the types and today's date for booking days.",
+    input: [f("kind", "text"), f("id", "number", { required: true })],
+    output: "{ found, kind, title, sub, entries, … }",
+    run: async (i) => {
+      const { jobDetail } = await import("./jobs-data");
+      return jobDetail({ kind: text(i.kind), id: i.id });
+    },
+  },
+  {
+    name: "time.job-delete",
+    group: "time",
+    label: "Delete a job or a project",
+    summary: "Deletes a job or a project (input kind job|project, id) — a job with entries is refused, a project's entries stay without a project. Output { ok }; a refusal is an error.",
+    input: [f("kind", "text", { required: true }), f("id", "number", { required: true })],
+    output: "{ ok }",
+    writes: true,
+    run: async (i) => {
+      if (text(i.kind) === "project") (await import("@/lib/projects")).deleteProject(Number(i.id));
+      else (await import("@/lib/jobs")).deleteJob(Number(i.id));
+      return { ok: true };
+    },
+  },
+  {
+    name: "time.book-days",
+    group: "time",
+    label: "Book the working days of a range on a project",
+    summary: "One entry per working day from from to to on a project (input id, from, to, hours, fillUp: only what the day lacks, description, type), as the project's page does it. Output { ok, message }; nothing to book is an error.",
+    input: [f("id", "number", { required: true }), f("from", "text"), f("to", "text"), f("hours", "text"), f("fillUp", "boolean"), f("description", "text"), f("type", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { t } = await import("@/lib/i18n/server");
+      const { formatHours } = await import("@/lib/format");
+      const { bookProjectDays } = await import("@/lib/project-days");
+      const hoursText = text(i.hours).trim();
+      const { booked, skipped } = bookProjectDays({
+        projectId: Number(i.id),
+        from: text(i.from),
+        to: text(i.to),
+        hours: hoursText ? Number(hoursText.replace(",", ".")) : undefined,
+        fillUp: i.fillUp === true || i.fillUp === "true",
+        description: text(i.description),
+        type: text(i.type) || undefined,
+      });
+      const total = booked.reduce((a, b) => a + b.hours, 0);
+      const skippedText = skipped.length ? ` ${t("Skipped {days}.", { days: skipped.map((s) => `${s.date} (${s.reason})`).join(", ") })}` : "";
+      if (booked.length === 0) throw new Error(`${t("Nothing to book.")}${skippedText}`);
+      return { ok: true, message: (booked.length === 1 ? t("Booked {hours} h on 1 day.", { hours: formatHours(total) }) : t("Booked {hours} h on {n} days.", { hours: formatHours(total), n: booked.length })) + skippedText };
+    },
+  },
+  {
     name: "time.job-save",
     group: "time",
     label: "Create or change a job",
