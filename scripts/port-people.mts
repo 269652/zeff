@@ -236,7 +236,7 @@ write(
     {
       format: 1,
       id: "people-ext",
-      version: "1.1.0",
+      version: "1.2.0",
       name: "People",
       description: "The AI steps of People: what the messages say about people, their overviews, who is a person or an organisation, which names are one person.",
       icon: "👥",
@@ -442,8 +442,13 @@ write(
   ) + "\n",
 );
 
-write("views/people.html", fs.readFileSync(path.join(SRC, "people-view.html"), "utf8"));
-write("views/person.html", fs.readFileSync(path.join(SRC, "person-view.html"), "utf8"));
+// (a database's rowTemplate is kept up to 20000 characters — the schema cuts the rest, which left the person's page with a tag never closed: so the views are written without their indentation, and too long is an error)
+const NL = String.fromCharCode(10);
+const tight = (f: string) => fs.readFileSync(path.join(SRC, f), "utf8").split(NL).map((l) => l.trim()).filter(Boolean).join(NL) + NL;
+const personView = tight("person-view.html");
+if (personView.length >= 20000) throw new Error(`views/person.html is ${personView.length} characters: a rowTemplate keeps only 20000`);
+write("views/people.html", tight("people-view.html"));
+write("views/person.html", personView);
 const old = fs.existsSync(path.join(dir, "zeff-plugin.json")) ? (JSON.parse(fs.readFileSync(path.join(dir, "zeff-plugin.json"), "utf8")) as { version?: string }) : {};
 write(
   "zeff-plugin.json",
@@ -452,7 +457,7 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "people-ext",
       name: "People (AI steps)",
-      version: "1.1.0",
+      version: "1.2.0",
       description: "What the AI does with your people: reads what new messages say about them (roles, tasks, promises, links), writes their overview, tells a person from an organisation and places them in a circle, and matches the names. The contacts themselves stay Zeff's.",
       author: "Zeff",
       apiVersion: 1,

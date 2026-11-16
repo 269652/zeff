@@ -1,6 +1,6 @@
 <data name="page" lambda="people.person" with='{"row": {{ id }}, "part": "page"}'/>
 <data name="wiki" lambda="people.person" with='{"row": {{ id }}, "part": "wiki"}' when="{{ data.page.ready }}"/>
-<on event="person-changed" action="reload"/>
+<on event="pc" action="reload"/>
 <data name="loops" lambda="people.person" with='{"row": {{ id }}, "part": "loops"}' when="{{ data.page.ready }}"/>
 <state name="keep" value=""/>
 <state name="dkind" value="iban"/>
@@ -18,16 +18,16 @@
   {{#if data.page_error}}<box tone=bad title="Something went wrong"><text>{{ data.page_error }}</text></box>{{#else}}<text tone=muted>…</text>{{/if}}
 {{#else}}{{#if data.page.ready}}
 
-<on event="save-profile" run="people.person-op" with="row={{ id }}, op=profile, name={{ state.p_name }}, aliases={{ state.p_aliases }}, emails={{ state.p_emails }}, whatsapp={{ state.p_whatsapp }}, jira={{ state.p_jira }}" done="Saved ✓" emit="person-changed"/>
+<on event="save-profile" run="people.person-op" with="row={{ id }}, op=profile, name={{ state.p_name }}, aliases={{ state.p_aliases }}, emails={{ state.p_emails }}, whatsapp={{ state.p_whatsapp }}, jira={{ state.p_jira }}" done="Saved ✓" emit="pc"/>
 <on event="save-note" run="people.person-op" with="row={{ id }}, op=note, note={{ state.p_note }}" done="Saved ✓"/>
-<on event="add-detail" run="people.person-op" with="row={{ id }}, op=detail, action=add, key={{ state.dkind }}, value={{ state.dvalue }}" then="dvalue=" emit="person-changed"/>
-<on event="add-date" run="people.person-op" with="row={{ id }}, op=addDate, kind={{ state.datekind }}, date={{ state.datevalue }}, label={{ state.datelabel }}" done="Added ✓" then="datevalue=" emit="person-changed"/>
-<on event="add-relation" run="people.person-op" with="row={{ id }}, op=addRelation, rel={{ state.relname }}, other={{ state.relother }}" then="relname=" emit="person-changed"/>
+<on event="add-detail" run="people.person-op" with="row={{ id }}, op=detail, action=add, key={{ state.dkind }}, value={{ state.dvalue }}" then="dvalue=" emit="pc"/>
+<on event="add-date" run="people.person-op" with="row={{ id }}, op=addDate, kind={{ state.datekind }}, date={{ state.datevalue }}, label={{ state.datelabel }}" done="Added ✓" then="datevalue=" emit="pc"/>
+<on event="add-relation" run="people.person-op" with="row={{ id }}, op=addRelation, rel={{ state.relname }}, other={{ state.relother }}" then="relname=" emit="pc"/>
 
 <split ratio=1:2>
   <col gap=5>
     <box>
-      <row gap=2 align=baseline><heading level=3>Profile</heading><grow/><button run="people.person-op" with="row={{ id }}, op=star, on={{ data.page.starred ? 'false' : 'true' }}" emit="person-changed" label="{{ data.page.starLabel }}" tip="{{ data.page.starTip }}" variant=quiet/></row>
+      <row gap=2 align=baseline><heading level=3>Profile</heading><grow/><button run="people.person-op" with="row={{ id }}, op=star, on={{ data.page.starred ? 'false' : 'true' }}" emit="pc" label="{{ data.page.starLabel }}" tip="{{ data.page.starTip }}" variant=quiet/></row>
       <input bind="p_name" value="{{ data.page.profile.name }}" label="Name" leave="save-profile"/>
       <input bind="p_aliases" value="{{ data.page.profile.aliases }}" label="Also called (comma-separated)" leave="save-profile"/>
       <input bind="p_emails" value="{{ data.page.profile.emails }}" label="Mail addresses (comma-separated)" leave="save-profile"/>
@@ -47,7 +47,7 @@
               <text tone=muted tip="{{ historyTip }}"><small>{{ provenance }}</small></text>
             </col>
             <copy text="{{ value }}" label="⧉"/>
-            <button run="people.person-op" with="row={{ data.page.row }}, op=detail, action=remove, key={{ key }}, value={{ value }}" emit="person-changed" label="×" tip="Remove" variant=quiet/>
+            <button run="people.person-op" with="row={{ data.page.row }}, op=detail, action=remove, key={{ key }}, value={{ value }}" emit="pc" label="×" tip="Remove" variant=quiet/>
           </row>
           {{/each}}
         </col>
@@ -81,7 +81,7 @@
     </box>
 
     <box>
-      <row gap=2 align=baseline><heading level=3>Dates</heading><grow/><button run="people.person-op" with="row={{ id }}, op=findDates" emit="person-changed" label="Find dates" tip="In the facts and (with the LLM plugin) by AI in the knowledge and the messages" variant=quiet/></row>
+      <row gap=2 align=baseline><heading level=3>Dates</heading><grow/><button run="people.person-op" with="row={{ id }}, op=findDates" emit="pc" label="Find dates" tip="In the facts and (with the LLM plugin) by AI in the knowledge and the messages" variant=quiet/></row>
       {{#if data.page.hasDates}}
         <col gap=2>
           {{#each data.page.dates}}
@@ -91,16 +91,16 @@
             <row gap=1 wrap=true>
               {{#if confirmed}}
                 <muted>remind</muted>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=0" emit="person-changed" label="on the day" variant="{{ remindDays == 0 ? 'primary' : 'quiet' }}"/>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=3" emit="person-changed" label="3" variant="{{ remindDays == 3 ? 'primary' : 'quiet' }}"/>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=7" emit="person-changed" label="7" variant="{{ remindDays == 7 ? 'primary' : 'quiet' }}"/>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=14" emit="person-changed" label="14" variant="{{ remindDays == 14 ? 'primary' : 'quiet' }}"/>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=30" emit="person-changed" label="30" variant="{{ remindDays == 30 ? 'primary' : 'quiet' }}"/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=0" emit="pc" label="on the day" variant="{{ remindDays == 0 ? 'primary' : 'quiet' }}"/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=3" emit="pc" label="3" variant="{{ remindDays == 3 ? 'primary' : 'quiet' }}"/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=7" emit="pc" label="7" variant="{{ remindDays == 7 ? 'primary' : 'quiet' }}"/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=14" emit="pc" label="14" variant="{{ remindDays == 14 ? 'primary' : 'quiet' }}"/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=dateRemind, id={{ id }}, days=30" emit="pc" label="30" variant="{{ remindDays == 30 ? 'primary' : 'quiet' }}"/>
                 <muted>days before</muted>
               {{#else}}
-                <button run="people.person-op" with="row={{ data.page.row }}, op=dateConfirm, id={{ id }}" emit="person-changed" label="Right" variant=primary/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=dateConfirm, id={{ id }}" emit="pc" label="Right" variant=primary/>
               {{/if}}
-              <button run="people.person-op" with="row={{ data.page.row }}, op=dateDelete, id={{ id }}" emit="person-changed" label="{{ confirmed ? 'Delete' : 'Wrong' }}"/>
+              <button run="people.person-op" with="row={{ data.page.row }}, op=dateDelete, id={{ id }}" emit="pc" label="{{ confirmed ? 'Delete' : 'Wrong' }}"/>
             </row>
           </box>
           {{/each}}
@@ -135,7 +135,7 @@
   <col gap=5>
     <know row="{{ id }}"/>
     <box>
-      <row gap=2 align=baseline><heading level=3>Summary</heading><grow/><button run="people.person-op" with="row={{ id }}, op=compile" emit="person-changed" label="{{ data.page.compileLabel }}" variant=quiet/></row>
+      <row gap=2 align=baseline><heading level=3>Summary</heading><grow/><button run="people.person-op" with="row={{ id }}, op=compile" emit="pc" label="{{ data.page.compileLabel }}" variant=quiet/></row>
       {{#if data.page.compiled}}
         {{#if data.page.summary.connection}}<col gap=0><muted>What connects you</muted><text pre=true>{{ data.page.summary.connection }}</text></col>{{/if}}
         {{#if data.page.summary.keyFacts}}<col gap=0><muted>Key facts</muted>{{#each data.page.summary.keyFacts}}<text>• {{ this }}</text>{{/each}}</col>{{/if}}
@@ -158,7 +158,7 @@
             <col gap=1>
               <muted>{{ title }}</muted>
               {{#each items}}
-              <row gap=2 align=baseline wrap=false tip="{{ tip }}"><col fill=true>{{ text }}{{#if due}} <muted>· {{ due }}</muted>{{/if}}</col>{{#if commitment}}<button run="people.person-op" with="row={{ data.page.row }}, op=review, what=claim, id={{ id }}, action=done" emit="person-changed" label="Done"/>{{/if}}</row>
+              <row gap=2 align=baseline wrap=false tip="{{ tip }}"><col fill=true>{{ text }}{{#if due}} <muted>· {{ due }}</muted>{{/if}}</col>{{#if commitment}}<button run="people.person-op" with="row={{ data.page.row }}, op=review, what=claim, id={{ id }}, action=done" emit="pc" label="Done"/>{{/if}}</row>
               {{/each}}
             </col>
             {{/each}}
@@ -180,8 +180,8 @@
               <row gap=2 align=baseline wrap=false>
                 <small><muted>{{ kind }}</muted></small>
                 <col fill=true>{{ text }}{{#if due}} <muted>· {{ due }}</muted>{{/if}}</col>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=review, what=claim, id={{ id }}, action=confirm" emit="person-changed" label="Right" variant=primary/>
-                <button run="people.person-op" with="row={{ data.page.row }}, op=review, what=claim, id={{ id }}, action=reject" emit="person-changed" label="Wrong"/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=review, what=claim, id={{ id }}, action=confirm" emit="pc" label="Right" variant=primary/>
+                <button run="people.person-op" with="row={{ data.page.row }}, op=review, what=claim, id={{ id }}, action=reject" emit="pc" label="Wrong"/>
               </row>
               <truncate tip="{{ evidence }}"><muted>{{ quote }}</muted></truncate>
             </col>
@@ -206,7 +206,7 @@
               <row gap=1><b>{{ rel }}</b>{{#if toYou}}<muted>(to you)</muted>{{#else}}of {{ other }}{{/if}}</row>
               {{#if evidence}}<muted>{{ evidence }}</muted>{{/if}}
             </col>
-            <button run="people.person-op" with="row={{ data.page.row }}, op=deleteRelation, id={{ id }}" emit="person-changed" label="✕" tip="Wrong? Remove it." variant=quiet/>
+            <button run="people.person-op" with="row={{ data.page.row }}, op=deleteRelation, id={{ id }}" emit="pc" label="✕" tip="Wrong? Remove it." variant=quiet/>
           </row>
           {{/each}}
           {{#each data.page.relations.in}}
@@ -215,7 +215,7 @@
               <row gap=1>{{ person }}: <b>{{ rel }}</b></row>
               {{#if evidence}}<muted>{{ evidence }}</muted>{{/if}}
             </col>
-            <button run="people.person-op" with="row={{ data.page.row }}, op=deleteRelation, id={{ id }}" emit="person-changed" label="✕" tip="Remove" variant=quiet/>
+            <button run="people.person-op" with="row={{ data.page.row }}, op=deleteRelation, id={{ id }}" emit="pc" label="✕" tip="Remove" variant=quiet/>
           </row>
           {{/each}}
         </col>
@@ -238,7 +238,7 @@
     {{#if data.wiki.hasWikiMerge}}
       <box tone=warn>
         <small>{{ data.wiki.wikiMerge.text }}</small>
-        <row gap=2><button run="people.person-op" with="row={{ id }}, op=knowledgeMerge, id={{ data.wiki.wikiMerge.id }}" emit="person-changed" label="{{ data.wiki.wikiMerge.label }}" variant=primary/><button run="people.person-op" with="row={{ id }}, op=knowledgeDismiss, id={{ data.wiki.wikiMerge.id }}" emit="person-changed" label="Not the same"/></row>
+        <row gap=2><button run="people.person-op" with="row={{ id }}, op=knowledgeMerge, id={{ data.wiki.wikiMerge.id }}" emit="pc" label="{{ data.wiki.wikiMerge.label }}" variant=primary/><button run="people.person-op" with="row={{ id }}, op=knowledgeDismiss, id={{ data.wiki.wikiMerge.id }}" emit="pc" label="Not the same"/></row>
       </box>
     {{/if}}
     {{#if data.wiki.wiki.summary}}<text>{{ data.wiki.wiki.summary }}</text>{{/if}}
@@ -273,18 +273,18 @@
       {{#if proposal}}
       <box tone=good>
         <small>{{ proposal.text }}{{#if proposal.href}} <a href="{{ proposal.href }}">show message</a>{{/if}}</small>
-        <row gap=2><button run="people.loop" with="ref={{ ref }}, op=accept-close" emit="person-changed" label="Yes, kept" tip="Close it — what you say is noted, so Zeff learns what keeps a promise"/><button run="people.loop" with="ref={{ ref }}, op=reject-close" emit="person-changed" label="No, still open" tip="This doesn't close it — it won't be proposed again"/></row>
+        <row gap=2><button run="people.loop" with="ref={{ ref }}, op=accept-close" emit="pc" label="Yes, kept"/><button run="people.loop" with="ref={{ ref }}, op=reject-close" emit="pc" label="No, still open"/></row>
       </box>
       {{/if}}
       {{#if open}}
       <row gap=1>
-        <button run="people.loop" with="ref={{ ref }}, op=close" emit="person-changed" label="Done" tip="Kept or answered — closed"/>
-        {{#if unconfirmed}}<button run="people.loop" with="ref={{ ref }}, op=confirm" emit="person-changed" label="Confirm" tip="Yes, this is open between you"/>{{/if}}
-        <button run="people.loop" with="ref={{ ref }}, op=dismiss" emit="person-changed" label="Not a loop" tip="Nothing is owed here — it goes, and Zeff learns from it"/>
-        {{#if overdue}}<button run="people.loop" with="ref={{ ref }}, op=later" emit="person-changed" label="Later" tip="Not on the Today page for a few days"/>{{/if}}
+        <button run="people.loop" with="ref={{ ref }}, op=close" emit="pc" label="Done"/>
+        {{#if unconfirmed}}<button run="people.loop" with="ref={{ ref }}, op=confirm" emit="pc" label="Confirm"/>{{/if}}
+        <button run="people.loop" with="ref={{ ref }}, op=dismiss" emit="pc" label="Not a loop"/>
+        {{#if overdue}}<button run="people.loop" with="ref={{ ref }}, op=later" emit="pc" label="Later"/>{{/if}}
       </row>
       {{#else}}
-      <row gap=2><muted>{{ closed }}</muted><button run="people.loop" with="ref={{ ref }}, op=reopen" emit="person-changed" label="Reopen" tip="Not kept after all — open again (and not closed this way again)"/></row>
+      <row gap=2><muted>{{ closed }}</muted><button run="people.loop" with="ref={{ ref }}, op=reopen" emit="pc" label="Reopen"/></row>
       {{/if}}
     </box>
     {{/each}}
