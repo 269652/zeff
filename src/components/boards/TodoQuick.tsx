@@ -14,7 +14,7 @@ import { useT } from "@/components/I18nProvider";
 import type { T } from "@/lib/i18n/shared";
 import { getDraft, saveDraft, useTodoDrafts } from "./todo-drafts";
 import { AttachPanel } from "@/plugins/documents/AttachPanel";
-import { uploadDocuments } from "@/plugins/documents/DocumentsApp";
+import { uploadDocuments } from "@/plugins/documents/upload";
 import { attachDocumentAction, ensureDocumentsAction } from "@/plugins/documents/server-actions";
 import { usePluginOn } from "../PluginFlags";
 import { TodoTimePanel } from "./TodoTime";

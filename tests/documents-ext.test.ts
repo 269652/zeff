@@ -130,20 +130,20 @@ test("local folders through the port: new files read in and read, a changed one 
   assert.equal(fs.readdirSync(path.join(dir, "documents")).filter((f) => /brief/.test(f)).length, 1);
 });
 
-test("the search and a document's text through the port are the built-in's", { skip }, async () => {
+test("the search and a document's text through the port", { skip }, async () => {
   await setup();
-  const { documentsMatching, documentText } = await import("@/plugins/documents/fulltext");
   const { getLambda } = await import("@/plugins/workspace/lambdas/store");
   const { runLambda } = await import("@/plugins/workspace/lambdas/run");
   const doc = await addDoc("Rechnung Stadtwerke.txt", "Rechnung 2026-11 über Strom, Kunde 4711, Zählerstand 12345");
   for (const q of ["rechnung", "strom 4711", "zählerstand", "gibtesnicht", ""]) {
     const r = await runLambda(getLambda("documents.search")!, { q });
     assert.ok(r.ok, r.ok ? "" : r.error);
-    assert.deepEqual([...(r.result as { ids: number[] }).ids].sort(), [...documentsMatching(q)].sort(), `“${q}”`);
+    const found = (r.result as { ids: number[] }).ids.includes(doc.id);
+    assert.equal(found, ["rechnung", "strom 4711", "zählerstand"].includes(q), `“${q}”`);
   }
   const t = await runLambda(getLambda("documents.text")!, { id: doc.id });
   assert.ok(t.ok);
-  assert.deepEqual({ found: (t.result as { found: boolean }).found, text: (t.result as { text: string }).text, summary: (t.result as { summary: string }).summary }, { found: true, ...documentText(doc.id) });
+  assert.deepEqual({ found: (t.result as { found: boolean }).found, text: (t.result as { text: string }).text, summary: (t.result as { summary: string }).summary }, { found: true, text: "Rechnung 2026-11 über Strom, Kunde 4711, Zählerstand 12345", summary: "" });
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -301,13 +301,14 @@ test("the abstracts: kept with the documents once the knowledge server compiled 
   const row = getSqlite().prepare("select summary, concepts, compiled from documents where id = ?").get(doc.id) as { summary: string; concepts: string; compiled: number };
   assert.deepEqual([row.summary, row.concepts, row.compiled], ["Ein Mietvertrag mit Kaution.", "Miete, Kaution", 1]);
   assert.ok(!(await lambda("documents.abstracts-plan")).ids.includes(`zeff:doc:${doc.id}`));
-  // The pages for the knowledge server: as the built-in's export gives them.
-  const { documentDocs } = await import("@/plugins/documents/export");
+  // The pages for the knowledge server.
   const { getLambda } = await import("@/plugins/workspace/lambdas/store");
   const { runLambda } = await import("@/plugins/workspace/lambdas/run");
   const mine = await runLambda(getLambda("documents.knowledge-docs")!, {});
   assert.ok(mine.ok);
-  assert.deepEqual(mine.result, documentDocs("").map(({ url, ...d }) => (void url, d)));
+  const page = (mine.result as { id: string; space: string; body: string }[]).find((d) => d.id === `zeff:doc:${doc.id}`)!;
+  assert.equal(page.space, "Zeff · Documents");
+  assert.match(page.body, /Mietvertrag über die Wohnung/);
 });
 
 test("the screens' templates draw: the Documents screen (grid, list, a PDF and a picture picked), the settings page, the attach panel — no errors", { skip }, async () => {
@@ -347,17 +348,15 @@ test("the document inbox: the documents as records of the Workspace, their Unrea
   await setup();
   const { getSqlite } = await import("@/db");
   const { externalSources } = await import("@/plugins/workspace/ext-functions");
-  const { documentRecords } = await import("@/plugins/documents/workspace-source");
   const doc = await addDoc("Inbox Brief.txt", "Ein Brief für den Eingang");
   // The port's source stands in for the built-in's by its id; its records say what the built-in's do.
   const src = externalSources().find((s) => s.id === "documents");
   assert.ok(src, "the port's source is the documents source");
   const mine = (await src!.read()).find((r) => r.ref === doc.ref)!;
-  const theirs = documentRecords().find((r) => r.ref === doc.ref)!;
-  assert.equal(mine.title, theirs.title);
+  assert.equal(mine.title, "Inbox Brief.txt");
   assert.equal(mine.dataType, "documents");
   const of = (r: { typed?: { id: string; value: unknown }[] }) => Object.fromEntries((r.typed ?? []).map((t) => [t.id, t.value]));
-  assert.deepEqual(of(mine), of(theirs));
+  assert.deepEqual([of(mine).dockind, of(mine).docstatus, of(mine).doccompiled], ["text", "ready", null]);
   assert.equal(of(mine).docunread, true);
   // Ticking the box off in the row is "seen".
   const cells = { srcref: doc.ref, srcedited: mine.updatedAt, docunread: false };

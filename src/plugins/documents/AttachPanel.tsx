@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
-import { uploadDocuments } from "./DocumentsApp";
+import { uploadDocuments } from "./upload";
 import { attachDocumentAction, listDocumentsAction } from "./server-actions";
 import { KIND_ICONS, sizeText, type DocView } from "./shared";
 

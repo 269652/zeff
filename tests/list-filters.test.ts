@@ -18,20 +18,3 @@ test("people list: search, starred only, sorts", async () => {
   assert.deepEqual(ids(filterPeople(rows.map((r) => ({ ...r, starred: false })), { ...base, sort: "next" })), [2, 1, 3]);
   assert.deepEqual(ids(filterPeople(rows.map((r) => ({ ...r, starred: false })), { ...base, sort: "added" })), [3, 2, 1]);
 });
-
-test("documents list: search name/abstract/concepts, status, kind, sort", async () => {
-  const { filterDocs } = await import("@/plugins/documents/list-filter");
-  const doc = (id: number, name: string, o: Record<string, unknown> = {}) => ({ id, ref: `doc:${id}`, name, mime: "", size: id * 100, kind: "pdf", status: "ready", error: "", abstract: "", concepts: [], compiled: true, chars: 0, createdAt: `2026-01-0${id}`, updatedAt: "", ...o }) as import("@/plugins/documents/shared").DocView;
-  const docs = [doc(1, "Invoice.pdf", { abstract: "Rent for May" }), doc(2, "photo.png", { kind: "image", status: "queued" }), doc(3, "notes.txt", { kind: "text", status: "failed", concepts: ["Budget"] }), doc(4, "scan.bin", { kind: "other", status: "unsupported" })];
-  const ids = (r: typeof docs) => r.map((d) => d.id);
-  const base = { query: "", status: "all", kind: "all", sort: "newest" } as const;
-  assert.deepEqual(ids(filterDocs(docs, base)), [4, 3, 2, 1]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, sort: "name" })), [1, 3, 2, 4]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, sort: "size" })), [4, 3, 2, 1]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, query: "rent may" })), [1]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, query: "budget" })), [3]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, status: "reading" })), [2]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, status: "unsupported" })), [4]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, kind: "text" })), [3]);
-  assert.deepEqual(ids(filterDocs(docs, { ...base, kind: "text", status: "ready" })), []);
-});

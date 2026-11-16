@@ -332,12 +332,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     get label() { return t("Local folders"); },
     href: "/settings/documents#folders",
     get what() { return t("The documents in the folders you chose on this computer — new and changed ones read in"); },
-    run: async () => {
-      const { scanFolders } = await import("@/plugins/documents/folders");
-      const r = await scanFolders();
-      if (r.added || r.updated) (await import("@/plugins/documents/process")).startProcessing();
-      return (await import("@/plugins/documents/folders-core")).scanSummary(r, t);
-    },
+    run: async () => ({ ok: false, message: t("Done by the Documents plugin (documents-ext): its flow runs it.") }),
     busy: () => false,
     inUse: () => getPref<unknown[]>("documents:folders", []).length > 0,
     schedule: () => ({ everyMinutes: stepMinutes("localdocs"), lastAt: recorded("localdocs").lastAt }),
@@ -556,14 +551,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     get label() { return t("Document review"); },
     href: "/documents",
     get what() { return t("Todos from your documents — what they ask of you: deadlines, bills, forms, open questions — new and changed ones, by the AI (after each briefing)"); },
-    run: async () => {
-      const r = await (await import("@/plugins/documents/review")).reviewDocumentsForTodos(
-        accountFlag<{ id: number }>("__zeffBoardRun")?.id ?? null,
-      );
-      return r.ok
-        ? { ok: true, message: `${t("{reviewed} documents reviewed, {added} new todos", { reviewed: r.reviewed, added: r.added })}${r.merged ? `, ${t("{n} merged into open ones", { n: r.merged })}` : ""}${r.error ? ` (${r.error})` : ""}` }
-        : { ok: false, message: r.error ?? t("Failed.") };
-    },
+    run: async () => ({ ok: false, message: t("Done by the Documents plugin (documents-ext): its flow runs it.") }),
     busy: () => flag("__zeffDocTodos"),
     schedule: () => ({ everyMinutes: getBoardSettings().autoMinutes, lastAt: recorded("doctodos").lastAt, window: t("workdays, with the briefing"), workdays: true }),
   },
@@ -571,12 +559,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     get label() { return t("Document matching"); },
     href: "/todos",
     get what() { return t("Which documents each open todo is about — the AI reads them by content (after each briefing)"); },
-    run: async () => {
-      const r = await (await import("@/plugins/documents/relations")).relateDocuments();
-      return r.ok
-        ? { ok: true, message: `${t("{todos} todos, {changed} changed", { todos: r.todos, changed: r.changed })}${r.error ? ` (${r.error})` : ""}` }
-        : { ok: false, message: r.error ?? t("Failed.") };
-    },
+    run: async () => ({ ok: false, message: t("Done by the Documents plugin (documents-ext): its flow runs it.") }),
     busy: () => flag("__zeffDocRelations"),
     schedule: () => ({ everyMinutes: getBoardSettings().autoMinutes, lastAt: recorded("docrelations").lastAt, window: t("workdays, with the briefing"), workdays: true }),
   },

@@ -38,35 +38,6 @@ test("a database keeps its navigation in the view until its view says otherwise"
   assert.deepEqual(Object.keys(await appNavs()), []);
 });
 
-test("in the tree: its entries with counts; hidden ones marked, not removed; moving it there and back", async () => {
-  const id = await seed();
-  const { appNavs } = await import("@/plugins/workspace/app-nav");
-  const { setNavHidden, setNavPlace } = await import("@/plugins/workspace/app-nav-store");
-  setNavPlace(id, "v1", "workspace");
-  const nav = (await appNavs())[id];
-  assert.ok(nav, "the database has a navigation in the tree");
-  const by = (e: string) => nav.entries.find((x) => x.id === e)!;
-  assert.equal(by("inbox").n, 1);
-  assert.equal(by("all").n, 2);
-  assert.equal(by("week").n, 1);
-  assert.equal(by("mail").n, 1);
-  assert.equal(by("kind:pdf").n, 1);
-  assert.equal(by("kind:image").n, 1);
-  assert.equal(nav.entries.some((x) => x.id === "kind:audio"), false, "a type without documents has no entry");
-  setNavHidden(id, nav.viewId, "kind:image", true);
-  assert.equal((await appNavs())[id].entries.find((x) => x.id === "kind:image")!.hidden, true);
-  assert.equal((await appNavs())[id].entries.length, nav.entries.length, "hidden is not deleted");
-  setNavHidden(id, nav.viewId, "kind:image", false);
-  assert.equal((await appNavs())[id].entries.find((x) => x.id === "kind:image")!.hidden, false);
-  setNavPlace(id, "v1", "view");
-  assert.deepEqual(Object.keys(await appNavs()), [], "back in the view");
-  // No sidebar at all: kept with the view, not in the tree either.
-  setNavPlace(id, "v1", "off");
-  const { getDatabase } = await import("@/plugins/workspace/store");
-  assert.equal(getDatabase(id)!.schema.views.find((v) => v.id === "v1")!.nav, "off");
-  assert.deepEqual(Object.keys(await appNavs()), []);
-});
-
 test("a view drawn from a template with a <nav>: its entries in the tree — a row's opens its page, a state's picks it in the view", async () => {
   const { setInstalled } = await import("@/plugins/state");
   setInstalled("workspace", true);

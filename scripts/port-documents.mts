@@ -448,7 +448,7 @@ write(
         workspacePackages: ["documents.package.json"],
         appViews: [{ id: "documents-ext", dataType: "documents", label: "Documents", icon: "🗂", template: "views/documents.html" }],
         sources: [{ id: "documents", label: "Documents", icon: "📄", hint: "The documents you dropped in or mail attachments brought — with their abstract, where they came from and whether you have seen them (Unread).", lambda: "documents.source", replaces: "documents", noNewRows: false, pull: "documents.pull" }],
-        knowledgeDocs: [{ id: "documents", lambda: "documents.knowledge-docs", args: {}, everyMinutes: 30, replaces: "documents" }],
+        knowledgeDocs: [{ id: "documents", lambda: "documents.knowledge-docs", args: {}, everyMinutes: 30 }],
         stores: [
           { name: "documents", adopts: "documents", key: "id", columns: [col("id", "integer"), col("name"), col("mime"), col("size", "integer"), col("sha256"), col("kind"), col("status"), col("error"), col("file"), col("text"), col("summary"), col("concepts"), col("compiled", "integer"), col("created_at"), col("updated_at")] },
           { name: "gate", adopts: "doc_gate", key: "doc_id", columns: [col("doc_id", "integer"), col("state"), col("at")] },
