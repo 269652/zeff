@@ -131,7 +131,7 @@ test("a session's page: the conversation lines as the log reads them, the state,
 
 test("what changes something is a flow with the permission api: archive and delete a session, stop a queued run; the dry run touches nothing", { skip }, async () => {
   const { a, b, c, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["work.archive", "work.delete", "work.git", "work.live", "work.repo-delete", "work.repo-delivery", "work.repo-save", "work.send", "work.setting", "work.start", "work.stop"]);
+  assert.deepEqual([...allowed].sort(), ["work.admin", "work.archive", "work.branch", "work.dangling-end", "work.delete", "work.git", "work.live", "work.repo-delete", "work.repo-delivery", "work.repo-save", "work.send", "work.setting", "work.start", "work.stop"]);
   const engine = await import("@/plugins/workspace/flows/engine");
   const { sessionTickets } = await import("@/lib/work/sessions");
   const ids = () => sessionTickets().flatMap((t) => t.sessions.map((s) => s.id));
@@ -310,4 +310,47 @@ test("the settings: read as the Settings page reads them, one setting changed at
   for (const state of [{}, { instred: "1", instr: "x" }, { agented: "1" }, { repoedit: "1" }])
     assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: { ...state }, app: {}, data: { s: withRepo, result: { message: "Saved." } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(state));
   assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: null }, db: { id: 1, title: "Code settings" } } as never).errors, []);
+});
+
+test("the rest of the page: dangling sessions are listed and ended, a session's branch is switched, Admin sessions state is read", { skip }, async () => {
+  const { call, b } = await world();
+  const engine = await import("@/plugins/workspace/flows/engine");
+  const { execFileSync } = await import("node:child_process");
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "zeff-work-repo3-"));
+  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: repo, encoding: "utf8" });
+  git("init", "-q", "-b", "main");
+  fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+  git("add", ".");
+  git("commit", "-q", "-m", "first");
+  git("branch", "feature");
+  const { updateRun } = await import("@/lib/work/store");
+  updateRun(b.run, { cwd: repo, repo, branch: "main" });
+  type Page = { dangling: { n: number; text: string }; session: { repoName: string; idle: boolean; branchList: { name: string; current: boolean; disabled: boolean }[]; branch: string } };
+  const closed = await call<Page>("work.screen", { sel: `run:${b.run}` });
+  assert.equal(closed.session.repoName, path.basename(repo));
+  assert.equal(closed.session.idle, true);
+  assert.deepEqual(closed.session.branchList, []);
+  const open = await call<Page>("work.screen", { sel: `run:${b.run}`, branches: "true" });
+  assert.deepEqual(open.session.branchList.map((x) => x.name).sort(), ["feature", "main"]);
+  assert.ok(open.session.branchList.find((x) => x.name === "main")!.current);
+  const sw = await engine.runFlow("work.branch", { run: b.run, branch: "feature" });
+  assert.equal(sw.status, "done", sw.error ?? undefined);
+  assert.equal(git("rev-parse", "--abbrev-ref", "HEAD").trim(), "feature");
+  assert.equal((await engine.runFlow("work.branch", { run: b.run, branch: "nope" })).status, "failed");
+  // Dangling: a "running" run nobody works on.
+  const dang = await engine.runFlow("work.dangling-end", {}, { dry: true });
+  assert.equal(dang.status, "done");
+  const none = await call<Page>("work.screen", {});
+  assert.equal(none.dangling.n, 0);
+  // Admin sessions: the plugin isn't installed here.
+  const adm = await engine.runFlow("work.admin", { do: "uac" });
+  assert.equal(adm.status, "failed", "the Admin sessions plugin isn't installed");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work.html"), "utf8");
+  for (const branches of ["false", "true"])
+    assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code", state: { sel: `run:${b.run}`, branchopen: branches }, app: {}, data: { x: { ...open, dangling: { n: 1, text: "1 sessions count as running" } }, result: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], branches);
+  const sTemplate = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work-settings.html"), "utf8");
+  const s = await call<Record<string, unknown>>("work.settings", {});
+  for (const adminInfo of [{ windows: true, elevated: true, task: false, how: "UAC", taskText: "not set up" }, { windows: true, elevated: false, task: true, how: "task", taskText: "set up" }, { windows: false }])
+    assert.deepEqual(renderView(sTemplate, { rows: [], props: [], titleName: "Code settings", state: {}, app: {}, data: { s: { ...s, admin: true, adminInfo } }, db: { id: 1, title: "Code settings" } } as never).errors, [], JSON.stringify(adminInfo));
 });

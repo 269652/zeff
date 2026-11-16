@@ -1,5 +1,5 @@
-<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
-<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}" every=2 debounce="300"/>
+<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="branchopen" value="false"/><state name="cprov" value=""/><state name="cmode" value=""/><state name="cmodel" value=""/><state name="ceffort" value=""/><state name="crepo" value=""/><state name="cws" value=""/><state name="cbranch" value=""/><state name="celev" value="false"/><state name="commitmsg" value=""/>
+<data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}, cprov={{ state.cprov }}, cmode={{ state.cmode }}, cmodel={{ state.cmodel }}, ceffort={{ state.ceffort }}, crepo={{ state.crepo }}, cws={{ state.cws }}, branches={{ state.branchopen }}" every=2 debounce="300"/>
 <data name="panes" lambda="work.panes" with="run={{ data.x.session.runId }}" when="{{ data.x.session.runId }}" every=5/>
 <on event="work-changed" action="reload"/>
 <on event="work-started" action="state" state="sel" value="run:{{ data.started.runId }}"/>
@@ -41,6 +41,13 @@
 </row>
 </col>
 <col fill=true gap=3>
+{{#if data.x.dangling.n}}
+<box tone=warn>
+<text>{{ data.x.dangling.text }}</text>
+<button run="work.dangling-end" into="result" confirm="End all of them? Their workers are free, the queue goes on." emit="work-changed" label="Kill all dangling sessions" variant=primary/>
+</box>
+{{/if}}
+{{#if data.result.message}}<text tone=good>{{ data.result.message }}</text>{{/if}}
 {{#if data.x.mode == 'new'}}
 <col gap=3 align=center>
 <heading level=1>{{ data.x.labels.newTitle }}</heading>
@@ -108,10 +115,22 @@
 {{#if data.x.session.elevated}}<text tone=bad><b>{{ data.x.session.elevatedLabel }}</b></text>{{/if}}
 {{#if data.x.session.ticket}}<button action="state" state="sel" value="ticket:{{ data.x.session.ticket }}" label="{{ data.x.session.ticket }}" variant=link/>{{#else}}<small><muted>{{ data.x.session.noTicket }}</muted></small>{{/if}}
 {{#if data.x.session.cardSummary}}<small><muted>{{ data.x.session.cardSummary }}</muted></small>{{/if}}
-{{#if data.x.session.branch}}<small><mono>⎇ {{ data.x.session.branch }}</mono></small>{{/if}}
+{{#if data.x.session.repoName}}<small><mono>📁 {{ data.x.session.repoName }}</mono></small>{{/if}}
+{{#if data.x.session.branch}}<button action="state" state="branchopen" value="{{ state.branchopen == 'true' ? 'false' : 'true' }}" label="⎇ {{ data.x.session.branch }}{{ data.x.session.worktree ? ' · worktree' : '' }}" variant=quiet disabled="{{ not data.x.session.idle }}" tip="{{ data.x.session.branchTip }}"/>{{/if}}
 {{#if data.x.session.todoRef}}<a href="/t/{{ data.x.session.todoId }}">{{ data.x.session.todoRef }}</a>{{/if}}
 {{#if data.x.session.cost}}<small><muted>{{ data.x.session.cost }}</muted></small>{{/if}}
 </row>
+{{#if state.branchopen == 'true'}}
+<box>
+{{#if data.x.session.branchError}}<text tone=bad>{{ data.x.session.branchError }}</text>{{/if}}
+{{#each data.x.session.branchList}}
+<row gap=2 align=center>
+<button run="work.branch" with="run={{ data.x.session.runId }}, branch={{ name }}" into="result" then="branchopen=false" emit="work-changed" label="{{ current ? '✓ ' : '' }}{{ name }}" tip="{{ tip }}" variant=quiet disabled="{{ disabled }}"/>
+{{#if remote}}<small><muted>remote</muted></small>{{/if}}{{#if worktree}}<small><muted>worktree</muted></small>{{/if}}
+</row>
+{{/each}}
+</box>
+{{/if}}
 {{#if data.x.session.side}}<row gap=2 wrap=true>{{#each data.x.session.side}}<a href="/t/{{ todoId }}">{{ active ? '● ' : '' }}{{ ref }} {{ text }}</a>{{/each}}</row>{{/if}}
 </col>
 <a href="/api/work/{{ data.x.session.runId }}/prompt">Prompt</a>

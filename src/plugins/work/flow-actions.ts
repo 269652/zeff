@@ -326,6 +326,108 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "work.branches",
+    group: "work",
+    label: "The branches a session can switch to",
+    summary: "The branches of the git repo a session works in (and where each is checked out), with the current one.",
+    input: [f("run", "number", { required: true })],
+    output: "{ ok, error, current, branches: [{ name, remote, current, worktree }] }",
+    run: async (i) => {
+      need();
+      const { getRun } = await import("@/lib/work/store");
+      const { listBranches, repoRoot } = await import("@/lib/work/git");
+      const run = getRun(int(i.run));
+      if (!run?.cwd) return { ok: false, error: t("This session has no folder of its own."), branches: [] };
+      if (!repoRoot(run.cwd)) return { ok: false, error: t("{folder} isn't in a git repo.", { folder: run.cwd }), branches: [] };
+      return { ok: true, ...listBranches(run.cwd) };
+    },
+  },
+  {
+    name: "work.session-branch",
+    group: "work",
+    label: "Switch a session's branch",
+    summary: "The branch a session works on switched (when it is idle, nothing is uncommitted and the branch isn't checked out elsewhere). Needs the “api” permission.",
+    input: [f("run", "number", { required: true }), f("branch", "text", { required: true })],
+    output: "{ message }",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { switchSessionBranchAction } = await import("./server-actions");
+      const r = await switchSessionBranchAction(int(i.run), String(i.branch ?? ""));
+      if (!r.ok) throw new Error(r.error);
+      return { message: t("Now on {branch}.", { branch: r.branch }) };
+    },
+  },
+  {
+    name: "work.dangling",
+    group: "work",
+    label: "Sessions that count as running but aren't working",
+    summary: "The runs that hold a worker without working (a session waiting for you or left over from before a restart, a worker whose process is gone) and how many runs wait for a worker.",
+    input: [],
+    output: "{ dangling: [{ id, ref, why }], queued }",
+    run: async () => {
+      need();
+      const { danglingRuns } = await import("@/lib/work/runner");
+      const { runsByStatus } = await import("@/lib/work/store");
+      return { dangling: danglingRuns(), queued: runsByStatus(["queued"]).length };
+    },
+  },
+  {
+    name: "work.dangling-end",
+    group: "work",
+    label: "Kill all dangling sessions",
+    summary: "Each dangling session stopped, their workers free, the queue goes on. Needs the “api” permission.",
+    input: [],
+    output: "{ ended: [id], message }",
+    writes: true,
+    run: async (_i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { endDanglingRuns } = await import("@/lib/work/runner");
+      const r = endDanglingRuns() as { ended?: number[] };
+      return { ...r, message: t("{n} sessions ended — the workers are free.", { n: r.ended?.length ?? 0 }) };
+    },
+  },
+  {
+    name: "work.admin",
+    group: "work",
+    label: "Admin sessions: how they start",
+    summary: "Whether the Admin sessions plugin is installed, the platform is Windows, the scheduled task is set up, Zeff itself runs elevated, and how admin sessions start (task | uac).",
+    input: [],
+    output: "{ installed, windows, task, elevated, mode }",
+    run: async () => {
+      need();
+      if (!isInstalled("work-elevated")) return { installed: false, windows: process.platform === "win32", task: false, elevated: false, mode: "uac" };
+      const e = await import("@/plugins/work-elevated/elevate");
+      const windows = process.platform === "win32";
+      const [task, elevated] = windows ? await Promise.all([e.taskInstalled(), e.zeffElevated()]) : [false, false];
+      return { installed: true, windows, task, elevated, mode: e.elevationMode() };
+    },
+  },
+  {
+    name: "work.admin-do",
+    group: "work",
+    label: "Set up or remove automatic admin sessions",
+    summary: "do = install (the scheduled task — Windows asks for administrator rights once) | remove | uac (ask each time). Needs the “api” permission.",
+    input: [f("do", "text", { required: true })],
+    output: "{ message }",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { setAdminSessionsAction } = await import("./server-actions");
+      const fd = new FormData();
+      fd.set("do", String(i.do ?? ""));
+      const r = await setAdminSessionsAction(null, fd);
+      if (!r?.ok) throw new Error(r?.error ?? t("Didn't work."));
+      return { message: r.message ?? t("Saved.") };
+    },
+  },
+  {
     name: "work.session-start",
     group: "work",
     label: "Start a session",

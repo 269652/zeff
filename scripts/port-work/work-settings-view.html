@@ -38,7 +38,17 @@
 <button run="work.setting" with="scope=claude, field=allowBypass, value={{ data.s.claude.allowBypass ? 'false' : 'true' }}" into="result" emit="settings-changed" label="{{ data.s.claude.allowBypass ? 'Allowed' : 'Not allowed' }}" variant="{{ data.s.claude.allowBypass ? 'danger' : 'plain' }}"/>
 </row>
 <small><muted>Only where nothing can go wrong: a worktree, a sandbox. Applies to sessions started from now on.</muted></small>
-{{#if data.s.admin}}<a href="/work/admin">Admin sessions</a>{{#else}}<small><muted>Sessions as administrator (Windows) come with the “Admin sessions” plugin — <a href="/plugins">Plugins</a>.</muted></small>{{/if}}
+{{#if data.s.admin}}
+<b>Admin sessions</b>
+{{#if data.s.adminInfo.windows}}
+{{#if data.s.adminInfo.elevated}}<text tone=warn>Zeff itself runs as administrator — so does every session, ticked or not.</text>{{/if}}
+<small><muted>How they start: {{ data.s.adminInfo.how }} · Scheduled task: {{ data.s.adminInfo.taskText }}</muted></small>
+<row gap=2>
+{{#if data.s.adminInfo.task}}<button run="work.admin" with="do=remove" into="result" confirm="Remove the scheduled task? Windows asks for administrator rights once more to remove it." emit="settings-changed" label="Remove — ask each time again"/>
+{{#else}}<button run="work.admin" with="do=install" into="result" confirm="Set up a scheduled task that starts admin sessions without asking? Windows asks for administrator rights once now. Anything that can write to your user profile could then get a process elevated through it." emit="settings-changed" label="Set up — start them without asking" variant=primary/>{{/if}}
+</row>
+{{#else}}<muted>Admin sessions are for Windows. Elsewhere, start Zeff itself with the rights its sessions need.</muted>{{/if}}
+{{#else}}<small><muted>Sessions as administrator (Windows) come with the “Admin sessions” plugin — <a href="/plugins">Plugins</a>.</muted></small>{{/if}}
 </col>
 </section>
 

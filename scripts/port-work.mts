@@ -61,13 +61,13 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "work.screen": {
     label: "Code: what the screen shows",
     what: "The sessions list (grouped and sorted), and by what is picked a session's conversation with its asks, a ticket's page or the new-session page — shaped from the engine's reads.",
-    zeff: ["work.session-list", "work.session-open", "work.composer"],
+    zeff: ["work.session-list", "work.session-open", "work.composer", "work.dangling", "work.branches"],
     timeoutMs: 30000,
   },
   "work.settings": {
     label: "Code: the settings",
     what: "The workers' and live sessions' settings and the repos, as the settings screen shows them.",
-    zeff: ["work.settings"],
+    zeff: ["work.settings", "work.admin"],
     timeoutMs: 30000,
   },
   "work.panes": {
@@ -165,6 +165,9 @@ write(
         flow("i12", "work.repo-save", "Add or change a repo", "A repo for workers (input id, name, path, gitlabProject, boards, tickets, instructions, delivery).", "work.repo-save", { id: "{{ input.id }}", name: "{{ input.name }}", path: "{{ input.path }}", gitlabProject: "{{ input.gitlabProject }}", boards: "{{ input.boards }}", tickets: "{{ input.tickets }}", instructions: "{{ input.instructions }}", delivery: "{{ input.delivery }}" }),
         flow("i13", "work.repo-delivery", "How a repo's work is delivered", "A repo's delivery only: mr | direct (input id, delivery).", "work.repo-save", { id: "{{ input.id }}", part: "delivery", delivery: "{{ input.delivery }}" }),
         flow("i14", "work.repo-delete", "Remove a repo", "A repo off the list; its folder is not touched (input id).", "work.repo-delete", { id: "{{ input.id }}" }),
+        flow("i15", "work.branch", "Switch a session's branch", "The branch a session works on (input run, branch). Output { message }.", "work.session-branch", { run: "{{ input.run }}", branch: "{{ input.branch }}" }),
+        flow("i16", "work.dangling-end", "Kill all dangling sessions", "Every dangling session stopped, the workers free. Output { message }.", "work.dangling-end", {}),
+        flow("i17", "work.admin", "Set up or remove automatic admin sessions", "input do: install | remove | uac. Output { message }.", "work.admin-do", { do: "{{ input.do }}" }),
         flow("i9", "work.git", "Commit, push, merge request, dev servers", "In a session's folder: input run, do (commit | push | mr | proc-start | proc-stop), message, title, name. Output { message, url }.", "work.session-git", { run: "{{ input.run }}", do: "{{ input.do }}", message: "{{ input.message }}", title: "{{ input.title }}", name: "{{ input.name }}" }),
         flow("i6", "work.stop", "Stop a session's run", "A run stopped or taken out of the queue (input run).", "work.session-stop", { run: "{{ input.run }}" }),
         flow("i7", "work.archive", "Archive a session", "A session out of the list, or back (input todo, archived: true | false).", "work.session-archive", { todo: "{{ input.todo }}", archived: "{{ input.archived }}" }),

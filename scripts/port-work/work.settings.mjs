@@ -23,6 +23,7 @@ export async function handler(_event, context) {
   ];
   const modes = ["default", "acceptEdits", "auto", "plan", "dontAsk", "bypassPermissions"].filter((m) => m !== "bypassPermissions" || c.allowBypass);
   const modeOpts = (now) => modes.map((m) => ({ ...opt(m, modeText(t, m).label, modeText(t, m).hint, now) }));
+  const a = d.admin ? await context.zeff.call("work.admin", {}) : null;
   const boardName = new Map(d.choices.boards.map((b) => [b.id, b.name]));
   return {
     labels: {
@@ -58,6 +59,13 @@ export async function handler(_event, context) {
       timeoutLess: Math.max(0, c.askTimeoutMin - 5),
     },
     admin: d.admin,
+    adminInfo: a && {
+      windows: a.windows,
+      elevated: a.elevated,
+      task: a.task,
+      how: a.mode === "task" && a.task ? t("Automatically — the scheduled task, no prompt") : t("Interactively — Windows asks you (UAC) each time"),
+      taskText: a.task ? t("set up") : t("not set up"),
+    },
     reposLine: d.repos.length ? d.repos.map((r) => `${r.name}${r.ok ? "" : ` ${t("(folder missing)")}`}`).join(", ") : t("none yet"),
     repos: d.repos.map((r) => ({
       id: r.id,

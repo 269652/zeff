@@ -4,7 +4,7 @@ import { groupSessions, priorityOf, stamp, tFor } from "./lib.mjs";
  * What the Code screen shows (views/work.html reads it as data.x): the session list (grouped and sorted like the built-in's sidebar), and — by what is picked —
  * a session's conversation, a ticket's page or the new-session page. The kernel's reads work.session-list and work.session-open do the looking (the engine's own);
  * this shapes it for the view language: every line already a row of text, every ask already its buttons.
- * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail, cprov, cmode, cmodel, ceffort, crepo, cws }
+ * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail, branches, cprov, cmode, cmodel, ceffort, crepo, cws }
  */
 const DOT = { running: "🔵", queued: "⚪", done: "🟢", failed: "🔴", cancelled: "⚪", interrupted: "🟠" };
 
@@ -108,6 +108,13 @@ export async function handler(event, context) {
     };
   }
 
+  // ── sessions that hold a worker without working
+  const dang = await zeff.call("work.dangling", {});
+  out.dangling = {
+    n: dang.dangling.length,
+    text: dang.dangling.length ? t("{n} sessions count as running but aren't working:", { n: dang.dangling.length }) + " " + dang.dangling.map((d) => `${d.ref} (${d.why})`).join(", ") : "",
+  };
+
   // ── a ticket's page
   if (!run && ticketArg !== undefined) {
     const tk = list.tickets.find((x) => x.ticket === ticketArg);
@@ -185,6 +192,11 @@ export async function handler(event, context) {
         noTicket: t("no ticket"),
         cardSummary: s.card?.summary ?? "",
         branch: s.last.branch ?? "",
+        repoName: s.last.repo ? s.last.repo.split(/[\\/]/).filter(Boolean).pop() : "",
+        worktree: !!s.last.cwd && !!s.last.repo && s.last.cwd !== s.last.repo,
+        idle: !s.active,
+        branchTip: s.active ? t("Working - switch the branch once it has answered") : t("Switch the branch of this session"),
+        branchList: [],
         todoRef: s.todo?.ref ?? "",
         todoId: s.todo?.id ?? 0,
         cost: s.cost > 0 ? `$${s.cost.toFixed(2)}` : "",
@@ -204,6 +216,11 @@ export async function handler(event, context) {
         priority: priorityOf({ waiting: asks.length > 0, live: !!live, status }),
       };
     }
+  }
+  if (run && out.session?.found && (event?.branches === true || String(event?.branches) === "true")) {
+    const b = await zeff.call("work.branches", { run });
+    out.session.branchError = b.ok ? "" : b.error;
+    out.session.branchList = (b.branches ?? []).map((x) => ({ name: x.name, remote: x.remote, current: x.current, worktree: x.worktree ?? "", disabled: x.current || !!x.worktree, tip: x.worktree ? t("Checked out in {path}", { path: x.worktree }) : "" }));
   }
   return out;
 }
