@@ -6,6 +6,7 @@ import { toast } from "@/components/Toaster";
 import { Overlay } from "@/components/Overlay";
 import type { VNode } from "../view-template";
 import type { BlockEnv } from "./view-blocks";
+import { Speak, Stories, Visible } from "./view-stories";
 import { NODE_R, type GraphLayout } from "../view-graph";
 import { SkillMap, type SkillMapNode } from "@/components/skill-tree/SkillMap";
 import { AgendaList } from "@/plugins/calendar/AgendaList";
@@ -56,6 +57,12 @@ export function moreBlock(n: Node, key: string | number, kids: Kids, env: BlockE
       return <Rating key={key} a={a} env={env} />;
     case "copy":
       return <CopyButton key={key} a={a} />;
+    case "visible":
+      return <Visible key={key} a={a} env={env} />;
+    case "speak":
+      return <Speak key={key} n={n} />;
+    case "stories":
+      return <Stories key={key} a={a} env={env} />;
     case "schedule":
       return <ScheduleBlock key={key} a={a} env={env} />;
     case "graph":

@@ -58,6 +58,8 @@ export const ADOPTABLE_PREFS: Record<string, string[]> = {
 export const REPLACEABLE_SOURCES: Record<string, string[]> = {
   "cases-ext": ["cases"],
   "finances-ext": ["recurring", "debts"],
+  // (News: the news you saved or liked, as a source of the databases)
+  "news-ext": ["news"],
 };
 
 const SQL_TYPE: Record<Column["type"], string> = { text: "text", integer: "integer", real: "real", json: "text" };

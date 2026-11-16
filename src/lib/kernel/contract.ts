@@ -93,9 +93,9 @@ export const KERNEL_CONTRACT = {
     "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "girocode", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
     "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "media", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
     "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "qr", "quickadd", "quote", "rating", "row", "rowtimeline", "schedule", "search", "section",
-    "select", "selected", "setting", "settings", "slider", "slot", "small", "sources", "sparkline", "split", "state", "step", "steps", "strike", "subview", "suggested",
+    "select", "selected", "setting", "settings", "slider", "slot", "small", "sources", "sparkline", "speak", "split", "state", "step", "steps", "stories", "strike", "subview", "suggested",
     "switch", "tab", "table", "tabs", "tabset", "text", "theme", "tick", "tile", "timeline", "todomark", "toggle", "toolbar", "transitions", "truncate",
-    "upload", "use", "widget",
+    "upload", "use", "visible", "widget",
   ],
 
   /** The functions of formulas (views, formula fields; workspace/formula.ts). Plugins add more through `workspace.formulaFunctions`. */

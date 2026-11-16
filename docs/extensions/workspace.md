@@ -407,6 +407,7 @@ from blocks: lists, cards, tables, boards, charts, tiles, panes, forms and more.
 - A **month calendar** (`<calendar>`), a **day-by-day heatmap** (`<heatmap>`, like a contribution graph), a **cross
   table** with totals (`<pivot>`: owner × stage, summed as euros), a **ring** (`<gauge>`), **stars** you click to rate a
   row (`<rating>`), a **copy** button.
+- **Like a phone:** `<stories groups="data.x" bind="story" emit="shown" actions="like|❤️|Like" read="reading"/>` — a strip of round pictures, each a run of reports (`[{ key, label, items: [{ id, title, text, image, meta, url }] }]`) played full screen (bars, tap right/left, hold to wait); the report on screen is `state.story`, then the event goes out. `<speak text="…" lang="de-DE"/>` reads a text aloud (the browser's voice). `<visible value="{{ id }}" bind="seen" emit="shown"/>` inside a card: once it was on screen for a moment its value joins the comma list in `state.seen` (batched) — what of a feed was seen. `<grid masonry=true cols=3 min=260>` lays cells of different heights in columns, each in the shortest.
 - Names for values (`<let name="open" value="rows | where(…)"/>`), a `<switch>` with cases, and new filters:
   `groupby`, `distinct`, `offset`, `reverse`, `between`, `where(…, 'in', 'A|B')`.
 - **Functions of your own** (`<def>`): `<def name="fact" args="n" value="if(n <= 1, 1, n * fact(n - 1))"/>` makes a function for what

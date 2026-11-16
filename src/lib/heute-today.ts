@@ -5,7 +5,7 @@
  */
 import type { TodoView } from "@/lib/todos/shared";
 import { dayOf, stampOf } from "@/lib/calendar/ir-shared";
-import { isInstalled } from "@/plugins/state";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
 
 export type TodayAppointment = { id: number; title: string; start: string; end: string; allDay: boolean; location: string; tomorrow: boolean; online: boolean; people: { id: number; name: string }[]; href: string; /** A proposal (the day plan's block …): shown dashed, nothing planned with it. */ proposed?: boolean };
 export type TodayPromise = { id: number; personId: number; personName: string; text: string; due: string; mine: boolean; overdue: boolean };
@@ -71,6 +71,8 @@ async function learned(since: string): Promise<TodayLearned[]> {
 /** The news since `since`: how many, and the best few not seen yet (with the funnel: what the AI let through). */
 async function news(since: string): Promise<TodayNews | null> {
   if (!isInstalled("news")) return null;
+  // (the plugin stands in for the built-in: its lambda's last answer — since yesterday —, asked again in the background after five minutes)
+  if (onlyThroughPort("news")) return (await import("@/lib/ext/snapshots")).lambdaSnapshot<TodayNews>("news-ext", "news.today", {}, 5);
   const { countNewSince, listItems } = await import("@/plugins/news/store");
   const count = countNewSince(since);
   const top = listItems({ view: "foryou", maxAgeDays: 1, limit: 3 })
