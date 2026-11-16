@@ -362,13 +362,13 @@ test("the document inbox: the documents as records of the Workspace, their Unrea
   // Ticking the box off in the row is "seen".
   const cells = { srcref: doc.ref, srcedited: mine.updatedAt, docunread: false };
   await src!.pull!(1, [{ id: 1, title: "x", cells } as never], {} as never);
-  assert.equal(getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id)!.n as number, 1);
+  assert.equal((getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id) as { n: number }).n, 1);
   // A row that is out of date (the document changed since) is left alone: unread again would not apply.
   await src!.pull!(1, [{ id: 1, title: "x", cells: { srcref: doc.ref, srcedited: "old", docunread: true } } as never], {} as never);
-  assert.equal(getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id)!.n as number, 1);
+  assert.equal((getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id) as { n: number }).n, 1);
   const again = (await src!.read()).find((r) => r.ref === doc.ref)!;
   await src!.pull!(1, [{ id: 1, title: "x", cells: { srcref: doc.ref, srcedited: again.updatedAt, docunread: true } } as never], {} as never);
-  assert.equal(getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id)!.n as number, 0);
+  assert.equal((getSqlite().prepare("select count(*) as n from document_seen where doc_id = ?").get(doc.id) as { n: number }).n, 0);
   // The screen: what waits for you, where a document of a folder lies.
   getSqlite().prepare("insert into doc_gate (doc_id, state, at) values (?, 'pending', ?) on conflict(doc_id) do update set state = 'pending'").run(doc.id, new Date().toISOString());
   const { setPref } = await import("@/lib/prefs");
