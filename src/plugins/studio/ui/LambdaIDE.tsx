@@ -19,7 +19,7 @@ import { LAMBDA_DTS, LAMBDA_SCHEMA } from "./lambda-editor-types";
 setupMonaco();
 
 type Files = Record<string, string>;
-type Meta = { name: string; kind: "lookup" | "function"; builtin: boolean; changed: boolean };
+type Meta = { name: string; kind: "lookup" | "function" | "driver"; builtin: boolean; changed: boolean };
 type TestRun = { run: { ok: boolean; result?: unknown; error?: string; stack?: string; logs: string[]; ms: number }; problems: string[] };
 
 const langOf = (f: string) => (f.endsWith(".json") ? "json" : f.endsWith(".md") ? "markdown" : f.endsWith(".txt") ? "plaintext" : "javascript");
@@ -204,7 +204,7 @@ export function LambdaIDE({ name, onChanged, onOpen, onList }: { name: string; o
   };
 
   if (!meta) return <p className="text-sm text-zinc-500">{t("Loading …")}</p>;
-  const lookup = manifest?.kind !== "function";
+  const lookup = (manifest?.kind ?? "lookup") === "lookup";
   const out = result?.run;
 
   return (

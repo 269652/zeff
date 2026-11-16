@@ -24,21 +24,8 @@ export function singleFlight<T>(flag: string, job: () => Promise<T>): Promise<T>
 /** A prompt's room: `chars` for Copilot (it takes the prompt on the command line) and a local model (a smaller context, a smaller model), three times that for the others. */
 export const promptRoom = (chars: number): number => (aiChoice().provider === "copilot" || aiChoice().provider === "local" ? chars : 3 * chars);
 
-/** The items in batches in their order: a new one when the next item would make it longer than `limit` (or it has `max` items). */
-export function batchByChars<T>(items: T[], sizeOf: (item: T) => number, limit: number, max = Infinity): T[][] {
-  const batches: T[][] = [];
-  let size = 0;
-  for (const item of items) {
-    const n = sizeOf(item);
-    if (!batches.length || size + n > limit || batches[batches.length - 1].length >= max) {
-      batches.push([]);
-      size = 0;
-    }
-    batches[batches.length - 1].push(item);
-    size += n;
-  }
-  return batches;
-}
+import { batchByChars } from "./batch";
+export { batchByChars };
 
 /** "2 of 5 parts failed" — when some did. */
 export const partsFailed = (failed: number, n: number): { error?: string } => (failed ? { error: t("{failed} of {n} parts failed", { failed, n }) } : {});

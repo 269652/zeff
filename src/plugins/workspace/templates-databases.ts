@@ -4,6 +4,7 @@ import { isInstalled } from "@/plugins/state";
 import { CONTRACT } from "./contract-fields";
 import { markdownToDoc, type DocNode } from "./doc";
 import { addRow, createPage, getDatabase, updatePage, updateSchema } from "./store";
+import { financesThere } from "@/lib/finances/there";
 
 /**
  * The database templates' make (the Workspace plugin): every name in your language — the database, its fields, its views and
@@ -179,7 +180,7 @@ export function projectsPage(parentId: number | null): number {
 export function contractsDatabase(parentId: number | null): number {
   // With the Finances plugin the recurring payments of your statements come in by themselves (its source "recurring" fills the
   // fields of fixed id); what you add — the kind, the provider, when to cancel by — is yours.
-  const fromBank = isInstalled("finances");
+  const fromBank = financesThere();
   const monthly = { ...euro(t("Per month")), id: CONTRACT.monthly };
   const amount = { ...euro(t("Per payment")), id: CONTRACT.amount };
   const rhythm = { ...select(t("Rhythm"), [t("Monthly"), t("Quarterly"), t("Yearly")], ["blue", "violet", "amber"]), id: CONTRACT.rhythm };

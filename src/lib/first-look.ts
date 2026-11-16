@@ -1,6 +1,7 @@
 import { casesThere } from "@/lib/cases/there";
 import { getSqlite } from "@/db";
 import { isInstalled } from "@/plugins/state";
+import { financesThere } from "@/lib/finances/there";
 
 /**
  * The first look: what Zeff finds in the last 30 days of what it read, on one page — the promises you made and forgot, the ones
@@ -63,7 +64,7 @@ export async function firstLook(): Promise<FirstLook> {
     }
   }
 
-  if (isInstalled("finances")) {
+  if (financesThere()) {
     const { debtPlans } = await import("@/plugins/finances/debts");
     for (const d of debtPlans(undefined, "owe").debts) {
       if (d.caseId || !d.nextDue || d.nextDue > ahead || d.open <= 0) continue;

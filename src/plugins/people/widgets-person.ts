@@ -7,6 +7,7 @@ import { namesPerson } from "./resolve";
 import { getPerson, listPeople, upcoming } from "./store";
 import type { DocNode } from "@/plugins/workspace/doc";
 import { localDay } from "@/lib/dates";
+import { financesThere } from "@/lib/finances/there";
 
 /**
  * Widgets about one person, for a page — on a person's own page (a row of the People database) they take that person by
@@ -192,7 +193,7 @@ export const PERSON_WIDGETS: WorkspaceWidget[] = [
         if (todos.length) add("☐", todos.slice(0, 4).map((x) => x.text).join(" · "), t("Open todos ({n})", { n: todos.length }));
       }
       // Money: what you owe them, what they owe you (Finances) — and their cases.
-      if (isInstalled("finances")) {
+      if (financesThere()) {
         try {
           const { FINANCES_FORMULAS } = await import("@/plugins/finances/formulas");
           const { EntityRef } = await import("@/plugins/workspace/formula");

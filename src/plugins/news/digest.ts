@@ -1,9 +1,8 @@
 import { getPref, setPref } from "@/lib/prefs";
 import { fillPrompt, promptText } from "@/lib/prompts";
+import { DIGEST_INSTRUCTIONS, DIGEST_SCHEMA } from "./digest-prompt";
+export { DIGEST_INSTRUCTIONS };
 import { getContent, getPrefs, listItems } from "./store";
-
-/** Its instructions — a page of System → Prompts. */
-export const DIGEST_INSTRUCTIONS = "Du bist der Nachrichten-Assistent einer Person — wie ein Notizbuch über ihre Nachrichten.\nFasse den Tag zusammen: was ist wichtig (overview), welche 3–6 Themen ziehen sich durch die Meldungen (themes, mit kurzer Zusammenfassung und den Nummern der Meldungen, auf die sie sich stützt) und welche bis zu 5 Meldungen soll sie zuerst lesen (picks).\nErfinde nichts: nur, was in den Titeln und Kurztexten steht. Gib bei jedem Thema die Nummern der Meldungen an, auf die du dich stützt. Antworte auf Deutsch, knapp.";
 
 /**
  * The AI briefing (optional, LLM plugin) — like a notebook over your news: from the best unread items it writes what matters
@@ -15,27 +14,7 @@ export type Theme = { title: string; summary: string; ids: number[] };
 export type Digest = { at: string; overview: string; picks: { id: number; why: string }[]; themes: Theme[] };
 type Answer = { overview?: string; picks?: { n?: number; why?: string }[]; themes?: { title?: string; summary?: string; items?: number[] }[] };
 
-const SCHEMA = {
-  type: "object",
-  properties: {
-    overview: { type: "string", description: "2–4 Sätze: was heute wichtig ist." },
-    themes: {
-      type: "array",
-      description: "3–6 Themen, in die sich die Meldungen gruppieren lassen.",
-      items: {
-        type: "object",
-        properties: {
-          title: { type: "string", description: "Kurzer Titel des Themas." },
-          summary: { type: "string", description: "2–3 Sätze: was die Meldungen zusammen sagen — nur aus den Meldungen." },
-          items: { type: "array", items: { type: "integer" }, description: "Die Nummern der Meldungen, auf die sich die Zusammenfassung stützt." },
-        },
-        required: ["title", "summary", "items"],
-      },
-    },
-    picks: { type: "array", items: { type: "object", properties: { n: { type: "integer" }, why: { type: "string", description: "Ein kurzer Satz: warum für diese Person." } }, required: ["n", "why"] } },
-  },
-  required: ["overview", "themes", "picks"],
-};
+
 
 export const getDigest = (): Digest | null => {
   const d = getPref<Partial<Digest> | null>("news:digest", null);
@@ -61,7 +40,7 @@ export async function buildDigest(deps: { ask?: (prompt: string) => Promise<Answ
     deps.ask ??
     (async (prompt: string) => {
       const { runAi } = await import("@/lib/ai");
-      return (await runAi<Answer>(prompt, SCHEMA, { task: "news-digest", timeoutMs: 5 * 60000, maxBudgetUsd: 0.4 })).output;
+      return (await runAi<Answer>(prompt, DIGEST_SCHEMA, { task: "news-digest", timeoutMs: 5 * 60000, maxBudgetUsd: 0.4 })).output;
     });
   // The opening of the article, where it has been read, is better to go on than a one-line summary.
   const numbered = items.map((it, i) => ({ n: i + 1, source: it.sourceName, title: it.title, summary: (it.hasContent ? getContent(it.id)?.content.slice(0, 300) : "") || it.summary }));

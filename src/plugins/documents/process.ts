@@ -245,5 +245,14 @@ export function releaseHeld(ids: number[]): void {
 /** A document just dropped: read it (in the background). */
 export function startProcessing(): void {
   const account = currentAccountId();
-  void withAccount(account, () => processDocuments()).catch((e) => console.error("[documents]", errorMessage(e)));
+  void withAccount(account, async () => {
+    // Kept by the port (documents-ext: its flow documents.read reads what waits): the knowledge server is asked afterwards, as ever.
+    const port = await import("./port");
+    if (port.documentsPortOn()) {
+      await port.documentsPortFlows([{ name: "documents.read" }]);
+      await askKnowledge();
+      return;
+    }
+    await processDocuments();
+  }).catch((e) => console.error("[documents]", errorMessage(e)));
 }

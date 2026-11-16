@@ -330,8 +330,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       const { scanFolders } = await import("@/plugins/documents/folders");
       const r = await scanFolders();
       if (r.added || r.updated) (await import("@/plugins/documents/process")).startProcessing();
-      const parts = [r.added && t("{n} new", { n: r.added }), r.updated && t("{n} changed", { n: r.updated }), r.missing && t("{n} gone from the folder", { n: r.missing })].filter(Boolean);
-      return r.errors.length && !r.added && !r.updated ? { ok: false, message: r.errors.slice(0, 3).join(" · ") } : { ok: true, message: parts.length ? parts.join(", ") : t("Nothing new.") };
+      return (await import("@/plugins/documents/folders-core")).scanSummary(r, t);
     },
     busy: () => false,
     inUse: () => getPref<unknown[]>("documents:folders", []).length > 0,
@@ -592,7 +591,8 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       // The circles by rule, the summaries out of date compiled (in the background) — a failure there doesn't fail the step.
       await (await import("@/plugins/people/pulse")).afterBriefing().catch((e) => console.error("[people] after the briefing:", e));
       // The AI's few points before the meetings of the next hours ("What you should know" — it checks its plugin and switch; again only when something changed).
-      await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
+      if ((await import("@/plugins/state")).onlyThroughPort("know")) await (await import("@/lib/cases/there")).casesPortFlows(["know.prepare"]);
+      else await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
       return r.ok ? { ok: true, message: t("{a} aliases, {c} new, {m} merged, {r} relations", { a: r.aliases, c: r.created, m: r.merged, r: r.relations }) } : { ok: false, message: r.error ?? t("Failed.") };
     },
     busy: () => flag("__zeffPeopleNormalize"),

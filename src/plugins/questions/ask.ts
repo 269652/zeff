@@ -3,6 +3,8 @@ import { getLanguage } from "@/lib/i18n/server";
 import { isoDay } from "@/lib/text";
 import { promptText } from "@/lib/prompts";
 import { workspaceDatabases } from "./builtin-views";
+import { ANSWER_INSTRUCTIONS, PLAN_INSTRUCTIONS } from "./prompts";
+export { ANSWER_INSTRUCTIONS, PLAN_INSTRUCTIONS };
 import type { KnowledgeAnswer } from "@/plugins/knowledge/shared";
 import type { QueryResultView, StructuredAnswer, StructuredSource } from "./shared";
 import { AGGREGATES, TIME_DIMS, listViews, runQuery, validateQuery, type QueryContext, type QueryView } from "./views";
@@ -15,21 +17,6 @@ import { AGGREGATES, TIME_DIMS, listViews, runQuery, validateQuery, type QueryCo
  * phrases the answer from the numbers, citing the rows behind them, which come back as links. The queries come along,
  * so the chat can show how it was computed. Server only.
  */
-
-/** The planner's instructions — a page of System → Prompts. */
-export const PLAN_INSTRUCTIONS = `Du entscheidest, wie eine Frage der Person beantwortet wird, und planst dafür Abfragen über ihre eigenen Daten in Zeff.
-
-- kind "structured": Die Frage will Zahlen, Anzahlen, Summen, Zeitpunkte, Häufigkeiten oder Rangfolgen aus ihren eigenen Daten (Arbeitszeit, Kontobewegungen, Termine, Todos, Nachrichten, Workspace-Datenbanken) — z. B. „wie viel“, „wie oft“, „wann zuletzt“, „welche … am meisten“. Plane dann 1 bis 3 Abfragen über die Sichten unten.
-- kind "text": Die Frage will Wissen, Erklärungen oder Inhalte aus Dokumentation und Texten („wie funktioniert …“, „wer ist zuständig …“, „was steht in …“). Dann keine Abfragen.
-- Kann eine Sicht die Frage beantworten, nimm "structured" — auch wenn du nicht sicher bist, dass Daten da sind.
-
-Eine Abfrage: view (Name einer Sicht), filters (Liste von {name, value} — bei Filtern vom Typ texts {name, values: [...]}, bei where {name: "where", prop, op, value}), optional groupBy (eine Gruppierung der Sicht oder day/week/month/year/weekday), aggregate (${AGGREGATES.join(", ")}: count = Anzahl, sum/avg/min/max über measure, first/last = frühester/letzter Zeitpunkt, count_days = an wie vielen Tagen, list = die Einträge), measure (bei sum/avg/min/max), order (desc|asc), limit.
-Nutze nur die Sichten, Filter, Gruppierungen und Maße unten — erfinde keine. Zeiträume als from/to (YYYY-MM-DD, YYYY-MM oder YYYY), bezogen auf heute. Lieber etwas weiter fassen (mehr Suchwörter, Synonyme) als etwas Gesuchtes zu verpassen.`;
-
-/** The phrasing's instructions — a page of System → Prompts. */
-export const ANSWER_INSTRUCTIONS = `Beantworte die Frage der Person nur anhand der Ergebnisse der Abfragen unten (ihre eigenen Daten in Zeff). Erfinde nichts.
-Nenne die Zahlen genau (mit Einheit: Stunden, Euro, Anzahl, Datum) und sag kurz, worüber gerechnet wurde (Zeitraum, Filter). Belege Einträge mit ihrer Nummer in eckigen Klammern, z. B. [3].
-Ist ein Ergebnis leer, sag das — und was gesucht wurde, damit die Person die Frage anders stellen kann.`;
 
 type PlanFilter = { name?: string; value?: unknown; values?: unknown[]; prop?: string; op?: string };
 type PlanQuery = { view?: string; aggregate?: string; groupBy?: string; measure?: string; order?: string; limit?: number; filters?: PlanFilter[] | Record<string, unknown> };
@@ -157,6 +144,13 @@ function checkPlan(plan: Plan, ctx: QueryContext): { ok: true; queries: PlanQuer
  */
 export async function askStructured(question: string, history: { role: string; text: string }[], deps: AskDeps = {}): Promise<Routed> {
   const ctx = deps.context ?? { via: "chat" };
+  // The plugin is there instead of the built-in (state.ts PROVIDED_BY): its lambda plans, runs over the kernel's views and phrases.
+  if (!deps.plan && !deps.phrase && (await import("@/plugins/state")).onlyThroughPort("questions")) {
+    const { invokeLambda } = await import("@/plugins/workspace/lambdas/run");
+    const r = await invokeLambda("questions.ask", { question, history: history.slice(-6), via: ctx.via === "mcp" ? "mcp" : "chat" });
+    if (!r.ok) throw new Error(r.error);
+    return r.result as Routed;
+  }
   const plan = deps.plan ?? realPlan;
   const phrase = deps.phrase ?? realPhrase;
   const started = Date.now();

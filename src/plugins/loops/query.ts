@@ -10,6 +10,15 @@ import { derivedLoops } from "./detect";
 import { isOverdue, type Loop, type LoopView } from "./shared";
 import { sourceMessage, sourceOf } from "./source";
 import { allStates, type StateRow } from "./state";
+import { onlyThroughPort } from "@/plugins/state";
+import { lambdaSnapshot } from "@/lib/ext/snapshots";
+
+/**
+ * While the plugin stands in for the built-in (state.ts PROVIDED_BY), the loops are what its lambda `loops.all` worked out — the last answer, asked again in the
+ * background after a minute (lib/ext/snapshots.ts); the closing by rule is its flow's. The views, the nudges and the chips below read them the same.
+ */
+type PortAll = { open: Loop[]; closed: Loop[]; settled: Loop[] };
+const portAll = (): PortAll | null => lambdaSnapshot<PortAll>("loops-ext", "loops.all", {}, 1);
 
 /** Closed loops stay in the "Closed" view this long. */
 const CLOSED_DAYS = 14;
@@ -75,6 +84,10 @@ const g = globalThis as { __zeffLoopsRuleAt?: number };
 function closeSoon(now: Date): void {
   if ((g.__zeffLoopsRuleAt ?? 0) > now.getTime() - 60000) return;
   g.__zeffLoopsRuleAt = now.getTime();
+  if (onlyThroughPort("loops")) {
+    void import("@/lib/cases/there").then((x) => x.casesPortFlows(["loops.close-by-rule"])).catch((e) => console.error("[loops] closing by rule", e));
+    return;
+  }
   try {
     closeByRule();
   } catch (e) {
@@ -88,6 +101,14 @@ export type LoopQuery = { view?: LoopView; personId?: number; now?: Date; limit?
 export function listLoops(q: LoopQuery = {}): Loop[] {
   const now = q.now ?? new Date();
   closeSoon(now);
+  if (onlyThroughPort("loops")) {
+    const all = portAll();
+    let out = (q.view === "closed" ? all?.closed : all?.open) ?? [];
+    if (q.view === "mine" || q.view === "theirs") out = out.filter((l) => l.direction === q.view);
+    if (q.view === "overdue") out = out.filter((l) => l.overdue);
+    if (q.personId) out = out.filter((l) => l.personId === q.personId);
+    return q.limit ? out.slice(0, q.limit) : out;
+  }
   const states = allStates();
   let out: Loop[];
   if (q.view === "closed") {
@@ -114,6 +135,10 @@ export function listLoops(q: LoopQuery = {}): Loop[] {
 
 /** One loop by its ref, whatever became of it (null: unknown — a rule's loop answered and never decided). */
 export function findLoop(ref: string, now = new Date()): Loop | null {
+  if (onlyThroughPort("loops")) {
+    const all = portAll();
+    return [...(all?.open ?? []), ...(all?.closed ?? []), ...(all?.settled ?? [])].find((l) => l.ref === ref) ?? null;
+  }
   const states = allStates();
   const st = states.get(ref);
   const claim = /^claim:(\d+)$/.exec(ref);
