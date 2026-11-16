@@ -14,7 +14,7 @@ test("slash menu: a bare slash lists the main items, a picker its own, and a sea
   const pickers = new Set(top.filter((i) => i.opens).map((i) => i.opens));
   for (const i of all) assert.ok(!i.under || pickers.has(i.under) || i.under === "ai" || i.under === "formula", `${i.key} is reachable`);
   // (a title that begins with a picker's word — "Widget (AI-built)" — is asked for inside that picker)
-  const words = all.filter((i) => i.opens).map((i) => `${i.opens} `);
+  const words = (all as { opens?: string }[]).filter((i) => i.opens).map((i) => `${i.opens} `);
   for (const i of all) if (!words.some((w) => i.title.toLowerCase().startsWith(w))) assert.ok(filterItems(all, i.title.toLowerCase().replace(/ …$/, "")).includes(i), `a search for "${i.title}" finds it`);
   assert.equal(filterItems(all, "ticket ").length, 11, "the ticket picker has the 11 modules");
   assert.deepEqual(filterItems(all, "ticket chat").map((i) => i.key), ["module-chat"]);
