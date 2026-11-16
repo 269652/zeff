@@ -9,7 +9,8 @@ import { KnowledgeAdd } from "@/plugins/knowledge/KnowledgeAdd";
 import { KnowledgeChat } from "@/plugins/knowledge/KnowledgeChat";
 import { KnowledgeSyncButton } from "@/plugins/knowledge/KnowledgeSyncButton";
 import { formatDateTime } from "@/lib/format";
-import { isInstalled } from "@/plugins/state";
+import { redirect } from "@/lib/redirect";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: t("Chat") };
@@ -23,6 +24,13 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function KnowledgePage() {
   await connection();
   if (!isInstalled("knowledge")) return <PluginNotInstalled id="knowledge" />;
+  // The plugin stands in for the built-in (state.ts PROVIDED_BY): its chat is a page of the Workspace.
+  if (onlyThroughPort("knowledge")) {
+    const { getPref } = await import("@/lib/prefs");
+    const { getPage } = await import("@/plugins/workspace/store");
+    const id = getPref<number | null>("knowledge.chatPage", null);
+    if (id && getPage(id) && !getPage(id)!.archivedAt) return redirect(`/workspace/${id}`);
+  }
   // Where your browser reaches the knowledge server (https://knowledge.zeff:1337 beside https://zeff:1337).
   const h = await headers();
   const server = knowledgeBrowserUrl(h.get("x-forwarded-host") ?? h.get("host"), h.get("x-forwarded-proto"));

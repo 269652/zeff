@@ -137,6 +137,33 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     walk(r.nodes);
     return names.sort().join("\n");
   }, [r.nodes]);
+  // <state keep=url>: those names are also in the address (?s.<name>=<value>, only when not the default) — a reload or a shared link opens the same place.
+  const urlNames = useMemo(() => {
+    const names: string[] = [];
+    const walk = (ns: VNode[]) => ns.forEach((n) => typeof n !== "string" && (n.t === "keep" && n.a.url === "true" && names.push(n.a.name), walk(n.c)));
+    walk(r.nodes);
+    return names.sort().join("\n");
+  }, [r.nodes]);
+  const urlJson = useMemo(() => (urlNames ? JSON.stringify(Object.fromEntries(urlNames.split("\n").map((k) => [k, state[k] ?? ""]))) : ""), [urlNames, state]);
+  useEffect(() => {
+    if (!urlJson || typeof window === "undefined") return;
+    try {
+      const now = JSON.parse(urlJson) as Record<string, string>;
+      const u = new URL(window.location.href);
+      let changed = false;
+      for (const [k, v] of Object.entries(now)) {
+        const want = v !== "" && v !== (defaults[k] ?? "") ? v : null;
+        const had = u.searchParams.get("s." + k);
+        if (want === had) continue;
+        changed = true;
+        if (want === null) u.searchParams.delete("s." + k);
+        else u.searchParams.set("s." + k, want);
+      }
+      if (changed) window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+    } catch {
+      /* no address to write */
+    }
+  }, [urlJson, defaults]);
   const keptJson = useMemo(() => (kept ? JSON.stringify(Object.fromEntries(kept.split("\n").map((k) => [k, state[k] ?? ""]))) : ""), [kept, state]);
   useEffect(() => {
     if (!keptJson) return;
@@ -534,6 +561,12 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return null;
       case "check":
         return <CheckBox key={key} a={a} onChange={(v) => setState(a.bind, v)} />;
+      case "media": {
+        const h = Math.min(1200, Number(a.h) || 560);
+        if (a.kind === "audio") return <audio key={key} src={a.src} controls className="w-full" aria-label={a.label || undefined} />;
+        if (a.kind === "video") return <video key={key} src={a.src} controls className="w-full rounded-md bg-black" style={{ maxHeight: h }} aria-label={a.label || undefined} />;
+        return <iframe key={key} src={a.src} title={a.label || "PDF"} className="w-full rounded-md border-0" style={{ height: h }} />;
+      }
       case "qr":
         return <QrCode key={key} value={a.value} size={Number(a.size) || 160} label={a.label} />;
       case "chat":

@@ -72,7 +72,7 @@ export const KERNEL_CONTRACT = {
   },
 
   /** What a plugin's manifest may bring (`contributes` in zeff-plugin.json, lib/ext/manifest.ts). */
-  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
+  manifestContributes: ["apps", "appViews", "chats", "compute", "fieldTypes", "flowActions", "formulaFunctions", "functions", "hooks", "lambdas", "language", "locales", "lookups", "metrics", "oauth", "pageNav", "reviewLinks", "reviewSources", "rowBadges", "schedules", "services", "settings", "sources", "stores", "tabMenus", "tools", "widgets", "workCommands", "workPanels", "workerMcpServers", "workerRules", "workspacePackages"],
 
   /** What a server function or a Notebook cell may ask Zeff for (`zeff.*` in Python and Node.js; notebook/zeff-access.ts). */
   functionCalls: ["add_row", "ai", "api", "call", "database", "databases", "delete_row", "meta", "metric", "metrics", "output", "outputs", "publish", "table", "tables", "update_row"],
@@ -84,14 +84,14 @@ export const KERNEL_CONTRACT = {
   metaOps: ["block.delete", "block.save", "blocks.list", "database.alter", "database.create", "flow.delete", "flow.save", "flows.list", "page.archive", "page.create", "page.delete", "page.update", "plugin.delete", "plugin.save", "plugins.list", "schema", "tree"],
 
   /** The steps a flow is made of (workspace/flows/types.ts). The actions a step runs come through `workspace.flowActions`. */
-  flowNodes: ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail"],
+  flowNodes: ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail", "fn", "apply", "while", "tx"],
 
   /** The elements of the view language (workspace/view-template.ts). */
   viewElements: [
     "a", "ask", "avatar", "b", "badge", "bar", "board", "box", "button", "calendar", "callout", "cards", "case", "chart", "chat", "check", "chip", "clamp",
     "code", "codewidget", "col", "column", "copy", "cover", "data", "datatable", "def", "dialog", "divider", "dossier", "dot", "drag", "drop",
     "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "girocode", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
-    "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
+    "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "media", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
     "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "qr", "quickadd", "quote", "rating", "row", "rowtimeline", "schedule", "search", "section",
     "select", "selected", "setting", "settings", "slider", "slot", "small", "sources", "sparkline", "split", "state", "step", "steps", "strike", "subview", "suggested",
     "switch", "tab", "table", "tabs", "tabset", "text", "theme", "tick", "tile", "timeline", "todomark", "toggle", "toolbar", "transitions", "truncate",

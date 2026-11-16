@@ -1,10 +1,12 @@
-import { checkedUrl, flowAction, type ActionCtx } from "./actions";
+import { checkedUrl, type ActionCtx } from "./actions";
 import { isPackageRef, packagePage } from "../package-refs";
 import { fill, holds, evalExpr, text, type Scope } from "./expr";
 import { runScript } from "./sandbox";
 import { askUser, answerAsk, cancelAsk, expireAsks, type Ask } from "../asks";
 import { dueRuns, flowByName, getFlowRun, grantWrite, listFlows, saveFlowRun, secretValues, startFlowRun, type Flow, type FlowRun, type Journal, type LogEntry, type Waiting, cutOffRuns, keepRunProgress } from "./store";
-import type { FieldSpec, FlowDef, FlowNode, FlowPermissions, FlowTrigger } from "./types";
+import { walkNodes, type FieldSpec, type FlowDef, type FlowNode, type FlowPermissions, type FlowTrigger } from "./types";
+import { resolveAction, type Capability } from "./capabilities";
+import { ensureDeclared } from "./declare";
 import { asFlow, currentFlow } from "../events";
 
 /**
@@ -53,6 +55,36 @@ type Ctx = {
   secrets: Record<string, string>;
   depth: number;
   resolve?: RunOptions["resolve"];
+  /** The user functions of the flow (fn nodes, by name) and how deep they call each other. */
+  fns: Record<string, Extract<FlowNode, { kind: "fn" }>>;
+  fnDepth: number;
+  /** When the run's time is up (permissions.runTimeoutMs, from this start or resume), checked between nodes. */
+  deadline?: number;
+  /** Inside a tx node: its nodes' journal is a scratch one (the tx is one journal entry). */
+  inTx?: boolean;
+};
+
+/** Transactions on the one connection never overlap: a tx waits for the one before it. */
+const txQueue = ((globalThis as { __zeffTxQueue?: { p: Promise<unknown> } }).__zeffTxQueue ??= { p: Promise.resolve() });
+const TX_KINDS = new Set(["set", "if", "switch", "foreach", "while", "try", "fn", "apply", "return", "fail", "action"]);
+/** What may not be inside a tx (it would wait, or reach outside, with the transaction open): null when fine. */
+export function txForbidden(nodes: FlowNode[]): string | null {
+  let bad: string | null = null;
+  walkNodes(nodes, (n) => {
+    if (bad) return;
+    if (!TX_KINDS.has(n.kind)) bad = `${n.id}: a ${n.kind} node can't be inside a tx (it waits or reaches outside while the transaction is open)`;
+    else if (n.kind === "action" && !n.action.startsWith("core.")) bad = `${n.id}: only core.* actions (sql, pref, clock, log) can be inside a tx — not “${n.action}”`;
+  });
+  return bad;
+}
+
+const MAX_FN_DEPTH = 20;
+const fnsOf = (nodes: FlowNode[]): Ctx["fns"] => {
+  const out: Ctx["fns"] = {};
+  walkNodes(nodes, (n) => {
+    if (n.kind === "fn") out[n.name] = n;
+  });
+  return out;
 };
 
 const MAX_LOG_VALUE = 4000;
@@ -122,7 +154,7 @@ async function journaled(ctx: Ctx, key: string, fn: () => Promise<unknown>): Pro
   const output = await fn();
   ctx.journal[key] = { output: output === undefined ? null : output, at: new Date().toISOString() };
   // (kept at once: a run cut off after this step goes on after it — resumeCutOffRuns)
-  if (!ctx.dry) keepRunProgress(ctx.runId, ctx.journal, ctx.log);
+  if (!ctx.dry && !ctx.inTx) keepRunProgress(ctx.runId, ctx.journal, ctx.log);
   return { output, replayed: false };
 }
 
@@ -137,6 +169,7 @@ async function runNodes(nodes: FlowNode[], ctx: Ctx, prefix: string, depth: numb
 
 async function runNode(n: FlowNode, ctx: Ctx, prefix: string, depth: number, extra: Scope): Promise<unknown> {
   if (++ctx.count.n > ctx.count.max) throw new Failed(`The flow took more than ${ctx.count.max} steps (a loop?) — raise maxSteps in its permissions if it is meant.`);
+  if (ctx.deadline && Date.now() > ctx.deadline) throw new Failed(`The run took longer than ${ctx.perms.runTimeoutMs} ms (its permissions' runTimeoutMs) — stopped before “${n.label || n.id}”.`);
   const key = `${prefix}${n.id}`;
   const scope = () => scopeOf(ctx, extra);
   const t0 = Date.now();
@@ -172,21 +205,106 @@ async function runNode(n: FlowNode, ctx: Ctx, prefix: string, depth: number, ext
       return Promise.all(n.branches.map((b, i) => runNodes(b, ctx, `${key}|${i}/`, depth + 1, extra)));
     }
     case "try": {
+      let waiting = false;
       try {
-        return await runNodes(n.nodes, ctx, `${key}/`, depth + 1, extra);
+        try {
+          return await runNodes(n.nodes, ctx, `${key}/`, depth + 1, extra);
+        } catch (e) {
+          if (e instanceof Suspend || e instanceof Return) throw e;
+          const message = e instanceof Error ? e.message : String(e);
+          logNode(ctx, n, key, depth, { status: "ok", ms: 0, output: { caught: message } });
+          return await runNodes(n.catch, ctx, `${key}!/`, depth + 1, { ...extra, error: { message } });
+        }
       } catch (e) {
-        if (e instanceof Suspend || e instanceof Return) throw e;
-        const message = e instanceof Error ? e.message : String(e);
-        logNode(ctx, n, key, depth, { status: "ok", ms: 0, output: { caught: message } });
-        return runNodes(n.catch, ctx, `${key}!/`, depth + 1, { ...extra, error: { message } });
+        if (e instanceof Suspend) waiting = true;
+        throw e;
+      } finally {
+        // (a run that waits is taken up again from its start: its finally nodes run when it ends, not while it waits)
+        if (n.finally?.length && !waiting) await runNodes(n.finally, ctx, `${key}~/`, depth + 1, extra);
       }
+    }
+    case "fn":
+      // (defined before the run starts — see fnsOf)
+      return null;
+    case "tx": {
+      if (ctx.inTx) throw new Failed(`${n.label || n.id}: a tx can't be inside another tx.`);
+      const no = txForbidden(n.nodes);
+      if (no) throw new Failed(`${n.label || n.id}: ${no}`);
+      if (ctx.dry) {
+        logNode(ctx, n, key, depth, { status: "dry", ms: 0, output: { dryRun: true } });
+        return { dryRun: true };
+      }
+      const r = await journaled(ctx, key, async () => {
+        const { getSqlite } = await import("@/db");
+        await import("@/lib/prefs");
+        const turn = txQueue.p;
+        let release!: () => void;
+        txQueue.p = new Promise<void>((res) => (release = res));
+        await turn;
+        const sq = getSqlite();
+        sq.exec("begin immediate");
+        try {
+          const inner: Ctx = { ...ctx, journal: {}, inTx: true };
+          let out: unknown;
+          try {
+            out = await runNodes(n.nodes, inner, `${key}/`, depth + 1, extra);
+          } catch (e) {
+            if (!(e instanceof Return)) throw e;
+            // (a return inside commits what was done, then leaves)
+            sq.exec("commit");
+            throw e;
+          }
+          sq.exec("commit");
+          return out;
+        } catch (e) {
+          if (sq.inTransaction) sq.exec("rollback");
+          throw e;
+        } finally {
+          release();
+        }
+      });
+      logNode(ctx, n, key, depth, { status: "ok", ms: Date.now() - t0, output: { committed: true } });
+      return r.output;
+    }
+    case "apply": {
+      const fn = ctx.fns[n.fn];
+      if (!fn) throw new Failed(`${n.label || n.id}: there is no function “${n.fn}” in this flow (known: ${Object.keys(ctx.fns).join(", ") || "none"}).`);
+      if (ctx.fnDepth >= MAX_FN_DEPTH) throw new Failed(`${n.label || n.id}: functions call each other more than ${MAX_FN_DEPTH} deep (endless recursion?).`);
+      const args = fill(n.args, scope()) as Record<string, unknown>;
+      for (const k of Object.keys(args)) if (!fn.params.includes(k)) throw new Failed(`${n.label || n.id}: ${fn.name} has no parameter “${k}” (it has: ${fn.params.join(", ") || "none"}).`);
+      const vars = Object.fromEntries(fn.params.map((p) => [p, args[p] ?? null]));
+      logNode(ctx, n, key, depth, { status: "ok", ms: 0, input: args, output: { fn: fn.name } });
+      const child: Ctx = { ...ctx, steps: {}, vars, fnDepth: ctx.fnDepth + 1 };
+      try {
+        const last = await runNodes(fn.nodes, child, `${key}()/`, depth + 1);
+        return fn.output !== undefined ? fill(fn.output, scopeOf(child)) : last;
+      } catch (e) {
+        if (e instanceof Return) return e.value;
+        throw e;
+      }
+    }
+    case "while": {
+      const max = n.max ?? 200;
+      const out: unknown[] = [];
+      let round = 0;
+      for (; round < max && holds(n.when, scope()); round++) out.push(await runNodes(n.nodes, ctx, `${key}#${round}/`, depth + 1, { ...extra, index: round }));
+      if (round >= max && holds(n.when, scope())) throw new Failed(`${n.label || n.id}: still going after ${max} rounds (an endless loop?) — raise max if it is meant.`);
+      logNode(ctx, n, key, depth, { status: "ok", ms: 0, output: { rounds: round } });
+      return out;
     }
     case "return":
       throw new Return(fill(n.value, scope()));
     case "fail":
       throw new Failed(text(fill(n.message, scope())));
     case "action": {
-      const def = flowAction(n.action);
+      // (the kernel's actions first; then the closed primitives as core.*; then the capabilities declared in the database)
+      let def;
+      try {
+        ensureDeclared();
+        def = resolveAction(n.action, (cap, capInput) => runCapabilityNodes(cap, capInput, ctx, key, depth));
+      } catch (e) {
+        throw new Failed(`${n.label || n.id}: ${e instanceof Error ? e.message : e}`);
+      }
       if (!def) throw new Failed(`There is no action “${n.action}”.`);
       const input = fill(n.input, scope()) as Record<string, unknown>;
       for (const fld of def.input) if (fld.required && (input[fld.name] === undefined || input[fld.name] === null || input[fld.name] === "")) throw new Failed(`${n.label || n.id}: ${def.label} needs “${fld.name}”.`);
@@ -232,7 +350,7 @@ async function runNode(n: FlowNode, ctx: Ctx, prefix: string, depth: number, ext
       if (!sub) throw new Failed(`There is no flow “${n.flow}”.`);
       const input = withDefaults(sub.inputs, fill(n.input, scope()) as Record<string, unknown>);
       logNode(ctx, n, key, depth, { status: "ok", ms: 0, input, output: { flow: sub.name } });
-      const child: Ctx = { ...ctx, flow: sub.name, perms: sub.permissions, steps: {}, vars: {}, base: { ...ctx.base, input }, depth: ctx.depth + 1, count: ctx.count };
+      const child: Ctx = { ...ctx, flow: sub.name, perms: sub.permissions, steps: {}, vars: {}, base: { ...ctx.base, input }, depth: ctx.depth + 1, count: ctx.count, fns: fnsOf(sub.nodes), fnDepth: 0 };
       try {
         const last = await runNodes(sub.nodes, child, `${key}>`, depth + 1);
         return sub.output !== undefined ? fill(sub.output, scopeOf(child)) : last;
@@ -284,6 +402,19 @@ async function runNode(n: FlowNode, ctx: Ctx, prefix: string, depth: number, ext
       }
       throw new Suspend({ key, kind: "wait", until });
     }
+  }
+}
+
+/** A capability made of nodes: its program runs as a sub-run with the caller's grants, its input as `input` (as a call node does with a flow). */
+async function runCapabilityNodes(cap: Capability & { impl: { nodes: FlowNode[]; output?: unknown } }, input: Record<string, unknown>, ctx: Ctx, key: string, depth: number): Promise<unknown> {
+  if (ctx.depth >= 5) throw new Failed("Capabilities call each other too deep (a loop?).");
+  const child: Ctx = { ...ctx, steps: {}, vars: {}, base: { ...ctx.base, input }, depth: ctx.depth + 1, fns: fnsOf(cap.impl.nodes), fnDepth: 0 };
+  try {
+    const last = await runNodes(cap.impl.nodes, child, `${key}@`, depth + 1);
+    return cap.impl.output !== undefined ? fill(cap.impl.output, scopeOf(child)) : last;
+  } catch (e) {
+    if (e instanceof Return) return e.value;
+    throw e;
   }
 }
 
@@ -341,8 +472,12 @@ async function execute(...args: Parameters<typeof executeLoud>): Promise<RunResu
 async function executeLoud(runId: number, def: FlowDef, input: Record<string, unknown>, journal: Journal, log: LogEntry[], opts: { dry: boolean; row?: number; trigger?: unknown; resolve?: RunOptions["resolve"] }): Promise<RunResult> {
   const now = new Date();
   const local = `${now.toLocaleDateString("sv-SE")}T${now.toTimeString().slice(0, 5)}`;
-  const base: Scope = { input, env: { now: now.toISOString(), local, hour: now.getHours(), weekday: now.getDay(), today: now.toLocaleDateString("sv-SE"), flow: def.name, run: runId, trigger: opts.trigger ?? { kind: "manual" } }, ...(await rowScope(opts.row)) };
-  const ctx: Ctx = { runId, flow: def.name, perms: def.permissions, dry: opts.dry, journal, log, steps: {}, vars: {}, base, count: { n: 0, max: def.permissions.maxSteps ?? 500 }, secrets: secretValues(), depth: 0, resolve: opts.resolve };
+  // (The clock as the run began, kept in its journal: a run taken up again sees the same env.now / today / hour — replays are deterministic.)
+  const frozen = journal.__env?.output as Record<string, unknown> | undefined;
+  const env = frozen ?? { now: now.toISOString(), local, hour: now.getHours(), weekday: now.getDay(), today: now.toLocaleDateString("sv-SE"), flow: def.name, run: runId, trigger: opts.trigger ?? { kind: "manual" } };
+  if (!frozen) journal.__env = { output: env, at: now.toISOString() };
+  const base: Scope = { input, env, ...(await rowScope(opts.row)) };
+  const ctx: Ctx = { runId, flow: def.name, perms: def.permissions, dry: opts.dry, journal, log, steps: {}, vars: {}, base, count: { n: 0, max: def.permissions.maxSteps ?? 500 }, secrets: secretValues(), depth: 0, resolve: opts.resolve, fns: fnsOf(def.nodes), fnDepth: 0, ...(def.permissions.runTimeoutMs ? { deadline: Date.now() + def.permissions.runTimeoutMs } : {}) };
   try {
     let output: unknown;
     try {

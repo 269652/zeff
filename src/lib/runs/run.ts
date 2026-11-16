@@ -11,6 +11,7 @@ import { closeTodosOfDoneTickets, reconcileTodos } from "../todos/store";
 import { finishRun, getBoardSettings, lastGoodRun, startRun } from "./store";
 import { accountFlag, setAccountFlag } from "@/lib/sync/account-flags";
 import { localDay } from "@/lib/dates";
+import { financesThere } from "@/lib/finances/there";
 
 /** What a run is doing right now — one at a time per account (each runs its own; kept across the server's module copies: lib/sync/account-flags.ts). */
 type BoardRunNow = { id: number; phase: "sync" | "jira" | "ai" | "saving" | "mailtodos" | "mails" | "notetodos" | "notes" | "calendarmatch" | "calendartodos" | "documents" | "docrelations" | "knowledge" | "people" | "briefingdb" | "autoactions"; since: number; provider: string };
@@ -198,13 +199,21 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
         }
         // The Documents plugin's extensions (while they're on): the documents gone through for todos, then which
         // documents each todo is about.
+        // (kept by the built-in, or by its port — documents-ext: its flows documents.review and documents.relate; plugins/documents/port.ts)
+        const docs = await import("@/plugins/documents/port");
         if (stepAvailable("doctodos")) {
           setAccountFlag("__zeffBoardRun", { id, phase: "documents", since: t0, provider });
           await syncAndWait("doctodos");
+        } else if (docs.documentsPortStep("doctodos")) {
+          setAccountFlag("__zeffBoardRun", { id, phase: "documents", since: t0, provider });
+          await docs.documentsPortFlows([{ name: "documents.review", input: { runId: id } }]);
         }
         if (stepAvailable("docrelations")) {
           setAccountFlag("__zeffBoardRun", { id, phase: "docrelations", since: t0, provider });
           await syncAndWait("docrelations");
+        } else if (docs.documentsPortStep("docrelations")) {
+          setAccountFlag("__zeffBoardRun", { id, phase: "docrelations", since: t0, provider });
+          await docs.documentsPortFlows([{ name: "documents.relate" }]);
         }
         // The Knowledge plugin's extension: which knowledge pages each todo needs (only those that fit).
         if (stepAvailable("knowledgerel")) {
@@ -215,6 +224,10 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
         if (stepAvailable("peoplenorm")) {
           setAccountFlag("__zeffBoardRun", { id, phase: "people", since: t0, provider });
           await syncAndWait("peoplenorm");
+        } else if ((await import("@/plugins/state")).stepTakenByPort("peoplenorm")) {
+          // (its port's flow does it: the names matched, what the messages say read, the contacts placed, the summaries — plugins/people-ext)
+          setAccountFlag("__zeffBoardRun", { id, phase: "people", since: t0, provider });
+          await (await import("@/lib/cases/there")).casesPortFlows(["people.normalize"]);
         }
         // The Cases plugin: the case numbers in what came in (by rule), then the cases with new sources summed up (AI) — a
         // failure there doesn't stop the run.
@@ -234,6 +247,7 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
             await (await import("@/lib/cases/there")).casesAfterBookings(localDay());
             // Your income as the knowledge read it off your statements (it compiles them as a source of its own).
             if ((await import("@/plugins/state")).isInstalled("finances")) await (await import("@/plugins/finances/income")).refreshIncome();
+            else if (financesThere()) await (await import("@/lib/cases/there")).casesPortFlows(["finances.refresh-income"]);
           } catch (e) {
             console.error("[cases] after the briefing:", errorMessage(e));
           }
@@ -258,7 +272,8 @@ export function startBoardRun(opts: { syncJira?: boolean } = {}): { ok: boolean;
         await syncAndWait("tododupes");
         // Last: the todos without a button get ready actions (with the mails related to them in their context).
         setAccountFlag("__zeffBoardRun", { id, phase: "autoactions", since: t0, provider });
-        await syncAndWait("autoactions");
+        if ((await import("@/plugins/state")).stepAvailable("autoactions")) await syncAndWait("autoactions");
+        else await (await import("@/lib/cases/there")).casesPortFlows(["autoactions.review"]);
       } catch (e) {
         if (!kept) finishRun(id, { status: "error", error: stop.signal.aborted ? ABORTED : errorMessage(e), durationMs: Date.now() - t0 });
         else if (!stop.signal.aborted) console.error("[boards] a step after the Lage failed:", errorMessage(e));

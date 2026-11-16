@@ -1,6 +1,8 @@
 import { discoverFeeds, isPublicUrl, type DiscoverDeps, type FoundFeed } from "./discover";
 import { fillPrompt, promptText } from "@/lib/prompts";
 import { newsFetch } from "./http";
+import { AGGREGATORS, OUTLET_INSTRUCTIONS, OUTLET_SCHEMA, publishersOf } from "./finder-core";
+export { OUTLET_INSTRUCTIONS, publishersOf };
 import { topicFeedUrl, type NewsPrefs } from "./shared";
 
 /**
@@ -12,27 +14,6 @@ import { topicFeedUrl, type NewsPrefs } from "./shared";
  * What is returned are feeds that answered with items just now — never a guess.
  */
 export type Suggestion = { feed: FoundFeed; topic: string; domain: string; via: "news" | "ai"; why: string };
-
-/** Hosts that only aggregate: their "feed" is a search page again, not a publisher. */
-const AGGREGATORS = /(^|\.)(news\.google\.|google\.|msn\.|yahoo\.|bing\.|flipboard\.|newsbreak\.|ground\.news|dailyhunt|smartnews|apple\.news|facebook\.|twitter\.|x\.com|instagram\.|youtube\.|reddit\.|t\.co|linkedin\.)/i;
-
-/** The publishers a Google News feed names: <source url="https://host">Name</source>, most often first. */
-export function publishersOf(xml: string): { host: string; name: string; count: number }[] {
-  const by = new Map<string, { host: string; name: string; count: number }>();
-  for (const m of xml.matchAll(/<source\b[^>]*url=["']([^"']+)["'][^>]*>([\s\S]*?)<\/source>/gi)) {
-    let host = "";
-    try {
-      host = new URL(m[1]).hostname.replace(/^www\./, "").toLowerCase();
-    } catch {
-      continue;
-    }
-    if (!host || AGGREGATORS.test(host)) continue;
-    const cur = by.get(host);
-    if (cur) cur.count++;
-    else by.set(host, { host, name: m[2].replace(/<!\[CDATA\[|\]\]>/g, "").trim(), count: 1 });
-  }
-  return [...by.values()].sort((a, b) => b.count - a.count);
-}
 
 export type FinderDeps = DiscoverDeps & {
   /** The AI's suggestions for a topic: outlets by domain (default: the LLM plugin, if installed). */
@@ -47,20 +28,6 @@ export type FinderDeps = DiscoverDeps & {
   publishers?: number;
   limit?: number;
 };
-
-const OUTLET_SCHEMA = {
-  type: "object",
-  properties: {
-    outlets: {
-      type: "array",
-      items: { type: "object", properties: { name: { type: "string" }, domain: { type: "string", description: "Nur die Domain, z. B. quantamagazine.org" }, why: { type: "string", description: "Ein kurzer Satz: warum für diese Person." } }, required: ["name", "domain"] },
-    },
-  },
-  required: ["outlets"],
-};
-
-/** Its instructions — a page of System → Prompts ({{topic}}). */
-export const OUTLET_INSTRUCTIONS = "Du hilfst einer Person, gute Nachrichtenquellen zu finden. Nenne bis zu 10 konkrete, real existierende Medien, Blogs oder Newsletter,\ndie regelmäßig über das Thema „{{topic}}“ berichten und einen öffentlichen RSS-/Atom-Feed haben (Fachmedien und Einzelautoren sind willkommen, nicht nur große Nachrichtenseiten).\nNenne nur Quellen, die du sicher kennst — erfinde keine Domains. Gib die Domain an, nicht die Feed-Adresse.";
 
 export function outletPrompt(topic: string, profile: string[], have: string[]): string {
   return [

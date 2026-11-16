@@ -4,6 +4,7 @@ import { currentAccountId } from "@/db/accounts";
 import { pluginAction } from "@/lib/action-result";
 import { t } from "@/lib/i18n/server";
 import { isInstalled } from "@/plugins/state";
+import { importMessage } from "./imports";
 import type { Listing, Opened, Places } from "./shared";
 
 /** The Explorer's server actions: each answers `{ ok: true, … }` or `{ ok: false, error }`. */
@@ -74,16 +75,6 @@ export async function importFolderAction(path: string) {
     const r = await importFiles(files);
     return { message: `${importMessage(r)}${cut ? ` ${t("Only the first {n} files — watch the folder to take in all of it.", { n: MAX_FOLDER_IMPORT })}` : ""}` };
   });
-}
-
-function importMessage(r: { added: number; updated: number; same: number; skipped: string[] }): string {
-  const parts = [
-    r.added && t("{n} imported", { n: r.added }),
-    r.updated && t("{n} updated", { n: r.updated }),
-    r.same && t("{n} already in Documents", { n: r.same }),
-    r.skipped.length && t("{n} skipped ({why})", { n: r.skipped.length, why: r.skipped.slice(0, 2).join("; ") }),
-  ].filter(Boolean);
-  return parts.length ? `${parts.join(", ")}.` : t("Nothing to import.");
 }
 
 /** A folder watched: a local folder of Documents (read in now, then on every change and on its schedule). */

@@ -13,6 +13,7 @@ import { greetingDraft } from "./greeting";
 import { dateKindLabels, dateText, inDaysText, isCircle, upcomingTitle, type Circle, type Person } from "./shared";
 import { createPerson, deleteDate, getPerson, listPeople, namesThem, proposedDates, setCircle, updateDate, upcoming, whatsappChats } from "./store";
 import { localDay } from "@/lib/dates";
+import { financesThere } from "@/lib/finances/there";
 
 /**
  * The tools of the people database's overview (its "People" view): what to look at (dates coming up, names that may be one
@@ -93,7 +94,7 @@ export async function peopleOverview(): Promise<PeopleOverview> {
   const today = localDay();
   const owedAll = openCommitments();
   // Money between you and each (with the Finances plugin): what you owe them, what they owe you.
-  const debts = isInstalled("finances") ? (await import("@/plugins/finances/debts")).balances() : new Map<number, { owe: number; owed: number }>();
+  const debts = financesThere() ? (await import("@/plugins/finances/debts")).balances() : new Map<number, { owe: number; owed: number }>();
   const birthdays = new Map(upcoming({ days: 1 }).filter((u) => u.date.kind === "birthday").map((u) => [u.person.id, u.inDays]));
   const unread = (await import("./badges")).unreadByPerson(people);
   const cards: PeopleOverview["cards"] = {};

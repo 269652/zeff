@@ -2,6 +2,7 @@ import { euroAmounts, refDue, refLabeler, refPayable, rowRefs, settledBy, todoAm
 import { claimById, claimsOf } from "@/plugins/people/graph";
 import { peoplePaid, promisedAmount } from "@/plugins/people/todo-settle";
 import { isInstalled } from "@/plugins/state";
+import { financesThere } from "@/lib/finances/there";
 import { getPage, rawRows, setCell } from "@/plugins/workspace/store";
 import { viaSource } from "@/plugins/workspace/events";
 import { getSqlite } from "@/db";
@@ -37,7 +38,7 @@ function debtsPaid(e: Evidence, db: number): number[] {
 }
 
 todoLinkFinder((e, found) => {
-  const db = isInstalled("finances") ? debtsDbId() : null;
+  const db = financesThere() ? debtsDbId() : null;
   if (!db) return [];
   const claims = new Set(found.filter((r) => r.startsWith("claim:")).map((r) => Number(r.slice(6))));
   const cases = new Set(found.filter((r) => r.startsWith("case:")));

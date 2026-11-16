@@ -54,8 +54,16 @@ export type FlowNode =
   | (Base & { kind: "foreach"; items: string; as?: string; nodes: FlowNode[]; max?: number })
   /** The branches side by side; its output: each branch's last output. */
   | (Base & { kind: "parallel"; branches: FlowNode[][] })
-  /** Its nodes; when one fails, the catch nodes run with error.message. */
-  | (Base & { kind: "try"; nodes: FlowNode[]; catch: FlowNode[] })
+  /** Its nodes; when one fails, the catch nodes run with error.message; the finally nodes run either way (not while the run waits). */
+  | (Base & { kind: "try"; nodes: FlowNode[]; catch: FlowNode[]; finally?: FlowNode[] })
+  /** A user function (the server DSL, docs/plugins/server-dsl.md): its params are vars.<param> inside; defined wherever it stands (before the run starts), called by an apply node. */
+  | (Base & { kind: "fn"; name: string; params: string[]; nodes: FlowNode[]; output?: Expr })
+  /** Calls a user function with these arguments; its output is what the function returns (a return node, its output expression, or its last node). */
+  | (Base & { kind: "apply"; fn: string; args: Record<string, Expr> })
+  /** Its nodes as one database transaction: all their writes (core.sql.exec, core.pref.set) commit together or none does. Only nodes that never wait are allowed inside (no http, ai, ask, approve, wait, parallel, call, script). One journal entry. */
+  | (Base & { kind: "tx"; nodes: FlowNode[] })
+  /** Its nodes again while the condition holds (at most max rounds, 200 by default); its output: the last node of each round. */
+  | (Base & { kind: "while"; when: string; nodes: FlowNode[]; max?: number })
   /** JavaScript in a sandbox (QuickJS: no network, no files, a time and memory limit): `input` and `steps` are there, what it returns is its output. */
   | (Base & { kind: "script"; code: string; input?: Record<string, Expr> })
   /**
@@ -76,7 +84,9 @@ export type FlowNode =
   | (Base & { kind: "fail"; message: string });
 
 export type FlowNodeKind = FlowNode["kind"];
-export const NODE_KINDS: FlowNodeKind[] = ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail"];
+export const NODE_KINDS: FlowNodeKind[] = ["action", "set", "if", "switch", "foreach", "parallel", "try", "script", "ask", "approve", "wait", "call", "return", "fail", "fn", "apply", "while", "tx"];
+/** A user function's name (and a param's): a plain identifier. */
+export const FN_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** What a flow may reach. Nothing beyond Zeff's own reading unless it is granted here. */
 export type FlowPermissions = {
@@ -104,6 +114,20 @@ export type FlowPermissions = {
   todos?: boolean;
   /** The parts of Zeff's structure it may read or change (read, pages, databases, schema:<id>, blocks, flows, plugins, delete) — the meta.* actions. */
   meta?: string[];
+  /** The sign-ins it may use ("<plugin>.<id>": contributes.oauth) — a token, a call to the service as the user. */
+  oauth?: string[];
+  /** The tables core.sql.exec may insert into, update and delete from. */
+  sqlWrite?: string[];
+  /** Folders core.fs.* may reach (absolute paths; write: may change files there too). */
+  fs?: { root: string; write?: boolean; /** Entries a listing gives at most (default 1000, up to 5000). */ maxEntries?: number; /** Bytes a file read or written may have at most (default 1 MB, up to 10 MB). */ maxBytes?: number }[];
+  /** The secrets core.http may put into a header (never readable by the flow itself). */
+  secret?: string[];
+  /** Most milliseconds one run may take, checked between nodes (default: none). */
+  runTimeoutMs?: number;
+  /** The tables the sql capability may read (their names): "news_items". */
+  sql?: string[];
+  /** The preferences the pref capability may read and write (a key, or a prefix with *): "finances.*". */
+  pref?: string[];
   /** Most nodes one run may take (default 500). */
   maxSteps?: number;
 };
@@ -208,7 +232,19 @@ export function normalizeNodes(raw: unknown, depth = 0, ids = new Set<string>())
         out.push({ ...base, kind: "parallel", branches: (Array.isArray(o.branches) ? o.branches : []).slice(0, 8).map((b) => sub(b)) });
         break;
       case "try":
-        out.push({ ...base, kind: "try", nodes: sub(o.nodes), catch: sub(o.catch) });
+        out.push({ ...base, kind: "try", nodes: sub(o.nodes), catch: sub(o.catch), ...(Array.isArray(o.finally) && o.finally.length ? { finally: sub(o.finally) } : {}) });
+        break;
+      case "fn":
+        if (FN_NAME.test(str(o.name))) out.push({ ...base, kind: "fn", name: str(o.name), params: (Array.isArray(o.params) ? o.params.map(str).filter((p) => FN_NAME.test(p)) : []).slice(0, 12), nodes: sub(o.nodes), ...(o.output !== undefined && o.output !== null && o.output !== "" ? { output: o.output } : {}) });
+        break;
+      case "apply":
+        if (FN_NAME.test(str(o.fn))) out.push({ ...base, kind: "apply", fn: str(o.fn), args: exprs(o.args) });
+        break;
+      case "tx":
+        out.push({ ...base, kind: "tx", nodes: sub(o.nodes) });
+        break;
+      case "while":
+        if (str(o.when)) out.push({ ...base, kind: "while", when: str(o.when), nodes: sub(o.nodes), ...(posInt(o.max) ? { max: Math.min(5000, posInt(o.max)!) } : {}) });
         break;
       case "script":
         if (typeof o.code === "string" && o.code.trim()) out.push({ ...base, kind: "script", code: o.code.slice(0, 50000), ...(o.input ? { input: exprs(o.input) } : {}) });
@@ -267,6 +303,13 @@ function normalizePermissions(raw: unknown): FlowPermissions {
     ...(Array.isArray(o.store) && o.store.map(str).filter((x) => STORE_NAME.test(x)).length ? { store: [...new Set(o.store.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
     ...(Array.isArray(o.driver) && o.driver.map(str).filter((x) => DRIVER_NAME.test(x)).length ? { driver: [...new Set(o.driver.map(str).filter((x) => DRIVER_NAME.test(x)))] } : {}),
     ...(metaOf(o.meta).length ? { meta: metaOf(o.meta) } : {}),
+    ...(Array.isArray(o.sql) && o.sql.map(str).some((x) => /^[a-z_][a-z0-9_]*$/i.test(x)) ? { sql: [...new Set(o.sql.map(str).filter((x) => /^[a-z_][a-z0-9_]*$/i.test(x)))] } : {}),
+    ...(Array.isArray(o.pref) && o.pref.map(str).some((x) => /^[\w.-]+\*?$/.test(x)) ? { pref: [...new Set(o.pref.map(str).filter((x) => /^[\w.-]+\*?$/.test(x)))] } : {}),
+    ...(Array.isArray(o.oauth) && o.oauth.map(str).filter((x) => STORE_NAME.test(x)).length ? { oauth: [...new Set(o.oauth.map(str).filter((x) => STORE_NAME.test(x)))] } : {}),
+    ...(Array.isArray(o.sqlWrite) && o.sqlWrite.map(str).some((x) => /^[a-z_][a-z0-9_]*$/i.test(x)) ? { sqlWrite: [...new Set(o.sqlWrite.map(str).filter((x) => /^[a-z_][a-z0-9_]*$/i.test(x)))] } : {}),
+    ...(Array.isArray(o.fs) && o.fs.some((x) => typeof obj(x).root === "string" && str(obj(x).root)) ? { fs: o.fs.filter((x) => str(obj(x).root)).slice(0, 8).map((x) => ({ root: str(obj(x).root), ...(obj(x).write === true ? { write: true } : {}), ...(posInt(obj(x).maxEntries) ? { maxEntries: Math.min(5000, posInt(obj(x).maxEntries)!) } : {}), ...(posInt(obj(x).maxBytes) ? { maxBytes: Math.min(10_000_000, posInt(obj(x).maxBytes)!) } : {}) })) } : {}),
+    ...(Array.isArray(o.secret) && o.secret.map(str).some((x) => /^[A-Za-z0-9_]+$/.test(x)) ? { secret: [...new Set(o.secret.map(str).filter((x) => /^[A-Za-z0-9_]+$/.test(x)))] } : {}),
+    ...(posInt(o.runTimeoutMs) ? { runTimeoutMs: Math.min(3_600_000, posInt(o.runTimeoutMs)!) } : {}),
     ...(posInt(o.maxSteps) ? { maxSteps: Math.min(20000, posInt(o.maxSteps)!) } : {}),
   };
 }
@@ -339,7 +382,7 @@ export function walkNodes(nodes: FlowNode[], visit: (n: FlowNode, depth: number)
     visit(n, depth);
     if (n.kind === "if") (walkNodes(n.then, visit, depth + 1), walkNodes(n.else, visit, depth + 1));
     else if (n.kind === "switch") (n.cases.forEach((c) => walkNodes(c.nodes, visit, depth + 1)), walkNodes(n.default, visit, depth + 1));
-    else if (n.kind === "foreach" || n.kind === "try") (walkNodes(n.nodes, visit, depth + 1), n.kind === "try" && walkNodes(n.catch, visit, depth + 1));
+    else if (n.kind === "foreach" || n.kind === "try" || n.kind === "fn" || n.kind === "while" || n.kind === "tx") (walkNodes(n.nodes, visit, depth + 1), n.kind === "try" && (walkNodes(n.catch, visit, depth + 1), walkNodes(n.finally ?? [], visit, depth + 1)));
     else if (n.kind === "parallel") n.branches.forEach((b) => walkNodes(b, visit, depth + 1));
   }
 }

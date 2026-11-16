@@ -98,6 +98,14 @@ export async function setDriveBackupAction(on: boolean): Promise<ActionState> {
   try {
     const { isInstalled, setInstalled } = await import("@/plugins/state");
     if (!isInstalled("backup")) return { ok: false, error: t("Backups are not installed (Menu → Plugins).") };
+    // (the plugin is on: its backup flow's schedule is the switch)
+    const port = await import("@/plugins/google-drive/port");
+    if (await port.portOn()) {
+      await port.setPortBackup(!!on);
+      revalidateAll();
+      if (!on) return { ok: true, message: t("Backups are no longer copied to Google Drive.") };
+      return { ok: true, message: (await port.portConnected()) ? t("Backups are copied to Google Drive now.") : t("On — connect Google Drive on its page, then backups are copied.") };
+    }
     if (on && !isInstalled("google-drive")) setInstalled("google-drive", true);
     (await import("@/plugins/extension-state")).setExtensionInstalled("google-drive:backup-sync", !!on);
     revalidateAll();

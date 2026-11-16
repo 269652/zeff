@@ -24,7 +24,7 @@ import { RunConsole } from "./RunConsole";
 type Draft = FlowDef & { pageId: number };
 type Tab = "canvas" | "setup" | "permissions" | "json" | "runs";
 
-const KIND_LABEL = (t: ReturnType<typeof useT>): Record<FlowNodeKind, string> => ({ action: t("Action"), set: t("Set variables"), if: t("If / else"), switch: t("Switch"), foreach: t("For each"), parallel: t("In parallel"), try: t("Try / catch"), script: t("JavaScript"), ask: t("Ask me"), approve: t("Approval"), wait: t("Wait"), call: t("Call a flow"), return: t("Return"), fail: t("Fail") });
+const KIND_LABEL = (t: ReturnType<typeof useT>): Record<FlowNodeKind, string> => ({ action: t("Action"), set: t("Set variables"), if: t("If / else"), switch: t("Switch"), foreach: t("For each"), parallel: t("In parallel"), try: t("Try / catch"), script: t("JavaScript"), ask: t("Ask me"), approve: t("Approval"), wait: t("Wait"), call: t("Call a flow"), return: t("Return"), fail: t("Fail"), fn: t("Function"), apply: t("Call a function"), while: t("While"), tx: t("Transaction") });
 
 export function FlowEditor({ pageId, onChanged }: { pageId: number; onChanged: () => void }) {
   const t = useT();

@@ -113,8 +113,10 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   column: T({ label: "text", align: { oneOf: ["left", "right", "center"] }, foot: "text", nowrap: { oneOf: ["true", "false"] }, width: "int", sort: "list" }),
   // A text as a QR code (a link, a ticket, a Wi-Fi login — at most 331 bytes), black on white; its caption under it.
   qr: T({ value: "text", size: "int", label: "text" }, true),
+  // A file the browser plays or shows beside the text: a PDF, audio or video, from an address of Zeff's own (src="/api/…") or the web; h = its height in px (a PDF, a video).
+  media: T({ src: "url", kind: { oneOf: ["pdf", "audio", "video"] }, h: "int", label: "text" }, true),
   // keep=true: what it is set to is kept in this browser for the view (a filter, a tab) — opened again, it is as you left it.
-  state: T({ name: "text", value: "text", keep: { oneOf: ["true", "false"] } }, true),
+  state: T({ name: "text", value: "text", keep: { oneOf: ["true", "false", "url"] } }, true),
   tabs: T({ bind: "text", options: "text" }, true),
   split: T({ ratio: { oneOf: ["1:1", "1:2", "2:1", "2:3", "3:2", "1:3", "3:1"] }, side: { oneOf: ["left", "right"] }, width: "int" }),
   // grid: the rows share one grid of these columns ("max-content minmax(0,80ch) 1fr max-content") — each as wide as its widest cell.
@@ -1036,7 +1038,7 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "state": {
       if (!a.name) return (err("<state> needs a name."), []);
       if (ctx.state[a.name] === undefined) ctx.state[a.name] = a.value ?? "";
-      return a.keep === "true" ? [{ t: "keep", a: { name: a.name }, c: [] }] : [];
+      return a.keep === "true" || a.keep === "url" ? [{ t: "keep", a: { name: a.name, ...(a.keep === "url" ? { url: "true" } : {}) }, c: [] }] : [];
     }
     case "tabs":
     case "select": {
@@ -1362,6 +1364,11 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "qr":
       if (!a.value?.trim()) return [];
       return [{ t: "qr", a: { value: a.value, size: String(Math.min(480, Math.max(64, Number(a.size) || 160))), ...(a.label ? { label: a.label } : {}) }, c: [] }];
+    case "media": {
+      const src = (a.src ?? "").trim();
+      if (!src || !["pdf", "audio", "video"].includes(a.kind ?? "")) return (err('<media> needs src="…" and kind="pdf", "audio" or "video".'), []);
+      return [{ t: "media", a: { src, kind: a.kind, label: a.label ?? "", ...(a.h ? { h: String(Math.min(1200, Math.max(120, Number(a.h) || 480))) } : {}) }, c: [] }];
+    }
     case "tick":
       return [{ t: "tick", a: { every: String(Math.min(3600, Math.max(1, Math.round(Number(a.every) || 1)))) }, c: [] }];
     case "datatable": {

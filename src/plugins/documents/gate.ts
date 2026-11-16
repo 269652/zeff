@@ -16,6 +16,9 @@ function db() {
   return d;
 }
 
+/** The table is there (made on first use: a port that adopts it needs it now). */
+export const ensureGate = (): void => void db();
+
 /** Hold a document until you confirm it (again, when its file changed). */
 export function hold(docId: number): void {
   db().prepare("insert into doc_gate (doc_id, state, at) values (?, 'pending', ?) on conflict(doc_id) do update set state = 'pending', at = excluded.at").run(docId, new Date().toISOString());

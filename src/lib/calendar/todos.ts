@@ -8,26 +8,12 @@
 import { addCalendarTodo, getTodo, setTodoDue, setTodoStatus, todoByRef } from "@/lib/todos/store";
 import { getPref, setPref } from "@/lib/prefs";
 import { eventsBetween } from "./ir";
+import { TODOS_INSTRUCTIONS as INSTRUCTIONS, TODOS_SCHEMA as SCHEMA } from "./prompts";
+
+export { INSTRUCTIONS };
 import { dayOf, type CalendarEventView } from "./ir-shared";
 
-export const INSTRUCTIONS = `Du gehst Termine aus meinem Kalender durch und entscheidest für jeden, ob er mir etwas zu tun gibt — nur dann wird er ein Todo an seinem Tag.
 
-- Ein Todo, wenn ich etwas TUN muss: etwas erledigen, vorbereiten, mitbringen, besorgen, anrufen, schicken, bezahlen, hingehen und dort etwas abgeben oder klären („Kleider waschen“, „Müll rausbringen“, „Geschenk für Anna besorgen“, „Steuererklärung abgeben“, „Arzttermin — Überweisung mitnehmen“).
-- KEIN Todo für: Zeitblocker und Routinen, die nur Zeit freihalten („Pause“, „Mittag“, „Fokuszeit“, „Blocker“, „Gym“, „Pendeln“, „Feierabend“, „Standup“, „Daily“), Erinnerungen ohne Aufgabe („Geburtstag Nadine“ — außer es steht dabei, dass ich etwas tun soll), Feiertage, Urlaub, Abwesenheiten, und Besprechungen, zu denen ich nur erscheine.
-- Lies die Beschreibung (notes) des Termins genau: sie sagt oft, was zu tun, mitzubringen, vorzubereiten oder abzugeben ist („bitte Formular ausgefüllt mitbringen“, „Unterlagen bis Montag schicken“). Ein Todo gibt es NUR, wenn sich aus Titel + Beschreibung eine konkrete Aufgabe für mich ergibt — nicht schon deshalb, weil ein Termin existiert. Ein Termin ohne Beschreibung, der nur Zeit belegt (Unterricht, Betreuung, Konferenz, Treffen, Training), ist kein Todo. Fällig ist das Todo am Tag des Termins.
-- Im Zweifel bei einem Termin, dessen Beschreibung nach einer Aufgabe klingt: ein Todo.
-- \`text\`: die Aufgabe, kurz, in der Sprache des Termins (meist einfach sein Titel; ohne Uhrzeit, die kommt dazu).`;
-
-const SCHEMA = {
-  type: "object",
-  properties: {
-    appointments: {
-      type: "array",
-      items: { type: "object", properties: { id: { type: "string" }, todo: { type: "boolean" }, text: { type: "string" } }, required: ["id", "todo"] },
-    },
-  },
-  required: ["appointments"],
-};
 
 /** The AI's word on an appointment (a series: all of it), kept — asked again only when its title or place changes. */
 type Verdict = { todo: boolean; text?: string; at: string };
@@ -130,12 +116,23 @@ export async function calendarTodos(now = new Date()): Promise<number> {
   return added;
 }
 
+/**
+ * The calendar todos — by this file's own steps, or (the Calendar's port is on: state.ts PROVIDED_BY) by the plugin's flow `calendar.todos`, whose lambda judges
+ * and whose flow writes. How many were made.
+ */
+export async function calendarTodosVia(): Promise<number> {
+  if (!(await import("@/plugins/state")).onlyThroughPort("calendar")) return calendarTodos();
+  const r = await (await import("@/lib/cases/there")).casesPortFlows(["calendar.todos"]);
+  const out = r["calendar.todos"] as { added?: number } | undefined;
+  return Number(out?.added) || 0;
+}
+
 /** The calendar todos when due (every 15 minutes, in each account with the Kalender installed). */
 export async function calendarTodosWhenDue(): Promise<void> {
   if (!(await import("@/plugins/state")).isInstalled("calendar")) return;
   const last = getPref<number>("calendar:todos-at", 0);
   if (Date.now() - last < 15 * 60000) return;
   setPref("calendar:todos-at", Date.now());
-  const n = await calendarTodos();
+  const n = await calendarTodosVia();
   if (n) console.log(`[calendar] ${n} Todo${n === 1 ? "" : "s"} aus Terminen`);
 }

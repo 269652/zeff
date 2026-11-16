@@ -330,8 +330,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       const { scanFolders } = await import("@/plugins/documents/folders");
       const r = await scanFolders();
       if (r.added || r.updated) (await import("@/plugins/documents/process")).startProcessing();
-      const parts = [r.added && t("{n} new", { n: r.added }), r.updated && t("{n} changed", { n: r.updated }), r.missing && t("{n} gone from the folder", { n: r.missing })].filter(Boolean);
-      return r.errors.length && !r.added && !r.updated ? { ok: false, message: r.errors.slice(0, 3).join(" · ") } : { ok: true, message: parts.length ? parts.join(", ") : t("Nothing new.") };
+      return (await import("@/plugins/documents/folders-core")).scanSummary(r, t);
     },
     busy: () => false,
     inUse: () => getPref<unknown[]>("documents:folders", []).length > 0,
@@ -358,7 +357,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       let made = 0;
       try {
         (await import("@/lib/calendar/ir")).syncOutlook();
-        made = await (await import("@/lib/calendar/todos")).calendarTodos();
+        made = await (await import("@/lib/calendar/todos")).calendarTodosVia();
       } catch (e) {
         console.warn("[calendar] todos from appointments:", e instanceof Error ? e.message : e);
       }
@@ -463,17 +462,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
         // The pipelines with their AI steps: the fields of the rows that changed, the summaries.
         await (await import("@/plugins/workspace/pipeline")).runPipelines({ ai: true }).catch((e) => console.error("[workspace] the pipelines failed", e));
       }
-      return r.ok
-        ? {
-            ok: true,
-            message: [
-              r.all ? t("{n} tickets (all)", { n: r.relevant }) : t("{n} tickets (with you)", { n: r.relevant }),
-              t("{n} reassessed", { n: r.analyzed }),
-              t("{n} unchanged", { n: r.unchanged }),
-              ...(r.failed ? [t("{n} failed", { n: r.failed })] : []),
-            ].join(" · "),
-          }
-        : { ok: false, message: r.error ?? t("Failed.") };
+      return (await import("@/plugins/jira-lage/core")).boardLageMessage(r, t);
     },
     busy: () => flag("__zeffBoardLage"),
     schedule: () => ({ everyMinutes: getBoardSettings().autoMinutes, lastAt: recorded("boardlage").lastAt, window: t("workdays, with the briefing"), workdays: true }),
@@ -529,7 +518,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     run: async () => {
       try {
         (await import("@/lib/calendar/ir")).syncOutlook();
-        const n = await (await import("@/lib/calendar/todos")).calendarTodos();
+        const n = await (await import("@/lib/calendar/todos")).calendarTodosVia();
         return { ok: true, message: t("{n} new todos", { n }) };
       } catch (e) {
         return { ok: false, message: errorMessage(e) };
@@ -543,6 +532,11 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     href: "/calendar",
     get what() { return t("Which appointments each open todo is about — the AI reads them by content (after each briefing)"); },
     run: async () => {
+      // (The Calendar's port is on: the plugin's flow does it — its lambda matches, the flow writes.)
+      if ((await import("@/plugins/state")).onlyThroughPort("calendar")) {
+        const out = (await (await import("@/lib/cases/there")).casesPortFlows(["calendar.relate"]))["calendar.relate"] as { todos?: number; changed?: number } | undefined;
+        return out ? { ok: true, message: t("{todos} todos, {changed} changed", { todos: Number(out.todos) || 0, changed: Number(out.changed) || 0 }) } : { ok: false, message: t("Failed.") };
+      }
       const r = await (await import("@/lib/calendar/relations")).relateAppointments();
       return r.ok
         ? { ok: true, message: `${t("{todos} todos, {changed} changed", { todos: r.todos, changed: r.changed })}${r.error ? ` (${r.error})` : ""}` }
@@ -592,7 +586,8 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
       // The circles by rule, the summaries out of date compiled (in the background) — a failure there doesn't fail the step.
       await (await import("@/plugins/people/pulse")).afterBriefing().catch((e) => console.error("[people] after the briefing:", e));
       // The AI's few points before the meetings of the next hours ("What you should know" — it checks its plugin and switch; again only when something changed).
-      await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
+      if ((await import("@/plugins/state")).onlyThroughPort("know")) await (await import("@/lib/cases/there")).casesPortFlows(["know.prepare"]);
+      else await (await import("@/plugins/know/summary")).prepareMeetingBriefs().catch((e) => console.error("[know] before meetings:", e));
       return r.ok ? { ok: true, message: t("{a} aliases, {c} new, {m} merged, {r} relations", { a: r.aliases, c: r.created, m: r.merged, r: r.relations }) } : { ok: false, message: r.error ?? t("Failed.") };
     },
     busy: () => flag("__zeffPeopleNormalize"),
@@ -827,7 +822,10 @@ export function startSyncAllHere(): { ok: boolean; message: string } {
     void (async () => {
       try {
         // The Mail-Durchsicht and -Zuordnung come with the Ticket-Lage (its last steps) — not twice.
-        for (const key of allKeys().filter((k) => k !== "relations" && k !== "mailtodos" && k !== "autoactions" && k !== "boardlage" && k !== "knowledgerel" && k !== "peoplenorm" && k !== "tododupes" && k !== "notetodos" && k !== "noterelations" && k !== "calendarrelations" && k !== "calendartodos" && k !== "review" && k !== "matching" && k !== "doctodos" && k !== "docrelations" && stepAvailable(k))) {
+        // (a port's flow standing in for one of those steps — its `replaces` — is left out like it)
+        const chained = new Set<string>(["relations", "mailtodos", "autoactions", "boardlage", "knowledgerel", "peoplenorm", "tododupes", "notetodos", "noterelations", "calendarrelations", "calendartodos", "review", "matching", "doctodos", "docrelations"]);
+        const kindOf = (k: string): string => (k.startsWith("flow:") ? (flowByName(k.slice(5))?.sync?.replaces ?? k) : k);
+        for (const key of allKeys().filter((k) => !chained.has(kindOf(k)) && stepAvailable(k))) {
           if (l.allStopped) break;
           l.all = key;
           await runStep(key);

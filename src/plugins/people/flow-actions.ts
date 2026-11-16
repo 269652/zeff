@@ -1,5 +1,7 @@
 import { extensionPoint } from "@/lib/plugin-kit/extension-point";
 import type { FlowAction } from "@/plugins/workspace/flows/actions";
+import { GRAPH_FLOW_ACTIONS } from "./graph-actions"; // (messages.recent, people.resolve, people.claims … for lambdas and flows)
+import { AI_FLOW_ACTIONS } from "./ai-actions"; // (the port of the AI steps: people.extract-input, people.compile-input … rag.retrieve)
 
 /**
  * What the People plugin lets lambdas and flows read (while it is built in — its port brings these the same way): your contacts' names,
@@ -86,6 +88,36 @@ export const PEOPLE_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "people.details",
+    group: "people",
+    label: "A contact's details",
+    summary: "For these contacts: their name, whether a person or an organisation, their mail addresses and their details (key, value — iban, bic, phone, address …) as kept.",
+    input: [{ name: "ids", type: "list", required: true }],
+    output: "{ people: { [id]: { name, kind, emails, details: [{ key, value }] } } }",
+    run: async (i) => {
+      const { getPerson } = await import("./store");
+      const { detailsOf } = await import("./details");
+      const out: Record<number, { name: string; kind: string; emails: string[]; details: { key: string; value: string }[] }> = {};
+      for (const id of ids(i.ids)) {
+        const p = getPerson(id);
+        if (p) out[id] = { name: p.name, kind: p.kind, emails: p.emails, details: detailsOf(id).map((d) => ({ key: d.key, value: d.value })) };
+      }
+      return { people: out };
+    },
+  },
+  {
+    name: "people.commitments",
+    group: "people",
+    label: "Open promises",
+    summary: "The promises not kept yet (the ones Zeff shows): id, person id and name, text, direction (mine: you promised, theirs: they did), due day.",
+    input: [],
+    output: "{ commitments: [{ id, personId, personName, text, direction, due }] }",
+    run: async () => {
+      const { openCommitments } = await import("./graph");
+      return { commitments: openCommitments().map((c) => ({ id: c.id, personId: c.personId, personName: c.personName, text: c.text, direction: c.direction, due: c.due })) };
+    },
+  },
+  {
     name: "people.by-iban",
     group: "people",
     label: "Whose account is it",
@@ -113,4 +145,4 @@ export const PEOPLE_FLOW_ACTIONS: FlowAction[] = [
   },
 ];
 
-extensionPoint<FlowAction[]>("workspace.flowActions").contribute("people", PEOPLE_FLOW_ACTIONS);
+extensionPoint<FlowAction[]>("workspace.flowActions").contribute("people", [...PEOPLE_FLOW_ACTIONS, ...GRAPH_FLOW_ACTIONS, ...AI_FLOW_ACTIONS]);

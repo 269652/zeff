@@ -17,7 +17,7 @@ export const AI_ACTIONS: FlowAction[] = [
     group: "ai",
     label: "AI: an answer in a shape",
     summary: "A prompt answered by the AI as JSON in the shape the schema says (a JSON Schema object) — routed and budgeted as the named task (Settings → AI: which AI does it).",
-    input: [f("prompt", "text", { required: true }), f("schema", "json", { required: true }), f("task", "text", { help: "The AI task it counts as (\"cases-compile\" …); general without one" }), f("budget", "number", { help: "At most this many dollars" })],
+    input: [f("prompt", "text", { required: true }), f("schema", "json", { required: true }), f("task", "text", { help: "The AI task it counts as (\"cases-compile\" …); general without one" }), f("budget", "number", { help: "At most this many dollars" }), f("minutes", "number", { help: "Gives up after this many minutes (4 by default, 30 at most)" })],
     output: "the answer, as the schema says",
     needs: ["ai"],
     run: async (i, ctx) => {
@@ -25,7 +25,7 @@ export const AI_ACTIONS: FlowAction[] = [
       if (!i.schema || typeof i.schema !== "object") throw new Error("schema: the shape of the answer (a JSON Schema object).");
       const { runAi } = await import("@/lib/ai");
       const budget = Number(i.budget);
-      const r = await runAi<unknown>(text(i.prompt).slice(0, 200000), i.schema as object, { task: (text(i.task) || "general") as never, timeoutMs: 4 * 60000, ...(budget > 0 ? { maxBudgetUsd: Math.min(5, budget) } : {}) });
+      const r = await runAi<unknown>(text(i.prompt).slice(0, 200000), i.schema as object, { task: (text(i.task) || "general") as never, timeoutMs: Math.min(30, Math.max(1, Number(i.minutes) || 4)) * 60000, ...(budget > 0 ? { maxBudgetUsd: Math.min(5, budget) } : {}) });
       return r.output ?? {};
     },
   },

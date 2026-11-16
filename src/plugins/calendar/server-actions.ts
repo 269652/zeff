@@ -38,7 +38,7 @@ const run = (fn: () => Promise<string> | string): Promise<ActionState> =>
     const message = await fn();
     // Today's and tomorrow's appointments as todos, right away (calendars set so) — not only every 15 minutes.
     // (Not awaited: the AI may judge new appointments first — the next scheduled turn makes them if this one fails.)
-    void (await import("@/lib/calendar/todos")).calendarTodos().catch(() => {});
+    void (await import("@/lib/calendar/todos")).calendarTodosVia().catch(() => {});
     changed();
     return { message };
   });

@@ -32,6 +32,7 @@ export async function caseOpAction(rowId: number, op: CaseOperation): Promise<Re
 }
 
 import type { CasesOverview } from "./core";
+import { financesThere } from "@/lib/finances/there";
 export type { CasesOverview };
 
 /** The cases database's overview (its "Overview" view): the money in figures, the running cases by what is due first, each with where it pays to. */
@@ -62,7 +63,7 @@ export async function casesOverviewAction(): Promise<Result<{ overview: CasesOve
       }),
     );
     const accounts = Object.fromEntries(all.filter((c) => c.personId && !c.compiled?.iban).map((c) => [c.personId!, personAccount(c.personId!)]));
-    const debtsDb = isInstalled("finances") ? (await import("@/plugins/finances/debts")).debtsDbId() : null;
+    const debtsDb = financesThere() ? (await import("@/plugins/finances/debts")).debtsDbId() : null;
     const { overviewOf } = await import("./core");
     return { overview: overviewOf({ cases: all, payments, parties: partyNames, names, accounts, rows, today: localDay(), in30: localDay(new Date(Date.now() + 30 * 864e5)), debtsDb }) };
   });
@@ -76,7 +77,7 @@ export async function bankStatusAction(): Promise<Result<{ bank: BankStatus }>> 
     const sync = await import("./bank-sync");
     const s = sync.bankSettings();
     const { listTransactions } = await import("./bank");
-    const debts = isInstalled("finances") ? await (await import("@/plugins/finances/database")).debtsDatabase() : null;
+    const debts = financesThere() ? await (await import("@/plugins/finances/database")).debtsDatabase() : null;
     return { bank: { debtsHref: debts ? `/workspace/${debts}` : null, statements: await (await import("@/lib/bank/statements")).statementsReadable(), configured: !!(s?.appId && s.privateKey), connected: sync.bankConnected(), appId: s?.appId ?? "", aspsp: s?.aspsp ?? "Revolut", country: s?.country ?? "DE", validUntil: s?.validUntil ?? null, lastSync: s?.lastSync ?? null, transactions: listTransactions(100000).length } };
   });
 }

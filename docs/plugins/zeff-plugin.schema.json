@@ -946,6 +946,158 @@
             ]
           }
         },
+        "aiTasks": {
+          "default": [],
+          "description": "AI tasks it has Zeff run: each a row in Settings → AI (its own backend and model), asked for as the id `<plugin id>.<id>` (flow action ai.json, task=…).",
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60,
+                "description": "Its name in Settings → AI."
+              },
+              "what": {
+                "default": "",
+                "description": "What the AI does in it, in a sentence.",
+                "type": "string",
+                "maxLength": 300
+              },
+              "idempotent": {
+                "description": "The same input gives an equal answer: a repeat within minutes is answered from memory.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "label"
+            ]
+          }
+        },
+        "knowledgeDocs": {
+          "default": [],
+          "description": "Pages this plugin gives the knowledge server (its Zeff export): a lambda returns them; the last answer is kept and asked for again after everyMinutes.",
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
+              },
+              "lambda": {
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$",
+                "description": "The lambda (kind function) giving the pages for the knowledge server: [{ \"id\", \"space\", \"title\", \"url\", \"version\", \"updatedAt\", \"author\", \"body\" }] (the id starts with \"zeff:\" so it counts as one of Zeff own sources)."
+              },
+              "args": {
+                "default": {},
+                "description": "What the lambda is called with.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              },
+              "everyMinutes": {
+                "default": 30,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1440
+              },
+              "replaces": {
+                "description": "The id of the built-in plugin whose pages these are: only given while that one is not installed.",
+                "type": "string",
+                "maxLength": 60
+              }
+            },
+            "required": [
+              "id",
+              "lambda"
+            ]
+          }
+        },
+        "personFormulas": {
+          "default": [],
+          "description": "Formulas of a contact or a circle — Schulden(@Chris), SUMME(Schulden(@Freunde)): a contact gives one number, a circle one per contact who has any, no argument the total; read from a snapshot the lambda keeps and asks again after everyMinutes.",
+          "maxItems": 10,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß]{0,39}$"
+              },
+              "aliases": {
+                "default": [],
+                "description": "Its other names (English …).",
+                "maxItems": 5,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß]{0,39}$"
+                }
+              },
+              "unit": {
+                "default": "",
+                "type": "string",
+                "maxLength": 20
+              },
+              "what": {
+                "default": "",
+                "type": "string",
+                "maxLength": 200
+              },
+              "lambda": {
+                "type": "string",
+                "maxLength": 80,
+                "pattern": "^[a-z][a-z0-9_-]*(\\.[a-z0-9_-]+)*$",
+                "description": "The lambda (kind function) that keeps the snapshot: { \"total\": number, \"byId\": { \"<contact id>\": number }, \"byName\": { \"<lower-case name>\": number } } — byName for what has no contact, matched by the contact's name or alias."
+              },
+              "args": {
+                "default": {},
+                "description": "What the lambda is called with.",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "number",
+                    "boolean"
+                  ]
+                }
+              },
+              "everyMinutes": {
+                "default": 5,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1440
+              }
+            },
+            "required": [
+              "name",
+              "lambda"
+            ]
+          }
+        },
         "metrics": {
           "default": [],
           "description": "Kennzahlen: numbers a plugin function gives, kept and asked again when they are older than everyMinutes.",
@@ -999,6 +1151,11 @@
                     "boolean"
                   ]
                 }
+              },
+              "replaces": {
+                "description": "A port's: the built-in plugin (its id) whose Kennzahl of this name it is — the built-in's counts while it is installed; the Kennzahl keeps its name, so pages and formulas that read it go on.",
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$"
               },
               "everyMinutes": {
                 "default": 15,
@@ -1342,6 +1499,11 @@
                 "maxLength": 80,
                 "pattern": "^[a-z][a-z0-9_-]*(.[a-z0-9_-]+)*$"
               },
+              "actFlow": {
+                "description": "Or a flow of the plugin's package a button runs, called with { action, payload, config }: the flow may write (what its package was allowed), where a lambda only reads. What it returns is shown when it is widget data, else the data is read again.",
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.-]{0,79}$"
+              },
               "act": {
                 "description": "The plugin function a button of it runs, called with { action, payload, config }; what it gives (data as above) is shown, else the data is read again.",
                 "type": "string",
@@ -1600,6 +1762,108 @@
             "required": [
               "key",
               "label"
+            ]
+          }
+        },
+        "oauth": {
+          "default": [],
+          "description": "Signing in to a service with an OAuth client of the user's own (authorization code with PKCE): the kernel serves the way there and back (/api/ext/oauth/<plugin>/<id>/connect and /callback), keeps the tokens encrypted and refreshes them. Its lambdas ask for a fresh access token (the read action oauth.token); its flows call the service as the user (oauth.fetch, oauth.upload, oauth.download). The client id and secret are its settings.",
+          "maxItems": 5,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,39}$",
+                "description": "Its id (unique in the plugin): <plugin>.<id> in the oauth actions and a flow's permissions."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              "authUrl": {
+                "type": "string",
+                "pattern": "^https:\\/\\/[^\\s]{4,300}$",
+                "description": "Where the user signs in (the provider's authorization endpoint)."
+              },
+              "tokenUrl": {
+                "type": "string",
+                "pattern": "^https:\\/\\/[^\\s]{4,300}$",
+                "description": "Where the code and the refresh token are exchanged for access tokens."
+              },
+              "scopes": {
+                "minItems": 1,
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "description": "What it asks for by default."
+              },
+              "scopeSets": {
+                "default": {},
+                "description": "More of what it can ask for, by name: connecting \"with\" one asks for that set instead (a narrow and a wide access).",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                },
+                "additionalProperties": {
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              },
+              "clientId": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][\\w]{0,39}$",
+                "description": "The key of its settings (kind text or secret) that holds the client id."
+              },
+              "clientSecret": {
+                "type": "string",
+                "pattern": "^[a-zA-Z][\\w]{0,39}$",
+                "description": "The key of its settings (kind secret) that holds the client secret."
+              },
+              "authParams": {
+                "default": {},
+                "description": "More parameters of the sign-in address ({ \"access_type\": \"offline\" }).",
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "maxLength": 200
+                }
+              },
+              "identity": {
+                "default": "none",
+                "description": "id_token: the e-mail address in the id token the provider sends (to show who is connected).",
+                "type": "string",
+                "enum": [
+                  "none",
+                  "id_token"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "authUrl",
+              "tokenUrl",
+              "scopes",
+              "clientId",
+              "clientSecret"
             ]
           }
         },

@@ -13,21 +13,13 @@ import { claimReviewed, flushSoon } from "./knowledge-sync";
 import { getPerson, listPeople, namesOf } from "./store";
 import { currentAccountId } from "@/db/accounts";
 import { trimSlice } from "@/lib/text";
+import { CLAIM_KINDS, ENTITY_LINK_TYPES, ENTITY_TARGET_TYPES, LINK_TYPES, TARGET_TYPES, type ClaimKind, type LinkType, type ClaimInput, type LinkInput, type Status, type TargetType } from "./kinds";
 
-export const CLAIM_KINDS = ["fact", "role", "owns", "preference", "commitment"] as const;
-export type ClaimKind = (typeof CLAIM_KINDS)[number];
-export const LINK_TYPES = ["reports-to", "manages", "works-with", "decides", "owns", "on-ticket", "commented-on", "authored", "active-in", "knows-about"] as const;
-/** Links the Entities plugin reads off the sources (not the AI's to propose): someone works at an organisation, lives or sits at a place. */
-export const ENTITY_LINK_TYPES = ["works-at", "located-at"] as const;
-export type LinkType = (typeof LINK_TYPES)[number] | (typeof ENTITY_LINK_TYPES)[number];
-export const TARGET_TYPES = ["person", "ticket", "repo", "project", "topic"] as const;
-/** The Entities plugin's targets: an organisation, a place (target_ref: its id; label: its name). */
-export const ENTITY_TARGET_TYPES = ["org", "place"] as const;
-export type TargetType = (typeof TARGET_TYPES)[number] | (typeof ENTITY_TARGET_TYPES)[number];
+export { CLAIM_KINDS, LINK_TYPES, ENTITY_LINK_TYPES, TARGET_TYPES, ENTITY_TARGET_TYPES } from "./kinds";
+export type { ClaimKind, LinkType, TargetType } from "./kinds";
 const ALL_LINK_TYPES: readonly string[] = [...LINK_TYPES, ...ENTITY_LINK_TYPES];
 const ALL_TARGET_TYPES: readonly string[] = [...TARGET_TYPES, ...ENTITY_TARGET_TYPES];
-/** superseded: true once, no longer (a newer value took its place — see @/lib/trust); claims only. */
-export type Status = "proposed" | "confirmed" | "rejected" | "superseded";
+export type { Status } from "./kinds";
 
 /** A claim of this kind is a snapshot that ages: it is asked about again after this many days. */
 const SHELF_LIFE: Partial<Record<ClaimKind, number>> = { role: 120, owns: 120, commitment: 45 };
@@ -148,7 +140,7 @@ const toLink = (r: LRow): Link => ({
 // Claims
 // ---------------------------------------------------------------------------
 
-export type ClaimInput = { personId: number; kind: ClaimKind; text: string; evidence?: string; sourceRef?: string; confidence?: number; status?: Status; direction?: Claim["direction"]; due?: string };
+export type { ClaimInput, LinkInput } from "./kinds";
 
 /** A claim kept — the same (person, kind, text) once, whatever became of it (a rejected one stays rejected). Whether it is new. */
 export function addClaim(v: ClaimInput): boolean {
@@ -228,7 +220,6 @@ export function reviewClaim(id: number, op: "confirm" | "reject" | "done" | "rec
 // Links
 // ---------------------------------------------------------------------------
 
-export type LinkInput = { personId: number; rel: LinkType; targetType: TargetType; targetRef: string; label?: string; evidence?: string; source?: Link["source"]; sourceRef?: string; confidence?: number; status?: Status };
 
 /** A link kept — once per (person, type, target); seen again, it is marked so (a rule-derived one stays alive). Whether it is new. */
 export function addLink(v: LinkInput): boolean {

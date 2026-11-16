@@ -172,7 +172,9 @@ async function proxyCall(m: LambdaManifest, name: string, input: unknown, plugin
   if (a.writes) throw new Error(`“${name}” changes something — a lambda only reads; a flow can write what it returns.`);
   // (an external plugin's lambda reads its own plugin's stores — it never writes: store.put is refused above)
   const own = plugin?.startsWith("ext:") ? ((getPlugin(plugin.slice(4))?.manifest.contributes as { stores?: { name: string }[] } | undefined)?.stores ?? []).map((x) => `${plugin.slice(4)}.${x.name}`) : [];
-  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}) };
+  // (and its own plugin's sign-ins: a fresh access token — oauth.token — for the calls its fetch makes)
+  const ownOauth = plugin?.startsWith("ext:") ? ((getPlugin(plugin.slice(4))?.manifest.contributes as { oauth?: { id: string }[] } | undefined)?.oauth ?? []).map((x) => `${plugin.slice(4)}.${x.id}`) : [];
+  const perms: FlowPermissions = { web: m.web ?? [], ai: true, ...(own.length ? { store: own } : {}), ...(ownOauth.length ? { oauth: ownOauth } : {}) };
   return a.run((input && typeof input === "object" ? input : {}) as Record<string, unknown>, {
     flow: `lambda:${m.name}`,
     runId: null,
@@ -236,7 +238,7 @@ export async function runLambda(l: Lambda, event: unknown, opts: { resolve?: (ho
         resolve(r.ok ? r : { ...r, error: hide(r.error, secrets), logs: r.logs.map((x) => hide(x, secrets)), ...(r.stack ? { stack: hide(r.stack, secrets) } : {}) });
       };
       const timer = setTimeout(() => finish({ ok: false, error: `took longer than ${(l.manifest.timeoutMs ?? 20000) / 1000} s (stopped)`, logs: [], ms: Date.now() - t0 }), l.manifest.timeoutMs ?? 20000);
-      child.on("message", (msg: { type?: string; id?: number; ok?: boolean; result?: unknown; error?: string; stack?: string; logs?: string[]; ms?: number; url?: string; method?: string; headers?: Record<string, string>; body?: string; name?: string; input?: unknown }) => {
+      child.on("message", (msg: { type?: string; id?: number; ok?: boolean; result?: unknown; error?: string; stack?: string; logs?: string[]; ms?: number; url?: string; method?: string; headers?: Record<string, string>; body?: string; bodyBase64?: string; name?: string; input?: unknown }) => {
         if (msg.type === "done") return finish(msg.ok ? { ok: true, result: msg.result, logs: (msg.logs ?? []).map((x) => hide(x, secrets)), ms: Date.now() - t0 } : { ok: false, error: msg.error ?? "failed", stack: msg.stack, logs: msg.logs ?? [], ms: Date.now() - t0 });
         const answer = (p: Promise<unknown>) =>
           p.then(

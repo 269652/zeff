@@ -63,7 +63,7 @@ export async function runTicketAction(runId: number, ticket: string, idx: number
     const detail = viaPort
       ? (
           await runJiraPortOps(
-            [action.type === "transition" ? { type: "transition" as const, ticket, to: action.to } : action.type === "assign" ? { type: "assign" as const, ticket, assignee: action.assignee } : { type: "comment" as const, ticket, body: action.comment }],
+            [action.type === "transition" ? { type: "transition" as const, ticket, to: action.to ?? "" } : action.type === "assign" ? { type: "assign" as const, ticket, assignee: action.assignee ?? "" } : { type: "comment" as const, ticket, body: action.comment ?? "" }],
             { plain: true },
           )
         )[0]
@@ -79,10 +79,10 @@ export async function runTicketAction(runId: number, ticket: string, idx: number
           return `→ ${hit.to ?? hit.name}`;
         }
         if (action.type === "assign") {
-          await call("jira_update_issue", { issue_key: ticket, fields: JSON.stringify({ assignee: action.assignee }) });
-          return t("assigned: {assignee}", { assignee: action.assignee });
+          await call("jira_update_issue", { issue_key: ticket, fields: JSON.stringify({ assignee: action.assignee ?? "" }) });
+          return t("assigned: {assignee}", { assignee: action.assignee ?? "" });
         }
-        await call("jira_add_comment", { issue_key: ticket, body: action.comment });
+        await call("jira_add_comment", { issue_key: ticket, body: action.comment ?? "" });
         return t("Comment posted");
       },
       90000,

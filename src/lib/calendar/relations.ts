@@ -14,6 +14,9 @@ import { getJiraTicket } from "@/lib/jira/store";
 import { COPILOT_MAX_PROMPT } from "@/plugins/copilot-cli/cli";
 import { promptRoom, relateInBatches, relateJob } from "@/lib/ai/batch-job";
 import { eventsBetween } from "./ir";
+import { RELATIONS_INSTRUCTIONS as INSTRUCTIONS, RELATIONS_SCHEMA as SCHEMA } from "./prompts";
+
+export { INSTRUCTIONS };
 import { calendarRef } from "./brief";
 import { dayOf } from "./ir-shared";
 
@@ -23,17 +26,7 @@ const BATCH_CHARS = COPILOT_MAX_PROMPT - 4000;
 const DAYS_BACK = 14;
 const DAYS_AHEAD = 30;
 
-const SCHEMA = {
-  type: "object",
-  properties: {
-    todos: { type: "array", items: { type: "object", properties: { id: { type: "integer" }, appointments: { type: "array", items: { type: "string" } } }, required: ["id", "appointments"] } },
-  },
-  required: ["todos"],
-};
 
-export const INSTRUCTIONS = `Du ordnest Termine meinen offenen Todos zu. Unten steht je Todo (Nummer in eckigen Klammern) eine Auswahl von Terminen aus meinem Kalender (Kennung in eckigen Klammern, z. B. [cal:12], dazu Datum, Titel, Ort und Beschreibung).
-
-Gib für JEDES Todo die Kennungen der Termine an, die für genau dieses Todo relevant sind: zu denen es gehört (es ist die Vor- oder Nachbereitung, etwas, das dort mitzubringen, abzugeben oder zu klären ist), die seinen Zeitpunkt festlegen oder die man kennen muss, um es zu erledigen. Nicht schon deshalb, weil ein Termin am selben Tag liegt oder ähnlich klingt. Gehört kein Termin dazu, gib eine leere Liste an.`;
 
 const STOP = new Set(
   "aber alle allem also auch dann dass dein deine denn diese dieser dies doch durch eine einem einen einer eines etwas für habe haben hast hier ihre ihren immer jetzt kann kein keine machen mehr mein meine mich nach noch nicht nur oder sein sind soll über und unter von war weil wenn werden wieder wird wir wollen zum zur with that this from have your".split(" "),

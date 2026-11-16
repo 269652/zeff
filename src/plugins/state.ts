@@ -25,7 +25,27 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   revolut: { port: "revolut-ext", steps: [] },
   gitlab: { port: "gitlab-ext", steps: ["gitlab"] },
   jira: { port: "jira-ext", steps: ["jira"] },
+  // (the Board-Lage run is the port's flow; the boards' databases, Meine Lage, the ticket picker and the assign button stay the kernel's — they read the same tables)
+  "jira-lage": { port: "jira-lage-ext", steps: ["boardlage"] },
   keep: { port: "keep-ext", steps: ["keep"] },
+  // (the review of the todos for actions: the port's flow takes the step; the briefing runs the flow — lib/runs/run.ts)
+  "auto-actions": { port: "auto-actions-ext", steps: ["autoactions"] },
+  // (structured questions: the port's lambda plans and phrases — questions/ask.ts askStructured asks it; the query layer is the kernel's: data.views, data.query)
+  questions: { port: "questions-ext", steps: [] },
+  // (what you should know: the port's flows summarize — know/server-actions.ts and the People matching step run them; the brief itself is the kernel's: brief.get)
+  know: { port: "know-ext", steps: [] },
+  // (open loops: the port's lambdas work them out — loops/query.ts reads their answer; your word and the closings are its flows)
+  loops: { port: "loops-ext", steps: [] },
+  // (News: the port's flow fetches, filters, tags and discovers — its page is the plugin's view; the settings page, the Today page's news and the Workspace database of what you kept stay the kernel's and read the same tables)
+  news: { port: "news-ext", steps: ["news"] },
+  // (Calendar: the port's page, flows and AI steps — the model, the readers, the settings page and the plugin API stay the kernel's; its steps calendartodos and calendarrelations run the port's flows — lib/calendar/todos.ts calendarTodosVia, sync/registry.ts)
+  calendar: { port: "calendar-ext", steps: [] },
+  // (Documents: the port's flows go through the documents for todos, match them to the todos, read in your local folders and read what waits — plugins/documents/port.ts; the screen, uploads, the settings page and the knowledge server's abstracts stay the built-in's)
+  documents: { port: "documents-ext", steps: ["localdocs", "doctodos", "docrelations"] },
+  // (the Explorer: the port's screen is a view of the Workspace, its writes are flows; the disk, the viewer's file route, the watchers and the imports stay the kernel's — fs.* actions, /api/explorer/file)
+  explorer: { port: "explorer-ext", steps: [] },
+  // (Knowledge: the port's lambdas and flows are the chat, the matching of knowledge to todos, the sync and adding; the connection to the knowledge server, the export it reads, the todo panel and the repos' systems stay the kernel's)
+  knowledge: { port: "knowledge-ext", steps: [] },
 };
 
 /**
@@ -35,6 +55,12 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
 export const DEPENDED_ON_THROUGH: Partial<Record<PluginId, string>> = {
   cases: "cases-ext",
 };
+
+/**
+ * Sync steps of built-ins that stay on (their screens and the people, entities and timeline they keep stay the kernel's) while a port brings the step itself as a flow
+ * (the AI steps of People: the port's flow `people.normalize` stands in for the step `peoplenorm`). The built-in's code for the step stays until the port has been used a while.
+ */
+export const STEPS_TAKEN_BY_PORT: Record<string, string> = { peoplenorm: "people-ext" };
 
 /** The built-ins whose port is on (DEPENDED_ON_THROUGH), per account — set by chosen(). */
 const portOnBy = new Map<string, Set<PluginId>>();
@@ -61,6 +87,13 @@ function chosen(): Map<PluginId, boolean> {
   portOnBy.set(currentAccountId(), ports);
   for (const [id, port] of Object.entries(DEPENDED_ON_THROUGH) as [PluginId, string][]) if (rows.some((r) => r.id === `x:${port}` && r.installed) && !safeMode()) ports.add(id);
   return out;
+}
+
+/** A sync step a port's flow does in its place (STEPS_TAKEN_BY_PORT): the built-in's own doesn't run. */
+export function stepTakenByPort(key: string): boolean {
+  const port = STEPS_TAKEN_BY_PORT[key];
+  if (!port || safeMode()) return false;
+  return getDb().select().from(schema.plugins).all().some((r) => r.id === `x:${port}` && r.installed);
 }
 
 /** A built-in there only through its port (PROVIDED_BY): its own sync steps don't run — the port's flow does. */
@@ -181,9 +214,12 @@ export const stepAvailable = (key: string) => {
   const on = installedPlugins();
   return (
     (!ps.length || ps.some((p) => on.has(p) && !(providedOnly().has(p) && PROVIDED_BY[p]!.steps.includes(key)))) &&
+    !stepTakenByPort(key) &&
     (STEP_NEEDS[key] ?? []).every((n) => (Array.isArray(n) ? n.some((x) => on.has(x)) : on.has(n))) &&
     // A step an extension brings: only while it's on (its plugins there).
-    stepExtensionOk(key)
+    stepExtensionOk(key) &&
+    // A step the port of a built-in took over (PROVIDED_BY) — an extension's step too, which no plugin names (Documents' review and matching).
+    ![...providedOnly()].some((p) => PROVIDED_BY[p]!.steps.includes(key))
   );
 };
 export const serviceAvailable = (service: string) => {

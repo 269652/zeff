@@ -7,22 +7,8 @@ import type { TeamsMessageView } from "@/lib/teams/shared";
 import { translator, type T } from "@/lib/i18n/shared";
 import { catalogText } from "@/plugins/catalog-text";
 
-/** What a todo asks for. */
-export const TODO_KINDS = [
-  "reply",
-  "comment",
-  "update",
-  "implement",
-  "fix",
-  "test",
-  "review",
-  "clarify",
-  "document",
-  "deploy",
-  "merge",
-  "other",
-] as const;
-export type TodoKind = (typeof TODO_KINDS)[number];
+import { TODO_KINDS, type TodoKind } from "./kinds";
+export { TODO_KINDS, type TodoKind };
 
 /** German: the prompts (the work brief, the auto-actions review) use them too — the pages show `todoKindLabels(t)`. */
 export const TODO_KIND_LABELS: Record<TodoKind, string> = {

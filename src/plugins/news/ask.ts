@@ -1,9 +1,8 @@
 import { getContent, searchItems } from "./store";
 import { fillPrompt, promptText } from "@/lib/prompts";
+import { ASK_INSTRUCTIONS, ASK_SCHEMA } from "./ask-prompt";
+export { ASK_INSTRUCTIONS };
 import type { NewsItem } from "./shared";
-
-/** Its instructions — a page of System → Prompts. */
-export const ASK_INSTRUCTIONS = "Beantworte die Frage nur anhand der Quellen unten (Nachrichten, die die Person gesammelt hat). Erfinde nichts und nutze kein Wissen von außerhalb.\nBelege jede Aussage mit der Nummer der Quelle in eckigen Klammern, z. B. [2]. Sagen die Quellen nichts dazu, antworte genau das.";
 
 /**
  * Ask your news (optional, LLM plugin): a question answered from what Zeff has fetched — like asking a notebook. The
@@ -14,14 +13,6 @@ export const ASK_INSTRUCTIONS = "Beantworte die Frage nur anhand der Quellen unt
 export type NewsAnswer = { answer: string; sources: { n: number; id: number; title: string; url: string; sourceName: string }[] };
 type Raw = { answer?: string; cites?: number[] };
 
-const SCHEMA = {
-  type: "object",
-  properties: {
-    answer: { type: "string", description: "Die Antwort, knapp und auf Deutsch; Belege als [1], [2] im Text. Steht es nicht in den Quellen: das sagen." },
-    cites: { type: "array", items: { type: "integer" }, description: "Die Nummern der Quellen, die du benutzt hast." },
-  },
-  required: ["answer", "cites"],
-};
 
 export function askPrompt(question: string, sources: { n: number; source: string; title: string; text: string }[]): string {
   return [
@@ -42,7 +33,7 @@ export async function askNews(question: string, deps: { ask?: (prompt: string) =
     deps.ask ??
     (async (prompt: string) => {
       const { runAi } = await import("@/lib/ai");
-      return (await runAi<Raw>(prompt, SCHEMA, { task: "news-ask", timeoutMs: 4 * 60000, maxBudgetUsd: 0.3 })).output;
+      return (await runAi<Raw>(prompt, ASK_SCHEMA, { task: "news-ask", timeoutMs: 4 * 60000, maxBudgetUsd: 0.3 })).output;
     });
   const textOf = (it: NewsItem) => (it.hasContent ? (getContent(it.id)?.content ?? "").slice(0, 900) : it.summary);
   const sources = items.map((it, i) => ({ n: i + 1, item: it, source: it.sourceName, title: it.title, text: textOf(it) }));

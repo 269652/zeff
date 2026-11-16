@@ -9,15 +9,30 @@ import type { KnowledgeAnswer, KnowledgeEntity, KnowledgeEntityDetail, Knowledge
  */
 export const knowledgeUrl = () => accountKnowledge().url;
 
+/** The plugin's own address and token for the knowledge server (its settings serviceUrl, serviceToken), while it stands in for the built-in — else this account's. */
+async function connection(): Promise<{ url: string; token: string }> {
+  const own = { url: knowledgeUrl(), token: process.env.KNOWLEDGE_TOKEN ?? "" };
+  try {
+    if (!(await import("@/plugins/state")).onlyThroughPort("knowledge")) return own;
+    const p = (await import("@/lib/ext/registry")).getPlugin("knowledge-ext");
+    if (!p?.enabled) return own;
+    const v = (await import("@/lib/ext/plugin-settings")).pluginSettings("knowledge-ext", p.manifest);
+    return { url: String(v.serviceUrl ?? "").trim().replace(/\/+$/, "") || own.url, token: String(v.serviceToken ?? "") || own.token };
+  } catch {
+    return own;
+  }
+}
+
 async function call<T>(path: string, init: { method?: "GET" | "POST"; body?: unknown; timeoutMs?: number } = {}): Promise<T> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (init.body !== undefined) headers["content-type"] = "application/json";
-  if (process.env.KNOWLEDGE_TOKEN) headers.authorization = `Bearer ${process.env.KNOWLEDGE_TOKEN}`;
+  const conn = await connection();
+  if (conn.token) headers.authorization = `Bearer ${conn.token}`;
   let r: Response;
   try {
-    r = await fetch(`${knowledgeUrl()}${path}`, { method: init.method ?? "GET", headers, body: init.body === undefined ? undefined : JSON.stringify(init.body), signal: AbortSignal.timeout(init.timeoutMs ?? 10000), cache: "no-store" });
+    r = await fetch(`${conn.url}${path}`, { method: init.method ?? "GET", headers, body: init.body === undefined ? undefined : JSON.stringify(init.body), signal: AbortSignal.timeout(init.timeoutMs ?? 10000), cache: "no-store" });
   } catch {
-    throw new Error(t("This account's knowledge server isn't answering ({url}) — is it running? The launcher (Zeff.exe) starts it.", { url: knowledgeUrl() }));
+    throw new Error(t("This account's knowledge server isn't answering ({url}) — is it running? The launcher (Zeff.exe) starts it.", { url: conn.url }));
   }
   const data = (await r.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!r.ok || !data) throw new Error(data?.error ?? t("Knowledge server: {status}", { status: r.status }));

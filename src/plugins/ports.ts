@@ -25,9 +25,23 @@ export const PORTS: Port[] = [
   { builtin: "google-calendar", plugin: "google-calendar-ext", switch: async () => (await import("./google-calendar/to-plugin")).switchGoogleCalendarToPlugin() },
   { builtin: "gitlab", plugin: "gitlab-ext", switch: async () => (await import("./gitlab/to-plugin")).switchGitlabToPlugin() },
   { builtin: "jira", plugin: "jira-ext", switch: async () => (await import("./jira/to-plugin")).switchJiraToPlugin() },
+  { builtin: "jira-lage", plugin: "jira-lage-ext", switch: async () => (await import("./jira-lage/to-plugin")).switchJiraLageToPlugin() },
   { builtin: "keep", plugin: "keep-ext", switch: async () => (await import("./keep/to-plugin")).switchKeepToPlugin() },
   { builtin: "revolut", plugin: "revolut-ext", switch: async () => (await import("./revolut/to-plugin")).switchRevolutToPlugin() },
+  { builtin: "google-drive", plugin: "google-drive-ext", switch: async () => (await import("./google-drive/to-plugin")).switchGoogleDriveToPlugin() },
   { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },
+  { builtin: "questions", plugin: "questions-ext", switch: async () => (await import("./plain-port")).switchPlainToPlugin("questions", "questions-ext") },
+  { builtin: "news", plugin: "news-ext", switch: async () => (await import("./news/to-plugin")).switchNewsToPlugin() },
+  { builtin: "loops", plugin: "loops-ext", switch: async () => (await import("./loops/to-plugin")).switchLoopsToPlugin() },
+  { builtin: "know", plugin: "know-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("know", { port: "know-ext", flow: "know.summarize", minutes: async () => 0 }) },
+  { builtin: "auto-actions", plugin: "auto-actions-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("auto-actions", { port: "auto-actions-ext", flow: "autoactions.review", minutes: async () => (await import("@/lib/runs/store")).getBoardSettings().autoMinutes }) },
+  { builtin: "calendar", plugin: "calendar-ext", switch: async () => (await import("./calendar/to-plugin")).switchCalendarToPlugin() },
+  // (People: only its AI steps — the extraction, the overviews, placing contacts, matching names — are the port's; the people, their screens and widgets stay Zeff's, so the built-in stays on)
+  { builtin: "people", plugin: "people-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("people", { port: "people-ext", flow: "people.normalize", minutes: stepMinutesOf("peoplenorm"), keepBuiltin: true }) },
+  { builtin: "finances", plugin: "finances-ext", switch: async () => (await import("./finances/to-plugin")).switchFinancesToPlugin() },
+  { builtin: "documents", plugin: "documents-ext", switch: async () => (await import("./documents/to-plugin")).switchDocumentsToPlugin() },
+  { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
+  { builtin: "knowledge", plugin: "knowledge-ext", switch: async () => (await import("./knowledge/to-plugin")).switchKnowledgeToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

@@ -206,6 +206,28 @@ const formulaFnDecl = z.object({
   what: z.string().max(200).default("").describe("One line: what it gives (the formula help and the AI read it)."),
   unit: z.string().max(20).optional(),
 });
+const personFormulaDecl = z.object({
+  name: z.string().regex(/^[A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß]{0,39}$/, "a formula name: letters and digits"),
+  aliases: z.array(z.string().regex(/^[A-Za-zÄÖÜäöüß][A-Za-z0-9ÄÖÜäöüß]{0,39}$/)).max(5).default([]).describe("Its other names (English …)."),
+  unit: z.string().max(20).default(""),
+  what: z.string().max(200).default(""),
+  lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).describe('The lambda (kind function) that keeps the snapshot: { "total": number, "byId": { "<contact id>": number }, "byName": { "<lower-case name>": number } } — byName for what has no contact, matched by the contact\'s name or alias.'),
+  args: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}).describe("What the lambda is called with."),
+  everyMinutes: z.number().int().min(1).max(1440).default(5),
+});
+const aiTaskDecl = z.object({
+  id: shortId,
+  label: z.string().min(1).max(60).describe("Its name in Settings → AI."),
+  what: z.string().max(300).default("").describe("What the AI does in it, in a sentence."),
+  idempotent: z.boolean().optional().describe("The same input gives an equal answer: a repeat within minutes is answered from memory."),
+});
+const knowledgeDocsDecl = z.object({
+  id: shortId,
+  lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).describe('The lambda (kind function) giving the pages for the knowledge server: [{ "id", "space", "title", "url", "version", "updatedAt", "author", "body" }] (the id starts with "zeff:" so it counts as one of Zeff own sources).'),
+  args: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}).describe("What the lambda is called with."),
+  everyMinutes: z.number().int().min(1).max(1440).default(30),
+  replaces: z.string().max(60).optional().describe("The id of the built-in plugin whose pages these are: only given while that one is not installed."),
+});
 const metricDecl = z.object({
   id: shortId,
   label: z.string().min(1).max(60).describe("Its name as a Kennzahl (formulas read it with kennzahl(\"…\"))."),
@@ -214,6 +236,7 @@ const metricDecl = z.object({
   function: shortId.optional().describe("The plugin function that gives the number (called with {}); its last answer is what the Kennzahl shows."),
   lambda: z.string().regex(/^[a-z][a-z0-9_-]*(\.[a-z0-9_-]+)*$/).max(80).optional().describe("Or a lambda of the plugin (kind function) that gives it — called with `args` (one lambda may answer several Kennzahlen)."),
   args: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}).describe("What a lambda is called with: { \"which\": \"owe-open\" }."),
+  replaces: z.string().regex(/^[a-z][a-z0-9-]{0,39}$/).optional().describe("A port's: the built-in plugin (its id) whose Kennzahl of this name it is — the built-in's counts while it is installed; the Kennzahl keeps its name, so pages and formulas that read it go on."),
   everyMinutes: z.number().int().min(1).max(1440).default(15).describe("How old its last answer may be before it is asked again (in the background)."),
 }).refine((m) => !!m.function || !!m.lambda, { message: "a metric is answered by a function or a lambda" });
 const rowBadgeDecl = z.object({
@@ -246,6 +269,7 @@ const widgetDecl = z.object({
   lambda: z.string().regex(/^[a-z][a-z0-9_-]*(.[a-z0-9_-]+)*$/).max(80).optional().describe("Or one of its lambdas (kind function), called the same way — no Notebook needed."),
   function: shortId.optional().describe('The plugin function that gives its data, called with { config }: { "kind": "list", "items": [{ id, text, detail?, meta?, href?, badge?, tone?, done?, actions? }] }, { "kind": "stats", "tiles": [{ label, value, detail?, tone?, href? }] } or { "kind": "figure", value, caption, detail?, href? }.'),
   actLambda: z.string().regex(/^[a-z][a-z0-9_-]*(.[a-z0-9_-]+)*$/).max(80).optional().describe("Or one of its lambdas for the buttons."),
+  actFlow: z.string().regex(/^[a-z][a-z0-9_.-]{0,79}$/).optional().describe("Or a flow of the plugin's package a button runs, called with { action, payload, config }: the flow may write (what its package was allowed), where a lambda only reads. What it returns is shown when it is widget data, else the data is read again."),
   act: shortId.optional().describe("The plugin function a button of it runs, called with { action, payload, config }; what it gives (data as above) is shown, else the data is read again."),
 });
 const storeColumn = z.object({
@@ -298,6 +322,18 @@ const settingDecl = z.object({
   default: z.union([z.string().max(500), z.number(), z.boolean()]).optional(),
   options: z.array(z.string().max(100)).max(50).optional(),
 });
+const oauthDecl = z.object({
+  id: shortId.describe("Its id (unique in the plugin): <plugin>.<id> in the oauth actions and a flow's permissions."),
+  label: z.string().min(1).max(60),
+  authUrl: z.string().regex(/^https:\/\/[^\s]{4,300}$/, "an https address").describe("Where the user signs in (the provider's authorization endpoint)."),
+  tokenUrl: z.string().regex(/^https:\/\/[^\s]{4,300}$/, "an https address").describe("Where the code and the refresh token are exchanged for access tokens."),
+  scopes: z.array(z.string().min(1).max(200)).min(1).max(20).describe("What it asks for by default."),
+  scopeSets: z.record(shortId, z.array(z.string().min(1).max(200)).min(1).max(20)).default({}).describe('More of what it can ask for, by name: connecting "with" one asks for that set instead (a narrow and a wide access).'),
+  clientId: z.string().regex(/^[a-zA-Z][\w]{0,39}$/).describe("The key of its settings (kind text or secret) that holds the client id."),
+  clientSecret: z.string().regex(/^[a-zA-Z][\w]{0,39}$/).describe("The key of its settings (kind secret) that holds the client secret."),
+  authParams: z.record(z.string().max(60), z.string().max(200)).default({}).describe('More parameters of the sign-in address ({ "access_type": "offline" }).'),
+  identity: z.enum(["none", "id_token"]).default("none").describe("id_token: the e-mail address in the id token the provider sends (to show who is connected)."),
+});
 const reviewLinkDecl = z.object({
   id: shortId,
   label: z.string().min(1).max(60),
@@ -324,6 +360,9 @@ const contributes = z.object({
   sources: z.array(sourceDecl).max(20).default([]).describe("Data sources for the pipelines: a database can follow one; a function of the plugin reads its records."),
   functions: z.array(fnDecl).max(50).default([]).describe("Server functions of its own: code (Python or Node.js) that runs in the Notebook's sessions and is called over HTTP (POST /api/ext/fn/<plugin>/<name>), from Notebook cells (zeff.call) and by other functions."),
   formulaFunctions: z.array(formulaFnDecl).max(30).default([]).describe("Functions for formulas (views, formula fields, tables): each a formula of its own, called by its name like Zeff's own (a name Zeff or another plugin has already is left out)."),
+  aiTasks: z.array(aiTaskDecl).max(20).default([]).describe("AI tasks it has Zeff run: each a row in Settings → AI (its own backend and model), asked for as the id `<plugin id>.<id>` (flow action ai.json, task=…)."),
+  knowledgeDocs: z.array(knowledgeDocsDecl).max(10).default([]).describe("Pages this plugin gives the knowledge server (its Zeff export): a lambda returns them; the last answer is kept and asked for again after everyMinutes."),
+  personFormulas: z.array(personFormulaDecl).max(10).default([]).describe("Formulas of a contact or a circle — Schulden(@Chris), SUMME(Schulden(@Freunde)): a contact gives one number, a circle one per contact who has any, no argument the total; read from a snapshot the lambda keeps and asks again after everyMinutes."),
   metrics: z.array(metricDecl).max(20).default([]).describe("Kennzahlen: numbers a plugin function gives, kept and asked again when they are older than everyMinutes."),
   stores: z.array(storeDecl).max(10).default([]).describe("Data of its own, beyond Workspace databases (many rows, looked up by key): tables the kernel keeps for it — read and written through the store actions, by its flows with the permission, read by its lambdas."),
   appViews: z.array(appViewDecl).max(10).default([]).describe("App views for the databases of a type (a mail client for mails): a template of the view language each, made the database's view."),
@@ -341,6 +380,7 @@ const contributes = z.object({
   lambdas: relPath.optional().describe("A folder of lambdas (<name>/lambda.json and its code, _lib.mjs shared): lookups and functions that run without the Notebook, each in a Node process of its own with only the domains and Zeff calls it names. Their secrets are the plugin's settings they name."),
   tools: z.array(toolDecl).max(30).default([]).describe("Tools for the AI (Zeff's MCP, the Workspace chat, agents), each done by a plugin function — beside Zeff's own."),
   settings: z.array(settingDecl).max(30).default([]).describe("What the user sets for it (Plugins → its Settings): texts, numbers, choices and secrets (kept encrypted). Its functions get them as `inputs.zeffSettings`."),
+  oauth: z.array(oauthDecl).max(5).default([]).describe("Signing in to a service with an OAuth client of the user's own (authorization code with PKCE): the kernel serves the way there and back (/api/ext/oauth/<plugin>/<id>/connect and /callback), keeps the tokens encrypted and refreshes them. Its lambdas ask for a fresh access token (the read action oauth.token); its flows call the service as the user (oauth.fetch, oauth.upload, oauth.download). The client id and secret are its settings."),
   reviewLinks: z.array(reviewLinkDecl).max(10).default([]).describe("Things waiting on a page of their own: the review queue shows how many and links there."),
   workspacePackages: z.array(relPath).max(20).default([]).describe("Workspace apps it brings: package files (JSON — a page exported with its databases, widgets, flows), offered under New → templates and made with one click."),
   locales: z
@@ -377,7 +417,7 @@ export const manifestSchema = z
       .describe("Where newer versions of it are: a GitHub repository (one repository may hold many plugins, each in a folder with its own zeff-plugin.json and version). Plugins → Sources checks it and updates on a click."),
     apiVersion: z.number().int().min(1).max(API_VERSION).describe(`The extension API version it was written for (this Zeff speaks up to ${API_VERSION}).`),
     permissions: z.array(permissionId).max(30).default([]).describe("What it may do (granted by you): exec, network, prompt, and the permissions plugins bring (work.read, todos.write, workspace.write …)."),
-    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], stores: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [] }),
+    contributes: contributes.default({ workerRules: [], workCommands: [], workerMcpServers: {}, workPanels: [], apps: [], hooks: {}, workspacePackages: [], functions: [], flowActions: [], lookups: [], sources: [], fieldTypes: [], chats: [], schedules: [], locales: {}, formulaFunctions: [], metrics: [], personFormulas: [], knowledgeDocs: [], aiTasks: [], stores: [], appViews: [], rowBadges: [], tabMenus: [], widgets: [], pageNav: [], reviewSources: [], reviewLinks: [], tools: [], settings: [], services: [], oauth: [] }),
   })
   .superRefine((m, ctx) => {
     const has = (p: Permission) => m.permissions.includes(p);

@@ -21,8 +21,20 @@ export type Where = Record<string, string | number | boolean | null>;
  */
 export const ADOPTABLE: Record<string, string[]> = {
   "cases-ext": ["cases", "case_sources", "case_parties", "bank_transactions", "case_warnings"],
+  // (Finances reads the cases and their parties — the debts they hold)
+  "finances-ext": ["cases", "case_parties"],
   // (keep_own_notes: only read — which of your boards' notes are synced with Google Keep)
   "keep-ext": ["keep_notes", "keep_own_notes"],
+  // (the documents, the ones waiting for your confirmation and what is known of the files of your local folders)
+  "documents-ext": ["documents", "doc_gate", "doc_local_files"],
+  // (the Jira briefing: which tickets are open, on which boards, and the comments it reads fresh — the tables the Jira reader keeps)
+  "jira-lage-ext": ["jira_tickets", "jira_boards", "jira_comments"],
+  // (what became of each open loop: closed, dismissed, a proposal to close it, put off)
+  "loops-ext": ["loops_state"],
+  // (News: its sources, items, what was cleared away, the words it learned and the finds for an item)
+  "news-ext": ["news_sources", "news_items", "news_gone", "news_terms", "news_similar"],
+  // (the files Zeff recorded as its own in Drive: nothing goes up twice through the switch)
+  "google-drive-ext": ["google_drive_files"],
 };
 
 /**
@@ -31,12 +43,21 @@ export const ADOPTABLE: Record<string, string[]> = {
  */
 export const ADOPTABLE_PREFS: Record<string, string[]> = {
   "finances-ext": ["finances.ownAccounts", "cases.income", "cases.incomeFacts"],
+  "auto-actions-ext": ["autoactions:offered"],
+  "know-ext": ["know.autoSummary"],
+  // (Calendar: how many days ahead appointments are read for todos, and the AI's verdicts on which give you something to do)
+  "calendar-ext": ["calendar:todos-days", "calendar:todo-verdicts"],
+  // (the folders read in by themselves, and when each was looked at)
+  "documents-ext": ["documents:folders"],
+  "news-ext": ["news:prefs", "news:taste", "news:digest", "news:funnel-stats", "news:discover-queries", "news:autodiscover-at", "news:lowdiscover-at", "news:low-turn", "news:discoveries", "news:expand-at"],
+  // (the folders of your Drive the built-in read into the documents — taken over once)
+  "google-drive-ext": ["googleDrive.pullFolders"],
 };
 
 /** The built-ins' sources their ports may stand in for (a source's `replaces`), by the port's plugin id: the databases that read it go on. */
 export const REPLACEABLE_SOURCES: Record<string, string[]> = {
   "cases-ext": ["cases"],
-  "finances-ext": ["recurring"],
+  "finances-ext": ["recurring", "debts"],
 };
 
 const SQL_TYPE: Record<Column["type"], string> = { text: "text", integer: "integer", real: "real", json: "text" };
