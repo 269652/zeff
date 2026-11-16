@@ -293,7 +293,13 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     get label() { return t("News"); },
     href: "/news",
     get what() { return t("The news from your sources and searches for your interests — fetched, scored for you, old items removed (public feeds; nothing of yours is sent)"); },
-    run: async () => (await import("@/plugins/news/sync")).syncNews(),
+    // (the News plugin's flow does it — the built-in's own code has left; a manual start of this step runs the flow)
+    run: async () => {
+      const { runFlow } = await import("@/plugins/workspace/flows/engine");
+      const r = await runFlow("news.fetch-round", {}, { trigger: { kind: "manual" } });
+      const out = (r.output ?? {}) as { ok?: boolean; message?: string };
+      return { ok: r.status === "done" && out.ok !== false, message: out.message ?? r.error ?? "" };
+    },
     busy: () => flag("__zeffNewsSyncing"),
     schedule: () => ({ everyMinutes: stepMinutes("news"), lastAt: recorded("news").lastAt, window: t("always") }),
   },

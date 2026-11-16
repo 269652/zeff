@@ -51,7 +51,6 @@ const groups = (t: (s: string) => string): Group[] => [
       { id: "people", label: t("People & birthdays"), plugins: ["people"] },
       { id: "money", label: t("Letters, cases & money"), hint: t("File numbers, debts, bank statements"), plugins: ["cases", "finances"] },
       { id: "docs", label: t("Documents"), hint: t("PDFs, scans, letters"), plugins: ["documents"] },
-      { id: "news", label: t("News"), plugins: ["news"] },
     ],
   },
   {

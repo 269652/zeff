@@ -16,7 +16,6 @@ import "./llm/server";
 import "./lookups/server";
 import "./loops/server";
 import "./mail-client/server";
-import "./news/server";
 import "./notebook-node/server";
 import "./notebook-python/server";
 import "./notebook-rust/server";

@@ -12,7 +12,7 @@ const plus = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.g
 
 test("today: appointments of today and tomorrow morning with whom to prepare, due and overdue todos, promises, new since yesterday", async () => {
   const { setInstalled } = await import("@/plugins/state");
-  for (const id of ["todos", "calendar", "people", "news"]) setInstalled(id, true);
+  for (const id of ["todos", "calendar", "people"]) setInstalled(id, true);
   const real = new Date();
   const today = dayOf(real);
   const [yesterday, tomorrow, later] = [dayOf(plus(real, -1)), dayOf(plus(real, 1)), dayOf(plus(real, 3))];
@@ -50,8 +50,6 @@ test("today: appointments of today and tomorrow morning with whom to prepare, du
   todo("Auf Antwort warten", today, { owner: "other" });
   todo("Vom Worker", today, { byWorker: true });
 
-  const news = await import("@/plugins/news/store");
-  news.addItems({ id: null, name: "Tagesschau" }, [{ guid: "1", url: "https://example.org/1", title: "Neues Gesetz beschlossen", summary: "", publishedAt: new Date().toISOString() }]);
 
   const { todayData } = await import("@/lib/heute-today");
   const d = await todayData(now);
@@ -69,13 +67,12 @@ test("today: appointments of today and tomorrow morning with whom to prepare, du
   assert.deepEqual(d.promises.map((p) => `${p.mine ? "mine" : "theirs"}: ${p.text}${p.overdue ? " (overdue)" : ""}`), ["theirs: Rechnung zahlen (overdue)", "mine: Folien schicken"]);
 
   assert.deepEqual(d.learned.map((c) => `${c.personName}: ${c.text}`), ["Max Muster: Spielt Schach"]);
-  assert.equal(d.news?.count, 1);
-  assert.deepEqual(d.news?.top.map((n) => n.title), ["Neues Gesetz beschlossen"]);
+  assert.equal(d.news, null, "the news come from the plugin (news-ext, tests/news-ext-rest.test.ts)");
 });
 
 test("today: without the plugins, their sections are empty", async () => {
   const { setInstalled } = await import("@/plugins/state");
-  for (const id of ["calendar", "people", "news"]) setInstalled(id, false);
+  for (const id of ["calendar", "people"]) setInstalled(id, false);
   const { todayData } = await import("@/lib/heute-today");
   const d = await todayData(new Date());
   assert.deepEqual([d.appointments, d.promises, d.learned, d.news], [[], [], [], null]);

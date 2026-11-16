@@ -27,9 +27,18 @@ export function refreshNewsDatabase(): void {
 /** The title of that database — the summary agent's instructions name it. */
 export const newsDatabaseTitle = (): string => t("Saved news");
 
-/** The news you saved or liked as a database of the Workspace — once, when the News plugin is installed (a gone one is not made again). */
+/** Whether the News plugin (news-ext) is on — its source "news" is what the database reads. */
+async function newsPluginOn(): Promise<boolean> {
+  try {
+    return (await import("@/lib/ext/registry")).isEnabled("news-ext");
+  } catch {
+    return false;
+  }
+}
+
+/** The news you saved or liked as a database of the Workspace — once, when the News plugin is on (a gone one is not made again). */
 export async function ensureNewsDatabase(): Promise<void> {
-  if (!isInstalled("workspace") || !isInstalled("news")) return;
+  if (!isInstalled("workspace") || !(await newsPluginOn())) return;
   const known = newsDatabase();
   if (known) {
     // Cards first (made before they existed: once).

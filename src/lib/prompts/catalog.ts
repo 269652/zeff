@@ -21,7 +21,7 @@ export type PromptEntry = {
   vars?: string[];
 };
 
-export const PROMPT_GROUPS = ["Todos & Lage", "Mail", "Knowledge", "Notes", "Documents", "People", "News", "Workspace", "LLM & Workers"] as const;
+export const PROMPT_GROUPS = ["Todos & Lage", "Mail", "Knowledge", "Notes", "Documents", "People", "Workspace", "LLM & Workers"] as const;
 
 export const PROMPTS: PromptEntry[] = [
   { key: "ticket-lage", group: "Todos & Lage", title: "Ticket-Lage", uses: "The Ticket-Lage: each ticket's attention, lead, summary, todos", plugin: "todos", step: "lage", builtIn: async () => (await import("@/lib/runs/collect")).INSTRUCTIONS },
@@ -59,14 +59,6 @@ export const PROMPTS: PromptEntry[] = [
   { key: "people-extract", group: "People", title: "Facts about people", uses: "What new messages say about people", plugin: "people", builtIn: async () => (await import("@/plugins/people/extract")).INSTRUCTIONS },
   { key: "loops-close", group: "People", title: "Open loops: kept?", uses: "Whether a message shows an open promise kept", plugin: "loops", builtIn: async () => (await import("@/plugins/loops/close")).CLOSE_INSTRUCTIONS },
   { key: "people-compile", group: "People", title: "Person overview", uses: "A person's short overview", plugin: "people", builtIn: async () => (await import("@/plugins/people/compile")).INSTRUCTIONS },
-  { key: "news-digest", group: "News", title: "News: the day's digest", uses: "The overview of your unread news", plugin: "news", builtIn: async () => (await import("@/plugins/news/digest")).DIGEST_INSTRUCTIONS },
-  { key: "news-ask", group: "News", title: "News: ask", uses: "A question answered from your news", plugin: "news", builtIn: async () => (await import("@/plugins/news/ask")).ASK_INSTRUCTIONS },
-  { key: "news-plan", group: "News", title: "News: search plan", uses: "What to search for new news", plugin: "news", builtIn: async () => (await import("@/plugins/news/discover-job")).PLAN_INSTRUCTIONS },
-  { key: "news-funnel", group: "News", title: "News: the filter (funnel)", uses: "Which new news get through to For you", plugin: "news", builtIn: async () => (await import("@/plugins/news/funnel")).FUNNEL_INSTRUCTIONS },
-  { key: "news-tags", group: "News", title: "News: tags", uses: "Tags and stories of the news", plugin: "news", builtIn: async () => (await import("@/plugins/news/retag")).TAGGING_INSTRUCTIONS },
-  { key: "news-similar", group: "News", title: "News: more like this", uses: "More of what you read", plugin: "news", builtIn: async () => (await import("@/plugins/news/similar")).SIMILAR_INSTRUCTIONS },
-  { key: "news-taste", group: "News", title: "News: your taste", uses: "The description of what you like to read", plugin: "news", builtIn: async () => (await import("@/plugins/news/taste")).TASTE_INSTRUCTIONS },
-  { key: "news-outlets", group: "News", title: "News: sources", uses: "News sources for a topic", plugin: "news", vars: ["topic"], builtIn: async () => (await import("@/plugins/news/finder")).OUTLET_INSTRUCTIONS },
   { key: "todo-refresh", group: "Todos & Lage", title: "One todo brought up to date", uses: "A todo re-read after you wrote a note on it", plugin: "todos", vars: ["attachments", "today"], builtIn: async () => (await import("@/lib/todos/refresh")).TODO_REFRESH_INSTRUCTIONS },
   { key: "rag", group: "Todos & Lage", title: "Asking for more context", uses: "Added to the steps that may ask Zeff to search (ticket chat, todo refresh)", builtIn: async () => (await import("@/lib/rag")).RAG_INSTRUCTIONS },
   { key: "people-dates", group: "People", title: "A person's dates", uses: "Birthdays and anniversaries of a person, found", plugin: "people", vars: ["name", "aliases"], builtIn: async () => (await import("@/plugins/people/dates")).PEOPLE_DATES_INSTRUCTIONS },
