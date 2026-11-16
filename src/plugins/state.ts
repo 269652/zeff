@@ -46,6 +46,8 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   explorer: { port: "explorer-ext", steps: [] },
   // (Code: the port's page is the screen — /work, /repos and the Code section of the Settings open it; the workers, runs, the work host, the logs and the live sessions are the kernel's: the work.session-* actions)
   work: { port: "work-ext", steps: [] },
+  // (Time tracking: the port's page is the screen — the report, the jobs and projects, the end of day, the analysis and the settings of the old addresses open it; the bookings, jobs, projects, the schedule, the report rules and the kernel's time.* reads and writes stay Zeff's)
+  zeiterfassung: { port: "zeiterfassung-ext", steps: [] },
 };
 
 /**

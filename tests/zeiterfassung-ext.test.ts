@@ -845,3 +845,26 @@ test("the gaps: rules edited in place, context items edited, files brought by an
   const closed = renderView(`<dialog bind="d" reset="x_" title="T"><text>hi</text></dialog>`, { ...(base as object), state: {} } as never);
   assert.ok(JSON.stringify(closed.nodes).includes(`"t":"watch"`) && !JSON.stringify(closed.nodes).includes(`"t":"dialog"`), "closed: only the watch");
 });
+
+test("switching to the plugin: its page is found, the built-in stands in through it, the old addresses lead to the tabs, the kernel's reads go on answering", { skip }, async () => {
+  const { run } = await setup();
+  const state = await import("@/plugins/state");
+  const ports = await import("@/plugins/ports");
+  const port = ports.PORTS.find((p) => p.builtin === "zeiterfassung");
+  assert.ok(port, "the time tracking port is registered");
+  const r = (await port!.switch()) as { page: number | null };
+  assert.ok(r.page, "the report's page is found");
+  const { getPage } = await import("@/plugins/workspace/store");
+  assert.equal(getPage(r.page!)?.title, "Report");
+  assert.equal(state.isInstalled("zeiterfassung"), true, "the built-in counts as there through its port");
+  assert.equal(state.onlyThroughPort("zeiterfassung"), true);
+  const { reportLink, reportPage } = await import("@/plugins/zeiterfassung/to-plugin");
+  assert.equal(await reportPage(), r.page);
+  assert.equal(await reportLink({ view: "week", week: "2026-W41", by: "" }), `/workspace/${r.page}?s.view=week&s.week=2026-W41`);
+  assert.equal(await reportLink({ view: "jobs", jd: "job:7" }), `/workspace/${r.page}?s.view=jobs&s.jd=job%3A7`);
+  // (the old addresses' pages only call reportLink: month, analysis, end of day, jobs, settings, tags, an entry — each with its tab and what it was asked for)
+  assert.equal(await reportLink({ view: "analysis", aweeks: "12", atickets: "mine" }), `/workspace/${r.page}?s.view=analysis&s.aweeks=12&s.atickets=mine`);
+  assert.equal(await reportLink({ view: "day", fweek: "current" }), `/workspace/${r.page}?s.view=day&s.fweek=current`);
+  // the kernel's reads answer (the screens of the port are what ask them)
+  assert.ok((await run("zeiterfassung.week", {})).key);
+});

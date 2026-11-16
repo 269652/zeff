@@ -15,8 +15,8 @@ const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
 // Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
-const PLUGIN_VERSION = "0.3.0";
-const PACKAGE_VERSION = "1.2.0";
+const PLUGIN_VERSION = "0.4.0";
+const PACKAGE_VERSION = "1.3.0";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -45,7 +45,7 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
 const TABS = ["month", "analysis", "day", "jobs", "settings"];
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
-  '<state name="view" value="week" keep=true/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
+  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
   '<tabs bind="view" options="week:Week, month:Month, analysis:Analysis, day:End of day, jobs:Jobs, settings:Settings"/>',
   // one branch per tab, the week the one left over
@@ -81,7 +81,7 @@ const FLOWS = [
   flow("f15", "zeiterfassung.job-delete", "Delete a job or a project", "Deletes a job or a project (input kind job|project, id). Run by the Jobs tab.", "time.job-delete", i("kind", "id")),
   flow("f16", "zeiterfassung.book-days", "Book the working days on a project", "One entry per working day of a range on a project (input id, from, to, hours, fillUp, description, type). Run by the Jobs tab.", "time.book-days", i("id", "from", "to", "hours", "fillUp", "description", "type")),
   flow("f14", "zeiterfassung.entry-op", "Edit an entry, its group or a day's break", "One edit of the weekly report (input op update|copy|link|unlink|collect|start|span-mode|ungroup|parallel|pauses and its fields). Run by the report.", "time.entry-op", i("op", "id", "date", "bookOn", "hours", "description", "ticket", "type", "tags", "comment", "start", "isGroup", "spanId", "mode", "ids", "dates", "text", "state", "contextId", "ctxKind", "ctxTitle", "ctxAuthor", "ctxBody", "ctxLink", "ctxDate", "ctxTicket", "ctxLinks", "token", "name", "mime", "fileId", "dir", "url")),
-  flow("f13", "zeiterfassung.rule-op", "Change a list of rules", "One change of a list of rules or of the entry types (input what types|report|meetings|exclude|entry-type, op add|remove|up|down|default|update|none, index, apply, and the rule's fields). Run by the Settings tab.", "time.rule-op", i("what", "op", "index", "apply", "jobNumber", "description", "type", "f1", "v1", "f2", "v2", "f3", "v3", "template", "tags", "match", "group", "value", "label", "color", "key")),
+  flow("f13", "zeiterfassung.rule-op", "Change a list of rules", "One change of a list of rules or of the entry types (input what types|report|meetings|exclude|entry-type, op add|remove|up|down|default|update|none, index, apply, and the rule's fields). Run by the Settings tab.", "time.rule-op", i("what", "op", "index", "apply", "jobNumber", "description", "type", "f1", "v1", "f2", "v2", "f3", "v3", "template", "tags", "match", "group", "value", "label", "color", "key", "name", "id", "mode")),
   flow("f11", "zeiterfassung.day-book", "Book the day", "The day's lines booked as you took them over (input date, state: the view's state as JSON). Run by the End of day tab.", "time.day-book", i("date", "state")),
   flow("f12", "zeiterfassung.day-undo", "Take the day's booking back", "Takes back what a booking of the day created, as far as it is still as booked (input created). Run by the End of day tab.", "time.day-undo", i("created")),
   flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment", "punch")),

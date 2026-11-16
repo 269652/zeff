@@ -97,6 +97,42 @@
   </section>
   {{/if}}
 
+  <section title="Parallel work">
+    <col gap=2>
+      <text tone=muted>Two tasks of one job done at the same time (by their start and hours) are not booked on top of each other. Choose how they are booked when Zeff notices — you can change each case afterwards.</text>
+      <row gap=2 align=end wrap=true>
+        <select bind="pm_mode" options="{{ data.r.parallelOptions | tojson }}" value="{{ data.r.parallelMode }}" label="Parallel work, by default"/>
+        <button run="zeiterfassung.rule-op" with="what=parallel, mode={{ state.pm_mode }}" into="rsaved" emit="rules-changed" label="Save" variant=plain/>
+      </row>
+      <small><muted>{{ data.r.parallelWhat }}</muted></small>
+    </col>
+  </section>
+
+  <section title="Tags" aside="{{ data.r.tagsHead }}">
+    <col gap=2>
+      <text tone=muted>Tags label entries (typically tickets). Add them here, or just type #tag in an entry description — the hashtag becomes a tag.</text>
+      <row gap=2 align=end wrap=true>
+        <input bind="tg_name" label="New tag"/>
+        <button run="zeiterfassung.rule-op" with="what=tag, op=add, name={{ state.tg_name }}" into="rsaved" then="tg_name=" emit="rules-changed" label="Add tag" variant=primary/>
+      </row>
+      {{#each data.r.tagList}}
+      <row gap=2 align=center wrap=true><b>#{{ name }}</b><small><muted>{{ count }}</muted></small>
+        <button action="state" state="tagedit" value="{{ id }}" label="✎" tip="Rename" variant=quiet/>
+        <button run="zeiterfassung.rule-op" with="what=tag, op=remove, id={{ id }}" confirm="Delete this tag?" into="rsaved" emit="rules-changed" label="✕" variant=quiet/>
+      </row>
+      {{/each}}
+      {{#if not data.r.tagList}}<text tone=muted>No tags yet.</text>{{/if}}
+    </col>
+  </section>
+  <dialog bind="tagedit" reset="tn_" title="Rename tag">
+    {{#each data.r.tagList | where('id', state.tagedit)}}
+    <col gap=2>
+      <input bind="tn_name" label="Name" value="{{ name }}"/>
+      <row gap=2><button run="zeiterfassung.rule-op" with="what=tag, op=rename, id={{ id }}, name={{ state.tn_name | default(name) }}" into="rsaved" then="tagedit=" emit="rules-changed" label="Save" variant=primary/></row>
+    </col>
+    {{/each}}
+  </dialog>
+
   <section title="Entry types">
     <col gap=2>
       {{#each data.r.entryTypes}}

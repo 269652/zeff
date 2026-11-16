@@ -48,6 +48,8 @@ export const PORTS: Port[] = [
   // (Code: the port's screens, settings and flows — the workers, runs, the work host, the logs and the live sessions stay the kernel's)
   { builtin: "work", plugin: "work-ext", switch: async () => (await import("./work/to-plugin")).switchWorkToPlugin() },
   { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
+  // (Time tracking: the port's page is the report and its tabs; the bookings, jobs, projects, the schedule and the report rules stay the kernel's)
+  { builtin: "zeiterfassung", plugin: "zeiterfassung-ext", switch: async () => (await import("./zeiterfassung/to-plugin")).switchZeiterfassungToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */
