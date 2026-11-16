@@ -491,6 +491,19 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         );
       }
       case "grid":
+        // (masonry: the cells in columns of their own, each cell in the shortest — CSS columns balance the heights)
+        if (a.masonry === "true") {
+          const gap = (Number(a.gap) || 3) * 4;
+          return (
+            <div key={key} style={{ columnWidth: `${Number(a.min) || 280}px`, columnGap: gap, ...(Number(a.cols) ? { columnCount: Math.max(1, Math.min(8, Number(a.cols))) } : {}) }}>
+              {n.c.map((c, i) => (
+                <div key={i} className="min-w-0 break-inside-avoid" style={{ marginBottom: gap }}>
+                  {draw(c, i, ext)}
+                </div>
+              ))}
+            </div>
+          );
+        }
         return (
           <div key={key} className="grid" style={cols(a)}>
             {n.c.map((c, i) => (

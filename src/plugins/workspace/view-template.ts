@@ -89,7 +89,8 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   nav: T({ title: "text" }),
   entry: T({ id: "text", label: "text", icon: "text", row: "text", state: "text", value: "text", href: "url", n: "text", group: "text" }, true),
   row: T({ fill: { oneOf: ["true", "false"] }, tip: "text", gap: "int", align: { oneOf: ["start", "center", "end", "baseline"] }, wrap: { oneOf: ["true", "false"] }, justify: { oneOf: ["start", "between", "end"] } }),
-  grid: T({ cols: "int", gap: "int", min: "int" }),
+  // masonry=true: the cells flow down columns, each in the shortest (cards of different heights).
+  grid: T({ cols: "int", gap: "int", min: "int", masonry: { oneOf: ["true", "false"] } }),
   col: T({ gap: "int", fill: { oneOf: ["true", "false"] }, width: "int", tip: "text", align: { oneOf: ["start", "center", "end"] }, max: "text", /** bottom: stays at the pane's bottom (a reply box). */ dock: { oneOf: ["bottom"] }, /** At most this % of the screen's height, scrolling in itself. */ scroll: "int", /** Opened at its end (a chat). */ end: { oneOf: ["true", "false"] } }),
   truncate: T({ tip: "text" }),
   mono: T({ tip: "text" }),
@@ -238,6 +239,14 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   gauge: T({ value: "num", max: "num", label: "text", sub: "text", tone: { oneOf: ["info", "good", "warn", "bad"] }, size: "int" }, true),
   rating: T({ value: "text", max: "int", prop: "text" }, true),
   copy: T({ text: "text", label: "text" }, true),
+  // Once it has been on screen for a moment (after = ms) its value joins the comma list in state.<bind>, then the event emit goes out (batched) — what of a feed was seen.
+  visible: T({ value: "text", bind: "text", emit: "text", after: "int" }, true),
+  // A text read aloud by the browser's voice (lang="de-DE").
+  speak: T({ text: "text", label: "text", lang: "text" }, true),
+  // A strip of round pictures, each a run of reports played full screen like stories. groups="data.x": [{ key, label, kind?, items: [{ id, title, text?, image?, meta?, url?, why?, seen? }] }];
+  // the report on screen: its id into state.<bind>, then the event emit; actions="event|icon|label; …": buttons under it (its id in the state, then the event); read="name": a
+  // button that puts its id into that state and closes; images=false: no pictures.
+  stories: T({ groups: "list", bind: "text", emit: "text", actions: "text", read: "text", images: { oneOf: ["true", "false"] }, title: "text" }, true),
 };
 
 // An event handler: <on event="saved" action="state" state="msg" value="Saved"/> does what a button does when a button says emit="saved" (or a
@@ -1683,6 +1692,33 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
       };
       return [{ t: "pivot", a: { data: JSON.stringify(data), total: a.total === "false" || !cf ? "false" : "true", ...(a.empty ? { empty: a.empty } : {}) }, c: [] }];
     }
+    case "stories": {
+      if (!a.groups) return (err('<stories> needs groups="data.…" (a list of { key, label, items }).'), []);
+      const groups = itemsOf(pipe(a.groups, ctx, n.line))
+        .slice(0, 30)
+        .flatMap((g) => {
+          const o = g && typeof g === "object" ? (g as Record<string, unknown>) : null;
+          const list = o && Array.isArray(o.items) ? o.items : [];
+          if (!o || !list.length) return [];
+          const str = (v: unknown) => (typeof v === "string" || typeof v === "number" ? String(v) : "");
+          return [
+            {
+              key: str(o.key) || str(o.label),
+              label: str(o.label),
+              kind: str(o.kind),
+              items: list.slice(0, 30).flatMap((x) => {
+                const r = x && typeof x === "object" ? (x as Record<string, unknown>) : null;
+                if (!r || !str(r.title)) return [];
+                const img = checkAttr("url", str(r.image)) ?? "";
+                const url = checkAttr("url", str(r.url)) ?? "";
+                return [{ id: str(r.id), title: str(r.title), text: str(r.text).slice(0, 600), image: img, meta: str(r.meta), url, why: str(r.why), seen: r.seen === true }];
+              }),
+            },
+          ];
+        })
+        .filter((g) => g.items.length);
+      return [{ t: "stories", a: { ...a, groups: JSON.stringify(groups) }, c: [] }];
+    }
     case "rating": {
       const max = String(Math.max(1, Math.min(10, Number(a.max) || 5)));
       if (!a.prop) return [{ t: "rating", a: { value: String(numOf(a.value ?? "") ?? 0), max }, c: [] }];
@@ -1860,7 +1896,7 @@ export function viewReference(parts: PartMeta[] = [], actions: ActionMeta[] = []
     "NAV: <nav title=\"…\"><entry label=\"…\" icon=\"📥\" state=\"scope\" value=\"inbox\" n=\"{{ … }}\" group=\"…\"/>…</nav> — the view's sidebar (beside the view, or — its setting — in the Workspace tree under the database); an entry sets the view's state, opens a row (row=\"{{ id }}\" — in {{#each}} the row by itself) or goes to an address (href). E.g. the newest five: {{#each rows | sort('Date', 'desc') | limit(5)}}<entry label=\"{{ title }}\" group=\"Newest\"/>{{/each}}.",
     "WIDGETS: <widget id=\"plugin.widget\" setting=value/> — a plugin's widget (as on pages).",
     "NAMES OF YOUR OWN: <let name=\"open\" value=\"rows | where('Status', '!=', 'Done')\"/> — a value named for what follows it (siblings after it and what is inside them): {{ open | count }}, <list source=\"open | limit(5)\">. <switch on=\"{{ Status }}\"><case value=\"Done|Closed\">…</case><otherwise>…</otherwise></switch>.",
-    "MORE BLOCKS: <tabset bind=\"t\"><tab id=\"open\" label=\"Open\" n=\"{{ open | count }}\">content</tab><tab id=\"all\" label=\"All\">…</tab></tabset> (tabs with their content; only the one shown is drawn). <dialog bind=\"edit\" title=\"…\" side=center|right wide=true>…</dialog> (open while state.edit is filled: <button action=\"state\" state=\"edit\" value=\"true\" label=\"…\"/>; its ✕ empties it; side=right: a drawer). <input bind=\"n\" type=text|number|date|time|month|color|textarea|email|url label=\"…\" placeholder=\"…\" value=\"start\"/> and <slider bind=\"x\" min=0 max=100 step=5 label=\"…\" unit=\"%\" value=\"50\"/> (state you type or drag: {{ state.n }}, rows | where('Amount', '>', state.x)). <calendar source=\"rows\" date=\"Due\" empty=\"…\">item</calendar> (a month: the items on their days, ‹ › to page months — bind=\"m\" holds the month as 2026-11). <heatmap source=\"rows\" date=\"Date\" value=\"Hours\" calc=count|sum weeks=26 label=\"…\" unit=\"h\"/> (a day by day grid, darker where more happened). <pivot source=\"rows\" rows=\"Owner\" cols=\"Status\" value=\"Amount\" calc=count|sum|avg format=\"euro(0)\" total=true/> (a cross table with totals; format: a value filter). <gauge value=\"{{ … }}\" max=100 label=\"…\" sub=\"…\" tone=good|warn|bad size=96/> (a ring). <rating value=\"{{ … }}\" max=5/> (stars) — in a row <rating prop=\"Stars\"/> sets a number property by a click. <copy text=\"{{ URL }}\" label=\"Copy\"/> (to the clipboard). <qr value=\"{{ URL }}\" size=160 label=\"…\"/> (a text as a QR code: a link, a ticket, a Wi-Fi login; at most 331 bytes).",
+    "MORE BLOCKS: <tabset bind=\"t\"><tab id=\"open\" label=\"Open\" n=\"{{ open | count }}\">content</tab><tab id=\"all\" label=\"All\">…</tab></tabset> (tabs with their content; only the one shown is drawn). <dialog bind=\"edit\" title=\"…\" side=center|right wide=true>…</dialog> (open while state.edit is filled: <button action=\"state\" state=\"edit\" value=\"true\" label=\"…\"/>; its ✕ empties it; side=right: a drawer). <input bind=\"n\" type=text|number|date|time|month|color|textarea|email|url label=\"…\" placeholder=\"…\" value=\"start\"/> and <slider bind=\"x\" min=0 max=100 step=5 label=\"…\" unit=\"%\" value=\"50\"/> (state you type or drag: {{ state.n }}, rows | where('Amount', '>', state.x)). <calendar source=\"rows\" date=\"Due\" empty=\"…\">item</calendar> (a month: the items on their days, ‹ › to page months — bind=\"m\" holds the month as 2026-11). <heatmap source=\"rows\" date=\"Date\" value=\"Hours\" calc=count|sum weeks=26 label=\"…\" unit=\"h\"/> (a day by day grid, darker where more happened). <pivot source=\"rows\" rows=\"Owner\" cols=\"Status\" value=\"Amount\" calc=count|sum|avg format=\"euro(0)\" total=true/> (a cross table with totals; format: a value filter). <gauge value=\"{{ … }}\" max=100 label=\"…\" sub=\"…\" tone=good|warn|bad size=96/> (a ring). <rating value=\"{{ … }}\" max=5/> (stars) — in a row <rating prop=\"Stars\"/> sets a number property by a click. <copy text=\"{{ URL }}\" label=\"Copy\"/> (to the clipboard). <qr value=\"{{ URL }}\" size=160 label=\"…\"/> (a text as a QR code: a link, a ticket, a Wi-Fi login; at most 331 bytes). <speak text=\"{{ … }}\" label=\"Listen\" lang=\"de-DE\"/> (a text read aloud by the browser's voice). <stories groups=\"data.news.stories\" bind=\"story\" emit=\"seen\" actions=\"like|❤️|Like; save|🔖|Save\" read=\"reading\"/> (a strip of round pictures, each a run of reports — [{ key, label, items: [{ id, title, text, image, meta, url }] }] — played full screen like stories; the report on screen: its id in state.story, then the event). <visible value=\"{{ id }}\" bind=\"seen\" emit=\"shown\"/> (in a card: once it was on screen for a moment its value joins the list in state.seen and the event goes out — what of a feed was seen). <grid masonry=true min=280 cols=3> (the cells in columns, each in the shortest).",
     "MORE FILTERS: groupby('Status') → items {group, count, items} ({{#each rows | groupby('Owner')}}<section title=\"{{ group }}\" aside=\"{{ count }}\"><list source=\"this.items\">…</list></section>{{/each}}; groupby('Owner', '—', 'count') biggest first), distinct('Tag') (each value once), offset(10), reverse, between('Due', now, '2026-12-31'), where('Status', 'in', 'Open|Waiting'), json (to look at a value).",
     blocks.length
       ? `BLOCKS of your own (use them; workspace_save_block makes more): ${blocks.map((b) => `${blockSignature(b)} — ${b.description || b.title || b.name}${b.params.some((p) => p.help) ? ` (${b.params.filter((p) => p.help).map((p) => `${p.name}: ${p.help}`).join("; ")})` : ""}`).join("; ")}. What stands inside <use>…</use> goes where its <slot/> is.`

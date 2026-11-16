@@ -28,7 +28,7 @@ fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 // The texts of the screen's data in the languages the packs have: every t("…") of the screen lambda and of the built-in's view-actions.ts.
 const KEYS: string[] = [];
-for (const file of [path.join(ROOT, "src", "plugins", "news", "view-actions.ts"), path.join(SRC, "news.screen.mjs")])
+for (const file of [path.join(ROOT, "src", "plugins", "news", "view-actions.ts"), path.join(ROOT, "src", "plugins", "news", "widgets.ts"), path.join(SRC, "news.screen.mjs"), path.join(SRC, "news.widget.mjs")])
   for (const m of fs.readFileSync(file, "utf8").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
     const k = JSON.parse('"' + m[1] + '"');
     if (!KEYS.includes(k)) KEYS.push(k);
@@ -44,7 +44,9 @@ const lib = await build({
 const STRINGS = ${JSON.stringify(strings)};
 setPluginStrings((lang) => STRINGS[lang] ?? {});
 export const tFor = (lang) => translator(isLang(lang) ? lang : "en");
-export * from "@/plugins/news/core";`, resolveDir: ROOT, loader: "ts", sourcefile: "news-port.ts" },
+export * from "@/plugins/news/core";
+export { aliasesOf } from "@/plugins/news/gazetteer";
+export { storyGroups } from "@/plugins/news/story-groups";`, resolveDir: ROOT, loader: "ts", sourcefile: "news-port.ts" },
   bundle: true,
   format: "esm",
   platform: "neutral",
@@ -71,7 +73,11 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "news.match": { label: "News: match unread news to your taste", what: "Everything unread that is kept matched against your taste: the closest become the Discover view.", zeff: ["pref.get", "sql.query"], timeoutMs: 300000 },
   "news.more-like": { label: "News: more like this", what: "An article read, the AI says why it matters to you and what to search; the web is searched and the answers ranked; new sources found.", zeff: ["pref.get", "sql.query", "prompts.fill", "ai.json", "facts.list", "people.known-in", "todos.open"], timeoutMs: 900000, web: ["*"] },
   "news.auto-discover": { label: "News: finding feeds by itself", what: "Once a day, and when fresh news run low: feeds for the things you care about — from the catalog and the internet — handed back as statements.", zeff: ["pref.get", "sql.query", "prompts.fill", "ai.json", "facts.list", "todos.open", "jira.tickets-open"], timeoutMs: 900000, web: ["*"] },
-  "news.settings": { label: "News: the settings page", what: "What the settings page shows, and the change of one setting.", zeff: ["pref.get", "sql.query"], timeoutMs: 30000 },
+  "news.settings": { label: "News: the settings page", what: "What the settings page shows, and the change of one setting.", zeff: ["pref.get", "sql.query", "facts.list", "todos.open", "jira.tickets-open"], timeoutMs: 30000 },
+  "news.fresh": { label: "News: how many came in since", what: "How many items came in since an open page loaded (the page's \"N new\").", zeff: ["pref.get", "sql.query"], timeoutMs: 20000 },
+  "news.today": { label: "News: for the Today page", what: "How many news came in since yesterday and the best few not seen yet — what the Today page shows.", zeff: ["pref.get", "sql.query"], timeoutMs: 20000 },
+  "news.widget": { label: "News: the widget News for you", what: "The best new items for the widget, with buttons to save, like or hide them.", zeff: ["pref.get", "sql.query"], timeoutMs: 20000 },
+  "news.kept": { label: "News: the news you kept", what: "The news you saved or liked, with their text, as records a Workspace database can follow.", zeff: ["sql.query"], timeoutMs: 30000 },
   "news.rescore": { label: "News: scored for you", what: "Every recent item scored again — your interests, mutes, what you liked, your todos and profile, the sources you trust — handed back as statements.", zeff: ["pref.get", "todos.open", "facts.list", "jira.tickets-open", "sql.query"], timeoutMs: 120000 },
 };
 const SHARED = new Set(["news.discover", "news.more-like", "news.auto-discover"]);
@@ -90,7 +96,7 @@ write(
     {
       format: 1,
       id: "news-ext",
-      version: "1.0.0",
+      version: "1.1.0",
       name: "News",
       description: "Your news, gathered for you: the feeds you pick, everything scored for you.",
       icon: "📰",
@@ -315,6 +321,50 @@ write(
           },
         },
         {
+          id: "i13",
+          parent: "i1",
+          kind: "page",
+          title: "Look for new feeds",
+          icon: "📰",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "news.auto-find",
+            title: "Look for new feeds",
+            description: "When fresh news run low (the end of the feed is reached): feeds for the things you care about, from the catalog and the internet, are looked for and fetched. Same as the sync's first step; it keeps its own pace (every two hours at most).",
+            inputs: [],
+            nodes: [
+              { id: "find", kind: "action", action: "lambda.invoke", input: { name: "news.auto-discover", event: {} } },
+              eachBatch("found", "find"),
+              { id: "sets", kind: "foreach", items: "{{ steps.find.sets }}", as: "p", nodes: [{ id: "setp", kind: "action", action: "pref.set", input: { plugin: "news-ext", key: "{{ p.key }}", value: "{{ p.value }}" } }], max: 10 },
+              { id: "fetch", kind: "if", when: "{{ steps.find.added }}", then: [{ id: "round", kind: "call", flow: "news.fetch-round", input: {} }], else: [] },
+              { id: "done", kind: "return", value: { added: "{{ steps.find.added }}" } },
+            ],
+            requested: { write: "all", ai: true, store: STORES, web: ["*"] },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
+          id: "i14",
+          parent: "i1",
+          kind: "page",
+          title: "Widget: News for you",
+          icon: "📰",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "news.widget-act",
+            title: "Widget: save, like or hide a news item",
+            description: "The buttons of the widget News for you (input action: save, like or hide; payload.id).",
+            inputs: [],
+            nodes: [
+              { id: "do", kind: "action", action: "lambda.invoke", input: { name: "news.act", event: { op: "widget", action: "{{ input.action }}", id: "{{ input.payload.id }}" } } },
+              { id: "write", kind: "if", when: "{{ steps.do.ok }}", then: [{ id: "sql", kind: "action", action: "sql.exec", input: { statements: "{{ steps.do.statements }}" } }, { id: "signal", kind: "if", when: "{{ steps.do.taste }}", then: [{ id: "queue", kind: "action", action: "pref.set", input: { plugin: "news-ext", key: "news:taste", value: "{{ steps.do.taste }}" } }], else: [] }], else: [] },
+              { id: "done", kind: "return", value: { ok: "{{ steps.do.ok }}" } },
+            ],
+            requested: { write: "all", store: STORES },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
           id: "i2",
           parent: "i1",
           kind: "page",
@@ -386,8 +436,8 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "news-ext",
       name: "News",
-      version: old.version ?? "0.1.0",
-      description: "Your news, gathered for you: the feeds you pick plus a search per interest, everything scored for you. Slice 1 of the port: the sync's heart (fetching, keeping what is new, scoring) — the rest of News (the agent's filter, tags, overview, discovery, the page) is still the built-in's.",
+      version: "0.2.0",
+      description: "Your news, gathered for you: the feeds you pick plus a search per interest, everything scored for you, filtered by an agent, tagged, with an overview, stories, discovery, a page and settings of its own, a widget, a Today line and the news you kept for databases.",
       author: "Zeff",
       apiVersion: 1,
       permissions: [],
@@ -395,6 +445,10 @@ write(
         lambdas: "lambdas",
         workspacePackages: ["news.package.json"],
         appViews: [{ id: "news", dataType: "news", label: "News", icon: "📰", template: "views/news.html" }],
+        widgets: [
+          { id: "top", label: "News for you", icon: "📰", description: "The best new items of your news, scored for you — save, like or hide them right here.", size: "half", ttl: 60, lambda: "news.widget", actFlow: "news.widget-act", replaces: "news.top", settings: [{ key: "limit", label: "How many", kind: "number", default: 6, min: 1, max: 15 }] },
+        ],
+        sources: [{ id: "kept", label: "Saved news", icon: "📰", hint: "The news you saved or liked — with their text, for reading, summarising and linking.", lambda: "news.kept", replaces: "news", noNewRows: true }],
         aiTasks: [
           { id: "funnel", label: "News: the agent's filter", what: "Reads the best new headlines like an editor who knows you and lets through what interests you." },
           { id: "discover", label: "News: Discover", what: "Plans searches from your taste." },
