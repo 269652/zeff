@@ -20,6 +20,7 @@ import { getRewrittenReport, reportToText } from "@/lib/report";
 import { absenceLabels, type AbsenceType } from "@/lib/schedule-shared";
 import { listTags } from "@/lib/tags";
 import { weekClose } from "@/lib/week-close";
+import { ticketInfos } from "./tickets";
 import { currentWeek, formatDay, formatWeekRange, isoDate, resolveWeek, shiftWeek, todayIso } from "@/lib/week";
 import { doneToday } from "@/lib/work/booking";
 import { openSuggestions } from "@/lib/work/suggestions";
@@ -227,6 +228,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   }));
 
   // --- the report
+  const tk = ticketInfos([...report.entries.map((e) => e.ticket), ...rewritten.days.flatMap((d) => d.lines.flatMap((l) => l.entries.map((e) => e.ticket)))]);
   const days = rewritten.days.map((d) => ({
     date: d.date,
     dateText: formatDate(d.date),
@@ -239,7 +241,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       tags: l.tags.map((x) => `#${x.name}`).join(" "),
       hours: `${h(l.hours)} h`,
       expandable: l.expandable,
-      entries: l.entries.map((e) => ({ job: `${e.jobNumber} ${e.jobName}`, description: `${e.ticket ? `${e.ticket} ` : ""}${e.description}`, hours: `${h(e.hours)} h` })),
+      entries: l.entries.map((e) => ({ job: `${e.jobNumber} ${e.jobName}`, description: e.description, ticket: e.ticket ?? "", ticketUrl: tk(e.ticket).url, ticketTip: tk(e.ticket).tip, hours: `${h(e.hours)} h` })),
     })),
   }));
 
@@ -311,6 +313,8 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       dateText: formatDate(e.date),
       description: e.description,
       ticket: e.ticket ?? "",
+      ticketUrl: tk(e.ticket).url,
+      ticketTip: tk(e.ticket).tip,
       job: `${e.job.number} ${e.job.name}`.trim(),
       project: e.project?.title ?? "",
       type: typeMap[e.type]?.label ?? e.type,

@@ -12,7 +12,7 @@
       {{#if not data.w.isCurrent}}<button action="state" state="week" value="{{ data.w.current }}" label="This week" variant=plain/>{{/if}}
     </row>
     <row gap=2 align=center wrap=true>
-      <input bind="week" type=date label="Jump to week" value=""/>
+      <input bind="week" type=week label="Jump to week" value="{{ data.w.key }}"/>
       <select bind="by" options="{{ data.w.reporterOptions | tojson }}" label="Reported by"/>
       <button action="url" href="{{ data.w.csv }}" label="CSV" variant=plain/>
     </row>
@@ -186,7 +186,7 @@
       {{#each lines}}
       {{#if expandable}}
       <section title="{{ label }} {{ count }} · {{ hours }}" aside="{{ type }} {{ tags }}" collapsible=true open=false>
-        {{#each entries}}<row justify=between gap=2><small>{{ job }} · {{ description }}</small><small>{{ hours }}</small></row>{{/each}}
+        {{#each entries}}<row justify=between gap=2><row gap=1 align=baseline><small>{{ job }} ·</small>{{#if ticket}}{{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<small><muted>{{ ticket }}</muted></small>{{/if}}{{/if}}<small>{{ description }}</small></row><small>{{ hours }}</small></row>{{/each}}
       </section>
       {{#else}}
       <row justify=between gap=2><text>{{ label }} <small><muted>{{ tags }}</muted></small></text><row gap=2 align=center><dot color="{{ color }}"/><small>{{ type }}</small><b>{{ hours }}</b></row></row>
@@ -201,7 +201,7 @@
     <datatable source="data.w.entryList" empty="No entries.">
       <column label="Date">{{ dateText }}</column>
       <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>
-      <column label="Description">{{ description }}{{#if ticket}} <small><muted>{{ ticket }}</muted></small>{{/if}}</column>
+      <column label="Description">{{ description }}{{#if ticket}} {{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<small><muted>{{ ticket }}</muted></small>{{/if}}{{/if}}</column>
       <column label="Type"><dot color="{{ color }}"/> {{ type }}</column>
       <column label="Group"><small>{{ groupText }}</small>{{#if books}}<small><muted>{{ books }}</muted></small>{{/if}}{{#if start}}<small><muted>{{ start }}</muted></small>{{/if}}</column>
       <column label="Hours" align=right><button action="state" state="hoursedit" value="{{ id }}" label="{{ hoursText }}" variant=link/>{{#if worked}}<small><muted>{{ worked }}</muted></small>{{/if}}</column>

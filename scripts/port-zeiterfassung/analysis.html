@@ -62,7 +62,7 @@
       {{#if data.a.splitItems}}{{#each data.a.splitItems}}<row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.a.splitItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>{{/each}}{{#else}}<text tone=muted>{{ data.a.splitEmpty }}</text>{{/if}}
     </section>
     <section title="Top tickets by hours">
-      {{#if data.a.ticketItems}}{{#each data.a.ticketItems}}<row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.a.ticketItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>{{/each}}{{#else}}<text tone=muted>No tickets.</text>{{/if}}
+      {{#if data.a.ticketItems}}{{#each data.a.ticketItems}}<row gap=2 align=center>{{#if url}}<button action="url" href="{{ url }}" label="{{ label }}" tip="{{ tip }}" variant=link/>{{#else}}<text>{{ label }}</text>{{/if}}<bar value="{{ value }}" max="{{ data.a.ticketItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>{{/each}}{{#else}}<text tone=muted>No tickets.</text>{{/if}}
     </section>
   </grid>
   <small><muted>{{ data.a.foot }}</muted></small>
