@@ -8,12 +8,13 @@ import { tFor } from "./lib.mjs";
 export async function handler(event, context) {
   const t = tFor(context.language);
   const q = String(event?.q ?? "").trim();
-  if (q.length < 2) return { hits: [], q, none: "" };
+  if (q.length < 2) return { hits: [], q, none: "", first: "" };
   const ICON = { text: "🔎", ticket: "🎫", todo: "☑", note: "📝", mail: "✉", teams: "💬", jira: "🗨", gitlab: "🔀", context: "📝", keep: "🗒", doc: "📄", fact: "💡", person: "👤", kind: "🏷" };
   const LABEL = { text: t("Everything with this"), ticket: t("Tickets"), kind: t("Kinds"), person: t("People"), todo: t("Todos"), note: t("Notes"), mail: t("Mails"), teams: t("Messages"), jira: t("Jira comments"), gitlab: t("GitLab"), context: t("Context"), keep: t("Keep"), doc: t("Documents"), fact: t("Facts") };
   const { hits } = await context.zeff.call("todos.omni", { q });
   return {
     q,
+    first: hits[0] ? `${ICON[hits[0].kind] ?? "•"} ${hits[0].title}\u241f${hits[0].todoIds.join(",")}` : "",
     none: hits.length ? "" : t("Nothing found that a todo refers to."),
     hits: hits.map((h, i) => ({
       key: h.key,

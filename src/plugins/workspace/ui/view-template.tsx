@@ -281,6 +281,19 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           return void (rowId && props.rowOps?.hide(rowId));
         case "state":
           return void (a.state && setState(a.state, a.value ?? ""));
+        case "pick": {
+          // A value in or out of the list kept in a state (what <check> does for one box) — a chip picked, a filter taken off.
+          if (!a.state) return;
+          let list: string[] = [];
+          try {
+            const v: unknown = JSON.parse(r.state[a.state] || "[]");
+            if (Array.isArray(v)) list = v.map(String);
+          } catch {
+            list = [];
+          }
+          const val = a.value ?? "";
+          return void setState(a.state, JSON.stringify(list.includes(val) ? list.filter((x) => x !== val) : [...list, val]));
+        }
         case "report": {
           // A <subview>'s result: as a code widget's zeff.report — its flow, and the chat it tells.
           const num = (v: string | undefined) => (v === undefined || v.trim() === "" || Number.isNaN(Number(v)) ? undefined : Number(v));

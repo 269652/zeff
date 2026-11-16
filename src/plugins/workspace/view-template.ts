@@ -71,6 +71,7 @@ const ACTIONS: Record<string, { row?: boolean; what: string }> = {
   duplicate: { row: true, what: "a copy of the row" },
   hide: { row: true, what: "hide the row from the views" },
   state: { what: 'set the view\'s state: state="dir" value="owed"' },
+  pick: { what: 'add a value to a list kept in the state — or take it out again when it is in: state="chips" value="…" (the state is a JSON list, as <check> keeps it)' },
   select: { row: true, what: "pick the row (state.selected) — <selected> shows it" },
   url: { what: 'go to an address: href="/todos"' },
   print: { what: "print the view (a PDF)" },

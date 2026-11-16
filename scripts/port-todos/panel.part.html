@@ -183,6 +183,26 @@
 <col gap=1>{{#each data.p.planned}}{{#if path}}<small><b>{{ path }}</b></small>{{/if}}{{#each steps}}<small>→ {{ text }} <muted>({{ kind }})</muted></small>{{/each}}{{/each}}</col>
 </section>
 {{/if}}
+{{#if not data.p.closed}}
+<section title="Attach a document" collapsible=true>
+<col gap=2>
+{{#if data.pick_error}}<small><muted>The Documents plugin is not installed (Menu → Plugins).</muted></small>{{#else}}
+<row gap=2 align=center>
+<col fill=true><search bind="aq" placeholder="Search the documents …"/></col>
+<upload bind="busy" run="documents.add" with="todo={{ data.p.id }}" multiple=true label="Upload new …" done="Attached — being read …" emit="todos-changed"/>
+</row>
+<small><muted>An attached document is context for this todo.</muted></small>
+{{#each data.pick.items}}
+<row gap=2 align=start wrap=false>
+<text>{{ icon }}</text>
+<col fill=true><b>{{ title }}</b> <small><muted>{{ sizeText }}</muted></small><small><muted>{{ text }}</muted></small></col>
+<button run="documents.attach" with="todo={{ data.p.id }}, doc={{ id }}" done="Attached." emit="todos-changed" label="Attach"/>
+</row>
+{{/each}}
+{{/if}}
+</col>
+</section>
+{{/if}}
 {{#if data.p.nKnowledge}}
 <section title="Knowledge" aside="{{ data.p.nKnowledge }}" collapsible=true>
 <col gap=1>

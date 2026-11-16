@@ -16,7 +16,7 @@
 <b>{{ icon }} {{ label }}</b>
 <col fill=true gap=1>
 <text>{{ text }}</text>
-<small><muted>{{ ref }} · {{ ticket }} · {{#if byHref}}<a href="{{ byHref }}" tip="{{ byTitle }}">{{ by }}</a>{{#else}}{{ by }}{{/if}}{{#if reopened}} · reopened{{/if}}</muted>
+<small><button action="state" state="panel" value="{{ todoId }}" label="{{ ref }}" variant=link/><muted> · {{ ticket }} · {{#if byHref}}<a href="{{ byHref }}" tip="{{ byTitle }}">{{ by }}</a>{{#else}}{{ by }}{{/if}}{{#if reopened}} · reopened{{/if}}</muted>
 {{#if run}} <button run="todos-ext.undo-run" with="run={{ run }}" into="undone" confirm="Dismiss the todos this run made that you haven't touched — those you worked on stay" emit="todos-changed" label="take back the run" variant=link/>{{/if}}</small>
 {{#if note}}<small><muted>{{ note }}</muted></small>{{/if}}
 </col>

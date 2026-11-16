@@ -14,6 +14,10 @@ export async function handler(event, context) {
   const { view, day, locale } = rowTools(t, lang);
   const b = await zeff.call("todos.board", {});
   const todos = await zeff.call("todos.rows", { scope: "open" });
+  const doneAll = await zeff.call("todos.rows", { scope: "done", limit: 300 });
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+  // (what was closed in the last week stays under its ticket, as on the page)
+  const recent = doneAll.rows.filter((r) => r.doneAt && r.doneAt >= weekAgo);
   const att = String(event?.att ?? "");
   const ATT = { feedback: [t("Open question"), "#f97316"], active: [t("In progress"), "#0d9488"], check: [t("Testing / Review"), "#6366f1"], spec: [t("Spec"), "#a855f7"], blocked: [t("Waiting on others"), "#a1a1aa"], ready: [t("Ready"), "#cbd5e1"], stale: [t("Stalled"), "#d6d3d1"] };
   const PHASES = { sync: t("syncing first"), jira: t("reading Jira and Zeff"), ai: t("analyzing"), saving: t("saving"), mailtodos: t("finding todos in mails and WhatsApp"), mails: t("matching mails to the todos"), notetodos: t("finding todos in notes"), knowledge: t("matching knowledge to the todos"), notes: t("matching notes to the todos"), calendarmatch: t("matching appointments to the todos"), calendartodos: t("finding todos in appointments"), documents: t("finding todos in documents"), docrelations: t("matching documents to the todos"), people: t("finding the people in the todos"), autoactions: t("taking actions for the todos") };
@@ -33,7 +37,7 @@ export async function handler(event, context) {
       flags: x.flags.map((text) => ({ text })),
       happened: x.happened.map((h) => ({ when: h.when ? day(h.when.slice(0, 10)) : "", who: h.who ?? "", what: h.what })),
       actions: x.actions.map((a) => ({ ...a, ticket: x.key, doneAt: a.done ? when(a.done.at) : "", ok: a.done?.status === "done", failed: a.done?.status === "failed", detail: a.done?.detail ?? "", icon: a.type === "transition" ? "→" : a.type === "assign" ? "👤" : "💬" })),
-      todos: todos.rows.filter((r) => onTicket(r, x.key)).map((r) => view(r, todos)),
+      todos: [...todos.rows.filter((r) => onTicket(r, x.key)).map((r) => view(r, todos)), ...recent.filter((r) => onTicket(r, x.key)).map((r) => view(r, doneAll))],
     }));
   return {
     running: b.running,
