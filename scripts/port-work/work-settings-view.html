@@ -113,7 +113,7 @@
 <box>
 <row gap=3 wrap=true align=center>
 <b>{{ name }}</b><small><muted>{{ path }}</muted></small>
-<small><text tone="{{ ok ? 'muted' : 'bad' }}">{{ state }}</text></small>
+<small><text tone="{{ ok ? 'muted' : 'bad' }}">{{ where }}</text></small>
 <small><muted>{{ boards }}{{ tickets ? ' · ' + tickets : '' }}</muted></small>
 <grow/>
 <button run="work.repo-delivery" with="id={{ id }}, delivery=mr" into="result" emit="settings-changed" label="Merge request" variant="{{ mr ? 'primary' : 'plain' }}" tip="Push a feature branch, open a merge request, merge once approved"/>

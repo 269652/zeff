@@ -20,7 +20,7 @@
 {{#each data.x.groups}}
 <section title="{{ heading }}{{ ticket }}" aside="{{ n }}" collapsible=true open=true>
 {{#if ticketKey}}<button action="state" state="sel" value="ticket:{{ ticketKey }}" label="{{ ticket }} {{ summary }}" variant=quiet tip="{{ summary }}"/>{{/if}}
-{{#each rows}}
+{{#each items}}
 <row gap=1 align=center>
 <button action="state" state="sel" value="run:{{ id }}" label="{{ dot }} {{ title }}{{ ticket ? '  ' + ticket : '' }}" variant="{{ selected ? 'primary' : 'quiet' }}" tip="{{ tip }}"/>
 <grow/>

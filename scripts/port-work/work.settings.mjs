@@ -72,7 +72,7 @@ export async function handler(_event, context) {
       name: r.name,
       path: r.path,
       ok: r.ok,
-      state: r.ok ? t("on {branch}", { branch: r.branch }) : t("folder missing"),
+      where: r.ok ? t("on {branch}", { branch: r.branch }) : t("folder missing"),
       gitlabProject: r.gitlabProject ?? "",
       boardsText: r.boards.join(", "),
       boards: r.boards.length ? r.boards.map((b) => boardName.get(b) ?? t("board {id}", { id: b })).join(", ") : t("no boards"),
