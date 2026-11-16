@@ -8,7 +8,7 @@
  * Called by scripts/port-news.mts.
  */
 import { translator } from "../../src/lib/i18n/shared";
-import { NEWS_VIEW } from "../../src/plugins/news/view-template.meta";
+import { NEWS_VIEW } from "./core/view-template.meta";
 
 export function newsViewTemplate(): string {
   const t = translator("en");
