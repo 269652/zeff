@@ -61,6 +61,21 @@ export const QUESTION_FLOW_ACTIONS: FlowAction[] = [
       }
     },
   },
+  {
+    name: "data.answer",
+    group: "data",
+    label: "Answer a question from Zeff's own data, if it is one",
+    summary: "A question about numbers and dates answered from the person's own data, the way the knowledge chat does: { answer: { answer, sources, entities, searchedFor, model, durationMs, structured } } — or { answer: null } when it is a question about text, the structured questions aren't there or the AI failed.",
+    input: [f("question", "text", { required: true }), f("history", "json")],
+    output: "{ answer }",
+    needs: ["ai"],
+    run: async (i, ctx) => {
+      ctx.may("ai");
+      const { chatAnswer } = await import("./ask");
+      const history = (Array.isArray(i.history) ? i.history : []).slice(-8).map((h: { role?: unknown; text?: unknown }) => ({ role: h?.role === "assistant" ? "assistant" : "user", text: String(h?.text ?? "").slice(0, 4000) }));
+      return { answer: JSON.parse(JSON.stringify(await chatAnswer(String(i.question ?? "").trim(), history))) };
+    },
+  },
 ];
 
 extensionPoint<FlowAction[]>("workspace.flowActions").contribute("questions", QUESTION_FLOW_ACTIONS);

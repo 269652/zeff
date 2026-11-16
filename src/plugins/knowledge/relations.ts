@@ -16,44 +16,16 @@ import { kindOfPage, kindOn } from "@/lib/todo-display";
 import { relateRepoSystems } from "./repo-systems";
 import { entitiesFor, parseTodoKnowledge, type KnowledgeEntity, type KnowledgePage, type TodoKnowledge, type TodoLink } from "./shared";
 import { batchByChars, promptRoom, singleFlight } from "@/lib/ai/batch-job";
+import { INSTRUCTIONS, LANGUAGE_NAMES, SCHEMA, clip, type Answer } from "./relations-core";
 
 export type { TodoKnowledge } from "./shared";
 
 
-const SCHEMA = {
-  type: "object",
-  properties: {
-    todos: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          id: { type: "integer" },
-          pages: {
-            type: "array",
-            items: { type: "object", properties: { id: { type: "string" }, why: { type: "string" } }, required: ["id", "why"] },
-          },
-          entities: { type: "array", items: { type: "integer" } },
-          links: { type: "array", items: { type: "integer" } },
-        },
-        required: ["id", "pages", "entities", "links"],
-      },
-    },
-  },
-  required: ["todos"],
-};
-type Answer = { todos?: { id?: number; pages?: ({ id?: string; why?: string } | string)[]; entities?: number[]; links?: number[] }[] };
-
-export const INSTRUCTIONS = `Du ordnest meinen offenen Todos Wissen zu. Zu jedem Todo (Nummer in eckigen Klammern, sein Text, ggf. sein Ticket) stehen Kandidaten aus der Wissensbasis — Seiten [p:…] mit Titel, Bereich und der gefundenen Stelle, Begriffe [e:…] mit ihrer Erklärung —, gefunden über eine Volltextsuche nach den Wörtern des Todos. Viele davon passen nur zufällig (ein gleiches Wort).
-
-Wähle je Todo NUR die Kandidaten, die mir beim Erledigen dieses Todos wirklich helfen: es geht um dieselbe Sache, dasselbe System, denselben Ablauf, dieselbe Person — nicht bloß ein gemeinsames Wort. Lieber keine als eine unpassende. Für persönliche Dinge (Freunde, Termine, Behörden, Einkäufe) passt Firmenwissen fast nie. Gib zu jedem Todo die gewählten Seiten-Kennungen (ohne „p:“) und Begriff-Nummern (ohne „e:“) an — leere Listen, wenn nichts passt. Dazu stehen je Todo Adressen der Systeme [l:…] (Prod, Test, Dev …) aus den Seiten: wähle unter links die Nummern (ohne „l:“) der Adressen der Systeme, um die es im Todo geht (Kunde/Projekt/Website laut Todo und Ticket) — von jedem System die Adressen der Umgebungen, die das Todo braucht: ein Test-, Abnahme- oder Fehler-Todo braucht die Test-/Staging-Adresse und die Prod-Adresse zum Vergleich, ein Live-Todo Prod und Test. Nichts wählen, was zu einem anderen Projekt gehört; leer, wenn keine passt. Zu jeder gewählten Seite ein „why“: EIN kurzer Satz (höchstens 90 Zeichen), was mir diese Seite für das Todo bringt — konkret, z. B. „Checkliste der Unterlagen für den Ersttermin“ oder „Wie der Login auf CMS 11 eingerichtet wird“; nicht „passt zum Thema“ und keine Wiederholung des Titels.`;
-
-const LANGUAGE_NAMES = { de: "Deutsch", en: "Englisch", es: "Spanisch" } as const;
+export { INSTRUCTIONS };
 
 export type KnowledgeRelationResult = { ok: boolean; todos: number; assigned: number; error?: string };
 
 
-const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s).replace(/\s+/g, " ");
 
 /**
  * The Wissens-Zuordnung (after the Ticket-Lage): for each open todo that's new or changed since
@@ -66,6 +38,14 @@ export function relateKnowledge(): Promise<KnowledgeRelationResult> {
     const db = getDb();
     // The systems (Prod, Test/Stage, Dev) are read once per repo, from the knowledge — not per todo.
     await relateRepoSystems().catch((e) => console.error("[knowledge-repo-systems]", errorMessage(e)));
+    // The plugin stands in for the built-in (state.ts PROVIDED_BY): its flow matches the knowledge to the todos (the repos' systems above stay the kernel's).
+    if ((await import("@/plugins/state")).onlyThroughPort("knowledge")) {
+      const { runFlow } = await import("@/plugins/workspace/flows/engine");
+      const r = await runFlow("knowledge.relate", {});
+      if (r.status !== "done") return { ok: false, todos: 0, assigned: 0, error: r.error ?? t("The AI didn't answer.") };
+      const o = (r.output ?? {}) as { todos?: number; assigned?: number; failed?: number; batches?: number };
+      return o.failed && o.failed === o.batches ? { ok: false, todos: Number(o.todos) || 0, assigned: Number(o.assigned) || 0, error: t("The AI didn't answer.") } : { ok: true, todos: Number(o.todos) || 0, assigned: Number(o.assigned) || 0 };
+    }
     const stored = new Map(db.select({ id: schema.todos.id, knowledge: schema.todos.knowledge }).from(schema.todos).all().map((r) => [r.id, parseTodoKnowledge(r.knowledge)]));
     // New or changed since their last assignment — the newest first, at most as many as set.
     const due = listTodos({ status: "open" })

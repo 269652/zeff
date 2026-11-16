@@ -11,6 +11,7 @@ import "./gitlab/server";
 import "./jira/server";
 import "./keep/server";
 import "./know/server";
+import "./knowledge/server";
 import "./llm/server";
 import "./lookups/server";
 import "./loops/server";

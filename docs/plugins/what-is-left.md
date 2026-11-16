@@ -21,6 +21,7 @@ The platform and the **shared entity graph**, which every app reads and none own
 | calendar | 3.9k (+2.3k lib) | the calendar app, meetings, entries | the calendar model (IR) as kernel reads |
 | jira-lage | 1.5k | "Meine Lage" | the Jira kernel reads |
 | knowledge (+hub) | 1.4k | Confluence client, export, graph | a connection kind (token) for plugins |
+| knowledge (+hub) | ✅ 1.4k | **done as `knowledge-ext`** (chat, state, sync/add, the matching to todos; connection and export stay the kernel's: `service.read`/`service.send`, `todos.attached`/`todos.attach`) | the todo panel and the repos' systems still move |
 | google-drive | 1.1k | Drive sync | OAuth for plugins (secrets, routes) |
 | explorer | 1.6k | file browser | kernel fs reads, UI in the view language |
 | people (screens + AI) | 9.2k | the People app, the extraction, the summaries | the entity graph's reads (mostly there) |
