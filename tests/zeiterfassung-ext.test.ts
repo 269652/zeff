@@ -638,3 +638,120 @@ test("the rest of the details: the day's sums and 'spread the rest' follow the s
   const s = await run("zeiterfassung.schedule", {});
   assert.equal(typeof s.punchOn, "boolean");
 });
+
+/**
+ * As the browser opens it: the view stored in the installed package's database, its rows as the page hands them (not made-up ones), the words through the
+ * language's bundle, and every <data> answered by running its lambda with the strings its `with` gives — until nothing more is asked.
+ */
+async function openLive(template: string, db: { page: { id: number; title: string }; schema: any }, state: Record<string, string>, lang: "en" | "de") {
+  const store = await import("@/plugins/workspace/store");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const { getLambda } = await import("@/plugins/workspace/lambdas/store");
+  const { runLambda } = await import("@/plugins/workspace/lambdas/run");
+  const { parseWith } = await import("@/plugins/workspace/flows/with");
+  const { translator } = await import("@/lib/i18n/shared");
+  const rows = store.rowsOf(db.page.id)!;
+  const flowData: Record<string, unknown> = {};
+  const failures: string[] = [];
+  const walk = (ns: any[], f: (n: any) => void) => ns.forEach((n) => typeof n !== "string" && (f(n), walk(n.c, f)));
+  let r: any;
+  for (let round = 0; round < 6; round++) {
+    r = renderView(
+      template,
+      { rows: rows.rows, props: rows.schema.properties, titleName: rows.schema.titleName, state, app: {}, data: flowData, db: { id: db.page.id, title: db.page.title }, labels: { person: (id: number) => `#${id}`, page: (id: number) => `#${id}`, todo: (id: number) => `T-${id}` }, locale: lang === "de" ? "de-DE" : "en-GB", texts: {}, outputs: {}, settings: {}, tr: lang === "en" ? undefined : translator(lang), now: new Date() } as never,
+      { parts: [], actions: [], blocks: [] },
+    );
+    const before = JSON.stringify(flowData).length;
+    const datas: any[] = [];
+    walk(r.nodes, (n) => n.t === "data" && datas.push(n));
+    for (const n of datas) {
+      if (n.a.when !== undefined && !n.a.when.trim()) {
+        flowData[n.a.name] = null;
+        continue;
+      }
+      const l = getLambda(n.a.lambda);
+      if (!l) {
+        failures.push(`no lambda ${n.a.lambda}`);
+        continue;
+      }
+      const out = await runLambda(l, parseWith(n.a.with));
+      if (out.ok) flowData[n.a.name] = JSON.parse(JSON.stringify(out.result ?? null));
+      else failures.push(`${n.a.lambda}: ${out.error}`);
+    }
+    if (JSON.stringify(flowData).length === before) break;
+  }
+  return { errors: r.errors as { line: number; message: string }[], failures, flowData, nodes: r.nodes };
+}
+
+const installedReport = async () => {
+  const life = await import("@/plugins/workspace/package-life");
+  const store = await import("@/plugins/workspace/store");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const inst = life.getInstalled("zeiterfassung-ext")!;
+  const db = Object.values(inst.map).map((id) => store.getDatabase(id)).find((d) => d && d.schema.views.some((v: any) => v.template))!;
+  return { db: db as never, template: (db.schema.views.find((v: any) => v.template) as any).template as string };
+};
+
+test("opened live: the installed view, its rows as the page hands them, German words, every tab with real weeks and months — the built-in's screens switched off", { skip }, async () => {
+  await setup();
+  const { setInstalled } = await import("@/plugins/state");
+  const { db, template } = await installedReport();
+  assert.ok(template.length > 1000);
+  // The built-in's screens are off (the plugin replaces them): time tracking's reads must be there all the same.
+  for (const id of ["zeiterfassung", "weekly-report", "monthly-report"]) setInstalled(id as never, false);
+  const { listBookedEntries } = await import("@/lib/entries");
+  const { weekFromDate } = await import("@/lib/week");
+  const dates = [...new Set(listBookedEntries({}).map((e) => e.date))].sort();
+  const weeks = [...new Set(dates.map((d) => weekFromDate(new Date(`${d}T12:00:00`)).key))];
+  const months = [...new Set(dates.map((d) => d.slice(0, 7)))];
+  assert.ok(weeks.length >= 3 && months.length >= 2, "real-looking bookings");
+  const states: Record<string, string>[] = [
+    ...["week", "month", "analysis", "day", "jobs", "settings"].map((view) => ({ view })),
+    ...weeks.map((week) => ({ view: "week", week })),
+    ...months.map((month) => ({ view: "month", month })),
+    { view: "analysis", aweeks: "0", atickets: "mine", asplit: "type" },
+    { view: "day", fweek: "current" },
+  ];
+  for (const lang of ["en", "de"] as const) {
+    for (const state of states) {
+      const o = await openLive(template, db, state, lang);
+      assert.deepEqual(o.failures, [], `${lang} ${JSON.stringify(state)}`);
+      assert.deepEqual(o.errors, [], `${lang} ${JSON.stringify(state)}`);
+    }
+    // the dialogs, with the ids of what is there
+    const w = (await openLive(template, db, { view: "week", week: weeks[0] }, lang)).flowData.w as any;
+    const id = String(w.entryList[0].id);
+    for (const st of [{ entryedit: id }, { groupedit: id }, { entrycopy: id }, { hoursedit: id }, { ctxentry: id }, { pauseday: w.table.foot.pause[0].iso }, { n_ctx: "true", n_group: "true" }] as Record<string, string>[]) {
+      const o = await openLive(template, db, { view: "week", week: weeks[0], ...st }, lang);
+      assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${JSON.stringify(st)}`);
+    }
+    const j = (await openLive(template, db, { view: "jobs" }, lang)).flowData.j as any;
+    for (const st of [{ jd: `job:${j.jobs[0].id}`, jobedit: String(j.jobs[0].id) }, ...(j.projects[0] ? [{ jd: `project:${j.projects[0].id}`, projectedit: String(j.projects[0].id) }] : [])] as Record<string, string>[]) {
+      const o = await openLive(template, db, { view: "jobs", ...st }, lang);
+      assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${JSON.stringify(st)}`);
+    }
+    const o = await openLive(template, db, { view: "settings", typeedit: "meeting" }, lang);
+    assert.deepEqual([o.failures, o.errors], [[], []]);
+  }
+  // the numbers are on the screen
+  const latest = (await openLive(template, db, { view: "week", week: weeks[weeks.length - 1] }, "de")).flowData.w as any;
+  assert.ok(latest.table.rows.length >= 1 && latest.entryList.length >= 1);
+});
+
+test("opened live in a new account: no job, no booking — every tab still draws (a select without options is an error of the language)", { skip }, async () => {
+  await setup();
+  const { setInstalled } = await import("@/plugins/state");
+  for (const id of ["zeiterfassung", "weekly-report", "monthly-report"]) setInstalled(id as never, false);
+  const { db, template } = await installedReport();
+  const { getSqlite } = await import("@/db");
+  const { listJobs } = await import("@/lib/jobs");
+  // (every job inactive and every entry away: what a new account has)
+  getSqlite().exec("delete from entry_items; delete from time_entries; update jobs set active = 0");
+  assert.equal(listJobs().length, 0);
+  for (const lang of ["en", "de"] as const)
+    for (const view of ["week", "month", "analysis", "day", "jobs", "settings"]) {
+      const o = await openLive(template, db, { view }, lang);
+      assert.deepEqual([o.failures, o.errors], [[], []], `${lang} ${view}`);
+    }
+});

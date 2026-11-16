@@ -14,6 +14,9 @@ const ROOT = process.cwd();
 const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
+// Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
+const PLUGIN_VERSION = "0.3.0";
+const PACKAGE_VERSION = "1.2.0";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -97,7 +100,7 @@ write(
     {
       format: 1,
       id: "zeiterfassung-ext",
-      version: "1.0.0",
+      version: PACKAGE_VERSION,
       name: "Time tracking",
       description: "The report of your booked time: the week and the month, with booking, suggestions and closing the week.",
       icon: "⏱️",
@@ -128,7 +131,7 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "zeiterfassung-ext",
       name: "Time tracking — the report",
-      version: old.version ?? "0.1.0",
+      version: PLUGIN_VERSION,
       description: "The report of your booked time in the view language: the week (booking, suggestions, closing it) and the month, over Zeff's own figures. The core (jobs, projects, bookings, the schedule) stays Zeff's.",
       author: "Zeff",
       apiVersion: 1,

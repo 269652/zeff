@@ -66,7 +66,7 @@
       {{/each}}
       <grid cols=3 gap=2 min=180>
         <input bind="mr_match" label="Title contains"/>
-        <select bind="mr_job" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>
+        {{#if data.r.jobOptions}}<select bind="mr_job" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>{{#else}}<text tone=warn>Create a job first — rules book meetings on a job number.</text>{{/if}}
         <toggle bind="mr_group" label="Group meeting (a mob day)"/>
       </grid>
       <row gap=2>

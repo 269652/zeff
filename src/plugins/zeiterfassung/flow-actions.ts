@@ -546,4 +546,5 @@ async function attachContextLater(entryId: number, ticket: string | null, todoId
   }
 }
 
-extensionPoint<FlowAction[]>("workspace.flowActions").contribute("zeiterfassung", TIME_FLOW_ACTIONS);
+// (Time tracking's core is the kernel's: these reads and writes are there whether or not the built-in screens are installed — the plugin that replaces them needs them.)
+extensionPoint<FlowAction[]>("workspace.flowActions").contribute("core:time", TIME_FLOW_ACTIONS);
