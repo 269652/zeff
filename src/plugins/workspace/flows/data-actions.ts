@@ -170,19 +170,20 @@ export const DATA_ACTIONS: FlowAction[] = [
     group: "todos",
     label: "Add a todo",
     summary: "A todo of yours — through the gate every todo goes through (one that repeats an open one isn't made twice: that one is given back) — with a due day and actions (a transfer …). Needs the flow's todos permission.",
-    input: [f("text", "text", { required: true }), f("due", "text"), f("ops", "json")],
-    output: "{ id }",
+    input: [f("text", "text", { required: true }), f("due", "text"), f("ops", "json"), f("ticket", "text", { help: "A ticket key the todo is on (empty: none)." })],
+    output: "{ id, ref, merged }",
     writes: true,
     run: async (i, ctx) => {
       if (!ctx.perms.todos) throw new Error("This flow may not add todos — grant it under the flow's permissions (todos).");
-      if (ctx.dryRun) return { id: null };
+      if (ctx.dryRun) return { id: null, ref: "", merged: false };
       const { addManualTodo, setTodoDue, setTodoOps } = await import("@/lib/todos/store");
-      const todo = addManualTodo({ ticket: "", text: String(i.text) });
+      const ticket = typeof i.ticket === "string" && /^[A-Za-z][A-Za-z0-9]*-\d+$/.test(i.ticket.trim()) ? i.ticket.trim().toUpperCase() : "";
+      const todo = addManualTodo({ ticket, text: String(i.text) });
       if (typeof i.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(i.due)) setTodoDue(todo.id, i.due);
       const ops = (Array.isArray(i.ops) ? i.ops : []) as { type?: string }[];
       const add = ops.filter((o) => o && typeof o.type === "string" && !todo.ops.some((x) => x.type === o.type));
       if (add.length) setTodoOps(todo.id, [...todo.ops, ...(add as never[])], undefined, true);
-      return { id: todo.id };
+      return { id: todo.id, ref: todo.ref, merged: todo.outcome === "merged" };
     },
   },
   {
