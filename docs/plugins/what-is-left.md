@@ -27,7 +27,7 @@ The platform and the **shared entity graph**, which every app reads and none own
 | people (screens + AI) | 9.2k | the People app, the extraction, the summaries | the entity graph's reads (mostly there) |
 | people (screens + AI) | 9.2k | **AI steps done** (`people-ext`: extraction, overviews, placing contacts, name matching — slice 1); left: the People app's screens (view-data + React parts), widgets, formulas, review/proposal sources, tools, pulse | kit parts for the card, the form and the panels |
 | news (rest) | ~0.8k | stories strip, masonry, topic chips, Today's news, the kept items' database | kit elements (stories, masonry) |
-| todos / work / zeiterfassung (screens) | 20k+ | the boards, the Code tab, the reports | the largest: after the others |
+| todos / work / zeiterfassung (screens) | 20k+ | the boards, the Code tab, the reports | the largest: after the others. **zeiterfassung: week, month, analysis, jobs and schedule screens done as `zeiterfassung-ext`** (kernel reads/writes `time.*`) — left: Feierabend, the entry type / report / meeting rules, the entry forms' parallel work and context, the integration slots; see runtime-conversion.md |
 
 ## Rhythm
 Each: read it, write the kernel reads it needs (generic, never plugin-named), a generator `scripts/port-<name>.mts`, run the lambdas **for real against a copy of the database** (the harness that found the

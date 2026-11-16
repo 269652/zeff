@@ -168,3 +168,108 @@ test("the report's view draws the week with the lambda's data — the form, the 
   assert.match(text, /zeiterfassung\.delete-entry/, "an entry can be deleted");
   assert.deepEqual(draw({ view: "week" }, {}).errors, [], "before the data is there");
 });
+
+test("jobs and projects: the lists are the built-in's; the flows create, change and switch them off through the kernel's writes", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { listJobs } = await import("@/lib/jobs");
+  const { listProjects } = await import("@/lib/projects");
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const lists = async () => run("zeiterfassung.jobs", {});
+  let r = await lists();
+  assert.deepEqual(r.jobs.map((j: any) => j.number), listJobs({ includeInactive: true }).map((j) => j.number));
+  const made = await runFlow("zeiterfassung.job-save", { number: "300001", name: "Neu", customer: "Kunde", description: "", defaultTags: "x, #y" });
+  assert.equal(made.status, "done", JSON.stringify(made));
+  assert.match(String((made.output as any).message), /Created job 300001 — Neu/);
+  r = await lists();
+  const job = r.jobs.find((j: any) => j.number === "300001");
+  assert.equal(job.tags, "#x #y");
+  assert.equal((await runFlow("zeiterfassung.job-save", { id: job.id, name: "Umbenannt" })).status, "done");
+  assert.equal((await lists()).jobs.find((j: any) => j.number === "300001").name, "Umbenannt");
+  assert.equal((await runFlow("zeiterfassung.job-save", { id: job.id, active: "false" })).status, "done");
+  assert.equal((await lists()).jobs.find((j: any) => j.number === "300001").status, "inactive");
+  const dup = await runFlow("zeiterfassung.job-save", { number: "300001", name: "Doppelt" });
+  assert.equal(dup.status, "failed", "a number twice is refused");
+  const p = await runFlow("zeiterfassung.project-save", { title: "Schulung", jobNumber: "100001", customer: "", description: "", startDate: "", endDate: "", defaultTags: "" });
+  assert.equal(p.status, "done", JSON.stringify(p));
+  r = await lists();
+  assert.equal(r.projects.length, listProjects({ includeInactive: true }).length);
+  assert.equal(r.projects.find((x: any) => x.title === "Schulung").jobNumber, "100001");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  for (const state of [{ view: "jobs" }, { view: "jobs", jobedit: String(job.id) }, { view: "jobs", projectedit: String(r.projects[0].id) }]) {
+    const d = renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data: { j: r }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+    assert.deepEqual(d.errors, [], JSON.stringify(state));
+  }
+});
+
+test("schedule settings: the weekly hours, break, flex time and absences — shown as the built-in's, saved through the kernel's writes", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const sch = await import("@/lib/schedule");
+  let r = await run("zeiterfassung.schedule", {});
+  assert.deepEqual(r.days.map((d: any) => d.hours), sch.scheduleHours(sch.getWorkSchedule()));
+  assert.equal(r.h_mon, r.days[0].hours);
+  assert.equal((await runFlow("zeiterfassung.schedule-save", { what: "hours", mon: "6", tue: "6", wed: "6", thu: "6", fri: "6", sat: "0", sun: "0" })).status, "done");
+  assert.deepEqual(sch.scheduleHours(sch.getWorkSchedule()), [6, 6, 6, 6, 6, 0, 0]);
+  assert.equal((await run("zeiterfassung.schedule", {})).hoursHead, "Weekly hours · 30 h/week");
+  const bad = await runFlow("zeiterfassung.schedule-save", { what: "pauses", text: "keine zeit" });
+  assert.equal(bad.status, "failed", "an unreadable break is refused");
+  assert.equal((await runFlow("zeiterfassung.schedule-save", { what: "pauses", text: "12:00-12:30" })).status, "done");
+  assert.equal(sch.getDefaultPauses()[0].start, "12:00");
+  const flex = await runFlow("zeiterfassung.schedule-save", { what: "flex", jobNumber: "100002", comment: "Gleitzeit" });
+  assert.equal(flex.status, "done");
+  assert.equal(sch.getFlexTime().jobNumber, "100002");
+  assert.equal((await runFlow("zeiterfassung.schedule-save", { what: "flex", jobNumber: "999", comment: "" })).status, "failed", "no such job");
+  const added = await runFlow("zeiterfassung.absence", { startDate: "2026-12-14", endDate: "", type: "vacation", hours: "", note: "Urlaub", repeatUntil: "" });
+  assert.equal(added.status, "done", JSON.stringify(added));
+  assert.match(String((added.output as any).message), /Added vacation 2026-12-14\./);
+  r = await run("zeiterfassung.schedule", {});
+  assert.equal(r.absences.length, sch.listAbsences().length);
+  assert.equal(r.absences[0].hours, "full day");
+  assert.equal(sch.getWeekTargets((await import("@/lib/week")).resolveWeek("2026-12-14")!).weekTarget, 24, "the absence takes its day off the target");
+  assert.equal((await runFlow("zeiterfassung.absence", { delete: r.absences[0].id })).status, "done");
+  assert.equal(sch.listAbsences().length, 0);
+  assert.equal((await runFlow("zeiterfassung.absence", { startDate: "2026-12-20", endDate: "2026-12-19", type: "sick" })).status, "failed", "an end before the start");
+  // The flex-time row: a short past day booked on the flex job
+  const w = await run("zeiterfassung.week", { week: "2026-W41" });
+  assert.ok(w.table.flex, "the week offers the flex job");
+  const gap = w.table.flex.days[0];
+  if (gap) assert.equal((await runFlow("zeiterfassung.flex-book", { dates: gap.iso })).status, "done");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const s = await run("zeiterfassung.schedule", {});
+  const d = renderView(template, { rows: [], props: [], titleName: "Name", state: { view: "settings" }, app: {}, data: { s }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  assert.deepEqual(d.errors, []);
+  const dw = renderView(template, { rows: [], props: [], titleName: "Name", state: { view: "week" }, app: {}, data: { w: await run("zeiterfassung.week", { week: "2026-W41" }) }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  assert.deepEqual(dw.errors, []);
+});
+
+test("the port's analysis is the built-in's: the same totals, split by type, weeks and tickets", { skip }, async () => {
+  const { run } = await setup();
+  const { getAnalysis, getEarliestEntryDate } = await import("@/lib/analysis");
+  const { formatHours } = await import("@/lib/format");
+  for (const weeks of [4, 8, 0]) {
+    const a = getAnalysis({ weeks, earliest: getEarliestEntryDate(), ticketScope: "all" });
+    const port = await run("zeiterfassung.analysis", { weeks: String(weeks) });
+    assert.equal(port.hasData, a.hasData, `${weeks}: data`);
+    assert.equal(port.figures.total, a.totalHours, `${weeks}: total`);
+    assert.equal(port.figures.meetingPercent, a.meetingPercent);
+    assert.equal(port.cards[0].value, `${formatHours(a.totalHours)} h`);
+    assert.deepEqual(port.typeSplit.map((x: any) => [x.key, x.hours]), Object.entries(a.byType).filter(([, v]) => v > 0).map(([k, v]) => [k, v]).sort((x, y) => port.typeSplit.findIndex((s: any) => s.key === x[0]) - port.typeSplit.findIndex((s: any) => s.key === y[0])), `${weeks}: hours by type`);
+    assert.equal(port.jobItems.length, a.byJob.length, `${weeks}: hours by job`);
+    assert.deepEqual(port.ticketItems.map((x: any) => x.key), a.topTickets.map((x) => x.ticket), `${weeks}: top tickets`);
+  }
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const port = await run("zeiterfassung.analysis", { weeks: "0" });
+  for (const state of [{ view: "analysis" }, { view: "analysis", asplit: "type", atickets: "mine" }]) {
+    const r = renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data: { a: port }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+    assert.deepEqual(r.errors, [], JSON.stringify(state));
+  }
+});

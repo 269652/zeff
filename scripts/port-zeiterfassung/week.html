@@ -1,4 +1,4 @@
-<data name="w" lambda="zeiterfassung.week" with="week={{ state.week }}, by={{ state.by }}" when="{{ state.view != 'month' }}"/>
+<data name="w" lambda="zeiterfassung.week" with="week={{ state.week }}, by={{ state.by }}" when="{{ state.view == 'week' }}"/>
 <on event="time-changed" action="reload"/>
 {{#if data.w}}
 <col gap=3>
@@ -60,6 +60,12 @@
       <text></text>
     </grid>
     {{#else}}<text tone=muted>{{ data.w.table.empty }}</text>{{/if}}
+    {{#if data.w.table.flex}}
+    <row gap=2 wrap=true align=center>
+      <small><muted>{{ data.w.table.flex.job }} · {{ data.w.table.flex.comment }}</muted></small>
+      {{#each data.w.table.flex.days}}<button run="zeiterfassung.flex-book" with="dates={{ iso }}" emit="time-changed" done="Booked." label="{{ label }} −{{ gap }}" variant=plain/>{{/each}}
+    </row>
+    {{/if}}
   </section>
 
   <section title="Add entry">

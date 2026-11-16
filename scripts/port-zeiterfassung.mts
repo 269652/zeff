@@ -23,6 +23,9 @@ const part = (name: string) => (fs.existsSync(path.join(SRC, name)) ? fs.readFil
 fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; timeoutMs: number }> = {
+  "zeiterfassung.jobs": { label: "Time tracking: jobs and projects", what: "The jobs and the projects as the Jobs and Projects pages list them, with the job options of a form.", zeff: ["time.jobs"], timeoutMs: 30000 },
+  "zeiterfassung.schedule": { label: "Time tracking: the schedule settings", what: "The weekly hours, the default break, the flex-time job and the absences with their words.", zeff: ["time.schedule"], timeoutMs: 30000 },
+  "zeiterfassung.analysis": { label: "Time tracking: the analysis", what: "The analysis of the booked time — the cards, the split by type, hours by job, the weeks, the Jira metrics where tickets are synced, tags and top tickets.", zeff: ["time.analysis"], timeoutMs: 60000 },
   "zeiterfassung.week": { label: "Time tracking: the week's report", what: "The weekly report's figures and words for a week — the booked card, hours per job and day, the closing steps, the suggestions, what was done today, the report, the entries.", zeff: ["time.week"], timeoutMs: 60000 },
   "zeiterfassung.month": { label: "Time tracking: the month's report", what: "The monthly report's figures and words for a month — the booked card, the calendar, hours per job and week, by type and tag, what each job's time went to.", zeff: ["time.month"], timeoutMs: 60000 },
 };
@@ -33,14 +36,20 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
 
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
-  '<state name="view" value="week" keep=true/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/>',
+  '<state name="view" value="week" keep=true/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
-  '<tabs bind="view" options="week:Week, month:Month"/>',
+  '<tabs bind="view" options="week:Week, month:Month, analysis:Analysis, jobs:Jobs, settings:Settings"/>',
   "{{#if state.view == 'month'}}",
   part("month.html"),
+  "{{#else}}{{#if state.view == 'analysis'}}",
+  part("analysis.html"),
+  "{{#else}}{{#if state.view == 'jobs'}}",
+  part("jobs.html"),
+  "{{#else}}{{#if state.view == 'settings'}}",
+  part("settings.html"),
   "{{#else}}",
-  part("week.html") || '<text tone=muted>…</text>',
-  "{{/if}}",
+  part("week.html"),
+  "{{/if}}{{/if}}{{/if}}{{/if}}",
 ].join("\n");
 write("views/report.html", report);
 
@@ -67,6 +76,11 @@ const flow = (id: string, name: string, title: string, description: string, acti
 });
 const i = (...names: string[]) => Object.fromEntries(names.map((n) => [n, `{{ input.${n} }}`]));
 const FLOWS = [
+  flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment")),
+  flow("f9", "zeiterfassung.flex-book", "Book the missing hours on the flex-time job", "The missing hours of the given days (input dates) booked on the flex-time job. Run by the report.", "time.flex-book", i("dates")),
+  flow("f10", "zeiterfassung.absence", "Add or delete an absence", "An absence added (startDate, endDate, type, hours, note, repeatUntil) or deleted (input delete: its id). Run by the Settings tab.", "time.absence", i("delete", "startDate", "endDate", "type", "hours", "note", "repeatUntil")),
+  flow("f6", "zeiterfassung.job-save", "Create or change a job", "A job: without id created, with id changed (number, name, customer, description, defaultTags, active). Run by the Jobs tab.", "time.job-save", i("id", "number", "name", "customer", "description", "defaultTags", "active")),
+  flow("f7", "zeiterfassung.project-save", "Create or change a project", "A project: without id created, with id changed (title, description, customer, jobNumber, startDate, endDate, defaultTags, active). Run by the Jobs tab.", "time.project-save", i("id", "title", "description", "customer", "jobNumber", "startDate", "endDate", "defaultTags", "active")),
   flow("f1", "zeiterfassung.add-entry", "Book time", "Books an entry (input date, hours, description, bookOn j:<job number> or p:<project id>, ticket, type, tags, comment). Run by the report's form.", "time.entry-add", i("date", "hours", "description", "bookOn", "ticket", "type", "tags", "comment")),
   flow("f2", "zeiterfassung.entry-hours", "Change the hours of an entry", "Sets the hours of one entry (input id, hours). Run by the report.", "time.entry-hours", i("id", "hours")),
   flow("f3", "zeiterfassung.delete-entry", "Delete an entry", "Deletes one booked entry (input id). Run by the report.", "time.entry-delete", i("id")),
