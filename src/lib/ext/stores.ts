@@ -21,8 +21,14 @@ export type Where = Record<string, string | number | boolean | null>;
  */
 export const ADOPTABLE: Record<string, string[]> = {
   "cases-ext": ["cases", "case_sources", "case_parties", "bank_transactions", "case_warnings"],
+  // (Finances reads the cases and their parties — the debts they hold)
+  "finances-ext": ["cases", "case_parties"],
   // (keep_own_notes: only read — which of your boards' notes are synced with Google Keep)
   "keep-ext": ["keep_notes", "keep_own_notes"],
+  // (what became of each open loop: closed, dismissed, a proposal to close it, put off)
+  "loops-ext": ["loops_state"],
+  // (News: its sources, items, what was cleared away, the words it learned and the finds for an item)
+  "news-ext": ["news_sources", "news_items", "news_gone", "news_terms", "news_similar"],
 };
 
 /**
@@ -31,12 +37,15 @@ export const ADOPTABLE: Record<string, string[]> = {
  */
 export const ADOPTABLE_PREFS: Record<string, string[]> = {
   "finances-ext": ["finances.ownAccounts", "cases.income", "cases.incomeFacts"],
+  "auto-actions-ext": ["autoactions:offered"],
+  "know-ext": ["know.autoSummary"],
+  "news-ext": ["news:prefs", "news:taste", "news:digest", "news:funnel-stats", "news:discover-queries", "news:autodiscover-at", "news:lowdiscover-at", "news:low-turn", "news:discoveries", "news:expand-at"],
 };
 
 /** The built-ins' sources their ports may stand in for (a source's `replaces`), by the port's plugin id: the databases that read it go on. */
 export const REPLACEABLE_SOURCES: Record<string, string[]> = {
   "cases-ext": ["cases"],
-  "finances-ext": ["recurring"],
+  "finances-ext": ["recurring", "debts"],
 };
 
 const SQL_TYPE: Record<Column["type"], string> = { text: "text", integer: "integer", real: "real", json: "text" };

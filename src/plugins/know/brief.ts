@@ -27,6 +27,7 @@ import { getEntity } from "@/plugins/entities/store";
 import { openLoopsFor } from "./loops";
 import type { Brief, BriefEvent, BriefFact, BriefLink, BriefMeeting, BriefPerson, BriefStale } from "./shared";
 import { localStamp } from "@/lib/dates";
+import { financesThere } from "@/lib/finances/there";
 
 /** How far back the brief reads the timeline, and how much of it shows. */
 const SINCE_DAYS = 180;
@@ -234,7 +235,7 @@ function personOf(id: number, L: Labels, now: Date, allowedEvents: (ref: string)
 
 /** Money between you and your people (Finances), when the reader may see it: null otherwise. */
 async function moneyMap(L: Labels, hide: () => void): Promise<Map<number, { owe: number; owed: number }> | null> {
-  if (!isInstalled("finances")) return null;
+  if (!financesThere()) return null;
   try {
     const { balances, debtsDbId } = await import("@/plugins/finances/debts");
     const db = debtsDbId();

@@ -28,6 +28,13 @@ export const PORTS: Port[] = [
   { builtin: "keep", plugin: "keep-ext", switch: async () => (await import("./keep/to-plugin")).switchKeepToPlugin() },
   { builtin: "revolut", plugin: "revolut-ext", switch: async () => (await import("./revolut/to-plugin")).switchRevolutToPlugin() },
   { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },
+  { builtin: "questions", plugin: "questions-ext", switch: async () => (await import("./plain-port")).switchPlainToPlugin("questions", "questions-ext") },
+  { builtin: "news", plugin: "news-ext", switch: async () => (await import("./news/to-plugin")).switchNewsToPlugin() },
+  { builtin: "loops", plugin: "loops-ext", switch: async () => (await import("./loops/to-plugin")).switchLoopsToPlugin() },
+  { builtin: "know", plugin: "know-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("know", { port: "know-ext", flow: "know.summarize", minutes: async () => 0 }) },
+  { builtin: "auto-actions", plugin: "auto-actions-ext", switch: async () => (await import("./connector-port")).switchConnectorToPlugin("auto-actions", { port: "auto-actions-ext", flow: "autoactions.review", minutes: async () => (await import("@/lib/runs/store")).getBoardSettings().autoMinutes }) },
+  { builtin: "finances", plugin: "finances-ext", switch: async () => (await import("./finances/to-plugin")).switchFinancesToPlugin() },
+  { builtin: "knowledge", plugin: "knowledge-ext", switch: async () => (await import("./knowledge/to-plugin")).switchKnowledgeToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

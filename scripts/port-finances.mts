@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { build } from "esbuild";
+import { debtsViewTemplate } from "./port-finances/debts-view.mjs";
 
 const ROOT = process.cwd();
 const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
@@ -36,10 +37,26 @@ const KEYS = [
   "Stays above {amount}",
   "lowest {amount} on {date}",
   "Income",
+  "I owe",
+  "No metrics yet — Workspace → Metrics.",
+  "{n} of {running} running, {amount} a month",
+  "Every subscription is in your contracts.",
+  "No recurring payments in your bank bookings.",
+  "Add to {db}",
+  "next {date}",
+  "last {date}",
+  "{amount} a month",
+  "Contracts",
+  "There is no contracts database yet (Workspace → templates → Contracts).",
+  "This payment isn't recurring any more.",
   "Monthly",
   "Quarterly",
   "Yearly",
   "{n} d overdue", "today", "tomorrow", "in {n} d", "No payments due.", "Nothing comes back in these days.", "Creditors overview", "Debtors overview"];
+for (const m of fs.readFileSync(path.join(ROOT, "src", "plugins", "finances", "view-data.ts"), "utf8").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
+  const k = JSON.parse('"' + m[1] + '"');
+  if (!KEYS.includes(k)) KEYS.push(k);
+}
 const strings: Record<string, Record<string, string>> = {};
 for (const lang of ["de", "es"]) {
   const file = path.join(repo, "plugins", `lang-${lang}`, "bundle.json");
@@ -47,7 +64,8 @@ for (const lang of ["de", "es"]) {
   strings[lang] = Object.fromEntries(KEYS.filter((k) => pack[k]).map((k) => [k, pack[k]]));
 }
 const lib = await build({
-  stdin: { contents: `import { setPluginStrings, translator, isLang } from "@/lib/i18n/shared";\nconst STRINGS = ${JSON.stringify(strings)};\nsetPluginStrings((lang) => STRINGS[lang] ?? {});\nexport const tFor = (lang) => translator(isLang(lang) ? lang : "en");\nexport { schedule, summarize } from "@/plugins/finances/plans";\nexport { DEBT } from "@/plugins/finances/fields";\nexport { movedOnly, recurringFlows, matchContracts, cashflowFlows, forecast } from "@/plugins/finances/insights";\nexport { detectRecurring, STRICT } from "@/plugins/finances/recurring";\nexport { classifyNoise } from "@/lib/noise";\nexport { CONTRACT } from "@/plugins/workspace/contract-fields";\nexport { recipientKey } from "@/plugins/finances/recurring";`, resolveDir: ROOT, loader: "ts", sourcefile: "finances-port.ts" },
+  stdin: { contents: `import { setPluginStrings, translator, isLang } from "@/lib/i18n/shared";\nconst STRINGS = ${JSON.stringify(strings)};\nsetPluginStrings((lang) => STRINGS[lang] ?? {});\nexport const tFor = (lang) => translator(isLang(lang) ? lang : "en");\nexport { schedule, summarize } from "@/plugins/finances/plans";\nexport { DEBT } from "@/plugins/finances/fields";\nexport { movedOnly, recurringFlows, matchContracts, cashflowFlows, forecast } from "@/plugins/finances/insights";\nexport { detectRecurring, STRICT } from "@/plugins/finances/recurring";\nexport { classifyNoise } from "@/lib/noise";\nexport { caseFromRow, standingOf, paymentOf } from "@/plugins/cases/core";\nexport { debtsAppData } from "@/plugins/finances/view-data";\nexport { caseTitle } from "@/plugins/cases/shared";
+export { amountIn } from "@/lib/girocode";\nexport { CONTRACT } from "@/plugins/workspace/contract-fields";\nexport { recipientKey } from "@/plugins/finances/recurring";`, resolveDir: ROOT, loader: "ts", sourcefile: "finances-port.ts" },
   bundle: true,
   format: "esm",
   platform: "neutral",
@@ -397,9 +415,277 @@ write(
   JSON.stringify({ name: "finances.recurring", label: "Finances: the recurring payments", what: "The recurring payments of your bank statements as records: each running contract or subscription, what it costs a payment and a month, its rhythm, when last paid and next.", kind: "function", zeff: ["bank.bookings", "people.list", "people.by-iban", "pref.get"], timeoutMs: 60000, memoryMb: 256 }, null, 2) + "\n",
 );
 
+write(
+  "lambdas/finances.debts/index.mjs",
+  `import { DEBT, caseFromRow, caseTitle, standingOf, tFor } from "./lib.mjs";
+
+/** Every row of a store (pages of 500). */
+async function all(zeff, store) {
+  const out = [];
+  for (let offset = 0; ; offset += 500) {
+    const { rows, total } = await zeff.call("store.query", { store, limit: 500, offset });
+    out.push(...rows);
+    if (!rows.length || out.length >= total) return out;
+  }
+}
+
+/**
+ * The cases' debts as records (the source "debts"): a case with money open is a row of the debts database, its figures what its letters say (the
+ * payments since counted). The built-in's debtRecords, rule for rule.
+ */
+export async function handler(_event, context) {
+  const t = tFor(context.language);
+  const zeff = context.zeff;
+  const cases = (await all(zeff, "finances-ext.cases"))
+    .map(caseFromRow)
+    .filter((c) => c.status === "open" && c.compiled && !c.compiled.manual && !c.compiled.done)
+    .sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+  if (!cases.length) return [];
+  const { allocations } = await zeff.call("money.allocations", { refs: cases.map((c) => "case:" + c.id) });
+  // The parties (a contact gone: none).
+  const parties = await all(zeff, "finances-ext.parties");
+  const ids = [...new Set(parties.map((r) => r.person_id).filter(Boolean))];
+  const { names } = ids.length ? await zeff.call("people.names", { ids }) : { names: {} };
+  const partyOf = (caseId, role) => {
+    const r = parties.find((x) => x.case_id === caseId && x.role === role && names[x.person_id]);
+    return r ? r.person_id : null;
+  };
+  return cases.flatMap((c) => {
+    const s = c.compiled;
+    const open = standingOf(c, allocations["case:" + c.id] ?? []).open ?? s.open;
+    if (open == null || open <= 0) return [];
+    const creditor = partyOf(c.id, "creditor");
+    const collector = partyOf(c.id, "collector");
+    return [
+      {
+        ref: "case:" + c.id,
+        title: caseTitle(c),
+        fields: {},
+        updatedAt: c.updatedAt,
+        dataType: "debts",
+        typed: [
+          { id: DEBT.dir, name: "Direction", type: "select", value: t("I owe") },
+          // The case's person is who writes — often who collects it (a bailiff), not whom it is owed to: never taken for the creditor; with no
+          // parties known yet it stands as who collects it.
+          { id: DEBT.creditor, name: "Other side", type: "person", value: creditor ? [creditor] : [] },
+          { id: DEBT.collector, name: "Collected by", type: "person", value: collector ? [collector] : !creditor && c.personId ? [c.personId] : [] },
+          { id: DEBT.total, name: "Total", type: "number", format: "euro", value: s.total },
+          { id: DEBT.open, name: "Open", type: "number", format: "euro", value: open },
+          { id: DEBT.rate, name: "Instalment", type: "number", format: "euro", value: s.installment },
+          { id: DEBT.due, name: "Next due", type: "date", value: s.nextDue },
+          { id: DEBT.day, name: "Plan's day", type: "number", value: s.installmentDay ?? null },
+          { id: DEBT.case, name: "Case number", type: "text", value: c.label },
+          { id: DEBT.next, name: "Next", type: "text", value: s.nextWhat },
+        ],
+      },
+    ];
+  });
+}
+`,
+);
+write(
+  "lambdas/finances.debts/lambda.json",
+  JSON.stringify({ name: "finances.debts", label: "Finances: the cases' debts", what: "The cases with money open as debts — creditor, who collects it, total, open, instalment, due day — as records of the debts database.", kind: "function", zeff: ["store.query", "money.allocations", "people.names"], timeoutMs: 60000, memoryMb: 256 }, null, 2) + "\n",
+);
+
+// The lambdas kept as plain files (scripts/port-finances/*.mjs): copied, the shared contracts helpers put where //@CONTRACTS stands.
+const SRC = path.join(ROOT, "scripts", "port-finances");
+const shared = fs.readFileSync(path.join(SRC, "_contracts.mjs"), "utf8");
+const LAMBDAS: Record<string, { what: string; zeff: string[]; label: string; memoryMb: number }> = {
+  "finances.debts-app": { label: "Finances: the debts view's data", what: "What the debts overview reads as app.*: the open, the instalments, debt-free, what is left, each debt as a line with its plan in words, the creditors and the fixed costs for the charts — the built-in's own figures.", zeff: ["zeff.places", "db.cells", "store.query", "money.allocations", "people.details", "people.accounts", "people.list", "people.commitments", "pref.get", "workspace.value"], memoryMb: 256 },
+  "finances.widget-figures": { label: "Finances: debts in figures", what: "The widget's tiles: what is open, the instalments a month, when you are debt-free and what is left of your income — or the same for what you are owed.", zeff: ["metrics.stats"], memoryMb: 128 },
+  "finances.widget-subscriptions": { label: "Finances: subscriptions not in your contracts", what: "The widget's list: what goes out regularly but isn't in your contracts database, with its cost a month and next payment.", zeff: ["bank.bookings", "pref.get", "workspace.value-sources"], memoryMb: 256 },
+  "finances.subscription-row": { label: "Finances: a subscription as a contracts row", what: "A subscription (by its recipient's key) as the row it becomes in the contracts database: its title and values by the fields' names.", zeff: ["bank.bookings", "workspace.value-sources"], memoryMb: 256 },
+  "finances.bank-docs": { label: "Finances: the bank statements for the knowledge server", what: "A page per account and month — what came in by sender, the largest payments out by recipient — the knowledge server keeps your income from them.", zeff: ["bank.bookings"], memoryMb: 128 },
+  "finances.accounts-app": { label: "Finances: your own accounts", what: "The recipients of your transfers of the last six months with what you marked them as — the list of the own-accounts page.", zeff: ["bank.bookings", "pref.get"], memoryMb: 128 },
+  "finances.account-mark": { label: "Finances: mark an account", what: "A recipient marked as an account of yours, a credit account, or neither (the preference finances.ownAccounts).", zeff: ["pref.get"], memoryMb: 128 },
+  "finances.income-refresh": { label: "Finances: your income from the knowledge", what: "What the knowledge server read about your net income off your statements, kept for the income Kennzahlen and the debts overview.", zeff: ["knowledge.profile"], memoryMb: 128 },
+  "finances.formula": { label: "Finances: the snapshot of Schulden, Forderungen, Rate", what: "What you owe or are owed, or pay a month, summed per contact — the snapshot the formulas Schulden(@Person), Forderungen, Rate read.", zeff: ["zeff.places", "db.cells"], memoryMb: 128 },
+};
+for (const [name, l] of Object.entries(LAMBDAS)) {
+  write(`lambdas/${name}/index.mjs`, fs.readFileSync(path.join(SRC, `${name}.mjs`), "utf8").replace("//@CONTRACTS", shared));
+  write(`lambdas/${name}/lambda.json`, JSON.stringify({ name, label: l.label, what: l.what, kind: "function", zeff: l.zeff, timeoutMs: 60000, memoryMb: l.memoryMb }, null, 2) + "\n");
+}
+// The flow behind the Subscriptions widget's button (its package: you allow it to write when it is installed).
+write(
+  "finances.package.json",
+  JSON.stringify(
+    {
+      format: 1,
+      id: "finances-ext",
+      version: "0.2.0",
+      name: "Finances",
+      description: "The flow behind the Subscriptions widget's button.",
+      icon: "💶",
+      localize: true,
+      items: [
+        { id: "i1", kind: "page", title: "Finances", icon: "💶", content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "The flow below adds a subscription to your contracts database — what the button of the Subscriptions widget runs." }] }] } },
+        {
+          id: "i2",
+          parent: "i1",
+          kind: "page",
+          title: "Add a subscription to the contracts",
+          icon: "➕",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "finances.add-subscription",
+            title: "Add a subscription to the contracts",
+            description: "A recurring payment as a row of your contracts database — run by the Subscriptions widget's button with { action: add, payload: { id } }.",
+            inputs: [],
+            nodes: [
+              { id: "row", kind: "action", action: "lambda.invoke", input: { name: "finances.subscription-row", event: { key: "{{ input.payload.id }}" } } },
+              { id: "add", kind: "action", action: "db.add", input: { database: "{{ steps.row.database }}", title: "{{ steps.row.title }}", values: "{{ steps.row.values }}" } },
+            ],
+            requested: { write: "all" },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
+          id: "i4",
+          parent: "i1",
+          kind: "page",
+          title: "A promise as a debt",
+          icon: "🤝",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "finances.debt-from-claim",
+            title: "A promise as a debt",
+            description: "A promise with an amount written down as a debt or a claim: the contact, the amount, the due day, the promise it came from. Run by the debts overview's suggestions.",
+            inputs: [],
+            nodes: [
+              { id: "who", kind: "action", action: "people.contacts", input: { items: [{ name: "{{ input.who }}", make: true }] } },
+              { id: "places", kind: "action", action: "zeff.places", input: {} },
+              {
+                id: "add",
+                kind: "action",
+                action: "db.add-cells",
+                input: {
+                  database: "{{ steps.places.debts }}",
+                  title: "{{ input.who }}",
+                  cells: { debtdir: "{{ input.dir | default('owe') }}", debtcreditor: "{{ steps.who.ids }}", debttotal: "{{ input.amount }}", debtopen: "{{ input.amount }}", debtdue: "{{ input.due }}", debtclaim: "{{ input.claim }}" },
+                },
+              },
+            ],
+            requested: { write: "all", api: true },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
+          id: "i8",
+          parent: "i1",
+          kind: "page",
+          title: "Refresh your income",
+          icon: "💰",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "finances.refresh-income",
+            title: "Refresh your income from the knowledge",
+            description: "Reads what the knowledge server knows about your income off your statements and keeps it. Run after the briefing (and daily).",
+            inputs: [],
+            nodes: [
+              { id: "income", kind: "action", action: "lambda.invoke", input: { name: "finances.income-refresh", event: {} } },
+              { id: "keep", kind: "if", when: "{{ steps.income.ok }}", then: [{ id: "set", kind: "action", action: "pref.set", input: { plugin: "finances-ext", key: "cases.incomeFacts", value: "{{ steps.income.facts }}" } }], else: [] },
+            ],
+            requested: { write: "all" },
+            triggers: [{ kind: "manual" }, { kind: "schedule", everyMinutes: 720 }],
+          },
+        },
+        {
+          id: "i6",
+          parent: "i1",
+          kind: "page",
+          title: "Mark an account",
+          icon: "🏦",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "finances.mark-account",
+            title: "Mark an account as yours",
+            description: "A recipient of your transfers marked as an account of your own, a credit account, or neither. Run by the own-accounts page.",
+            inputs: [],
+            nodes: [
+              { id: "mark", kind: "action", action: "lambda.invoke", input: { name: "finances.account-mark", event: { key: "{{ input.key }}", kind: "{{ input.kind }}" } } },
+              { id: "set", kind: "action", action: "pref.set", input: { plugin: "finances-ext", key: "finances.ownAccounts", value: "{{ steps.mark.value }}" } },
+            ],
+            requested: { write: "all" },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
+          id: "i7",
+          parent: "i1",
+          kind: "database",
+          title: "Your own accounts",
+          icon: "🏦",
+          schema: {
+            titleName: "Settings",
+            properties: [],
+            views: [{ id: "vacc1", name: "Your own accounts", type: "app", filter: { op: "and", rules: [] }, sorts: [], hidden: [], app: "template", template: "<state name=\"x\" value=\"\"/>\n<data name=\"acc\" lambda=\"finances.accounts-app\"/>\n<on event=\"mark-changed\" action=\"reload\"/>\n<text tone=muted>Money you send to an account of your own is no spending: a second current account or a depot (it only moved), a credit card or loan account you pay into (it pays a debt off). Mark those recipients here — Ausgaben and Sparquote leave them out, and they aren't suggested as contracts. Pockets and savings with money going both ways are recognised by themselves.</text>\n{{#if not data.acc}}<muted>Loading …</muted>{{#else}}\n{{#if data.acc.any}}\n<list source=\"data.acc.recipients\" open=true>\n  <row wrap=false gap=2>\n    <col fill=true><b>{{ name }}</b><small><muted>{{ count }}× · {{ out | euro }} · {{ last }}{{#if moved}} · only moves there and back{{/if}}</muted></small></col>\n    <button run=\"finances.mark-account\" with=\"key={{ key }}, kind=own\" emit=\"mark-changed\" label=\"Mine\" variant=\"{{ kind == 'own' ? 'primary' : 'plain' }}\"/>\n    <button run=\"finances.mark-account\" with=\"key={{ key }}, kind=credit\" emit=\"mark-changed\" label=\"Credit\" variant=\"{{ kind == 'credit' ? 'primary' : 'plain' }}\"/>\n    <button run=\"finances.mark-account\" with=\"key={{ key }}, kind=\" emit=\"mark-changed\" label=\"No\" variant=\"quiet\"/>\n  </row>\n</list>\n{{#else}}<muted>No transfers in your bank statements of the last six months.</muted>{{/if}}\n{{/if}}" }],
+          },
+          rows: [{ id: "r1", title: "Your own accounts", cells: {}, content: { type: "doc", content: [{ type: "paragraph" }] } }],
+        },
+        {
+          id: "i5",
+          parent: "i1",
+          kind: "page",
+          title: "Change who is on a debt's other side",
+          icon: "✎",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "finances.set-side",
+            title: "Change who is on a debt's other side",
+            description: "The contact on a debt's other side changed (made when there is none of that name). Run by the debts overview.",
+            inputs: [],
+            nodes: [
+              { id: "who", kind: "action", action: "people.contacts", input: { items: [{ name: "{{ input.who }}", make: true }] } },
+              { id: "set", kind: "action", action: "db.set-cells", input: { row: "{{ input.row }}", cells: { debtcreditor: "{{ steps.who.ids }}" } } },
+            ],
+            requested: { write: "all", api: true },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+        {
+          id: "i3",
+          parent: "i1",
+          kind: "page",
+          title: "Add a debt or a claim",
+          icon: "💶",
+          content: { type: "doc", content: [{ type: "paragraph" }] },
+          flow: {
+            name: "finances.add-debt",
+            title: "Add a debt or a claim",
+            description: "A debt of your own (or a claim): the other side a contact — made when there is none of that name —, what for, the amount, the instalment, the next due day. Run by the debts overview's form.",
+            inputs: [],
+            nodes: [
+              { id: "who", kind: "action", action: "people.contacts", input: { items: [{ name: "{{ input.who }}", make: true }] } },
+              { id: "places", kind: "action", action: "zeff.places", input: {} },
+              {
+                id: "add",
+                kind: "action",
+                action: "db.add-cells",
+                input: {
+                  database: "{{ steps.places.debts }}",
+                  title: "{{ input.what | default(input.who) }}",
+                  cells: { debtdir: "{{ input.dir | default('owe') }}", debtcreditor: "{{ steps.who.ids }}", debttotal: "{{ input.amount }}", debtopen: "{{ input.amount }}", debtrate: "{{ input.installment }}", debtdue: "{{ input.due }}" },
+                },
+              },
+            ],
+            requested: { write: "all", api: true },
+            triggers: [{ kind: "manual" }],
+          },
+        },
+      ],
+    },
+    null,
+    2,
+  ) + "\n",
+);
+
+// The debts overview: the built-in's template converted (scripts/port-finances/debts-view.mts).
+write("views/debts.html", debtsViewTemplate());
 const href = "/workspace";
 void href;
-const M = (id: string, label: string, unit: string, what: string, which: string) => ({ id, label, unit, what, lambda: "finances.metric", args: { which }, everyMinutes: 15 });
+const col = (name: string, type = "text") => ({ name, type });
+const M = (id: string, label: string, unit: string, what: string, which: string) => ({ id, label, unit, what, lambda: "finances.metric", args: { which }, replaces: "finances", everyMinutes: 15 });
 const old = fs.existsSync(path.join(dir, "zeff-plugin.json")) ? (JSON.parse(fs.readFileSync(path.join(dir, "zeff-plugin.json"), "utf8")) as { version?: string }) : {};
 write(
   "zeff-plugin.json",
@@ -415,7 +701,29 @@ write(
       permissions: [],
       contributes: {
         lambdas: "lambdas",
+        stores: [
+          { name: "cases", adopts: "cases", key: "id", columns: [col("id", "integer"), col("key"), col("label"), col("status"), col("person_id", "integer"), col("note"), col("compiled"), col("overrides"), col("created_at"), col("updated_at"), col("last_at")] },
+          { name: "parties", adopts: "case_parties", key: ["case_id", "role"], columns: [col("case_id", "integer"), col("role"), col("person_id", "integer"), col("source")] },
+        ],
+        workspacePackages: ["finances.package.json"],
+        appViews: [{ id: "overview", dataType: "debts", label: "Debts and claims", icon: "💶", template: "views/debts.html" }],
+        knowledgeDocs: [{ id: "bank", lambda: "finances.bank-docs", args: {}, everyMinutes: 30, replaces: "finances" }],
+        personFormulas: [
+          { name: "Schulden", aliases: ["Debts", "Deudas"], unit: "€", what: "What you owe them, still open — a circle: one number per person; empty: all you owe", lambda: "finances.formula", args: { which: "owe-open" }, everyMinutes: 5 },
+          { name: "Forderungen", aliases: ["Claims", "Owed"], unit: "€", what: "What they owe you, still open — a circle: one number per person; empty: all you are owed", lambda: "finances.formula", args: { which: "owed-open" }, everyMinutes: 5 },
+          { name: "Rate", aliases: ["Instalment", "Installment"], unit: "€/Monat", what: "What you pay them a month (the plans running now)", lambda: "finances.formula", args: { which: "owe-rate" }, everyMinutes: 5 },
+        ],
         sources: [
+          {
+            id: "debts",
+            label: "Debts",
+            icon: "💶",
+            hint: "The cases with money open as debts — creditor, who collects it, total, open, instalment, due day. Rows of your own go beside them.",
+            lambda: "finances.debts",
+            replaces: "debts",
+            noNewRows: false,
+            lockedFields: ["debtdir", "debtcreditor", "debtcollector", "debttotal", "debtopen", "debtrate", "debtdue", "debtday", "debtcase", "debtnext", "debtclaim"],
+          },
           {
             id: "recurring",
             label: "Recurring payments",
@@ -428,6 +736,32 @@ write(
           },
         ],
         widgets: [
+          {
+            id: "figures",
+            label: "Debts in figures",
+            icon: "💶",
+            description: "What is open, the instalments a month, when you are debt-free and what is left of your income — or the same for what you are owed.",
+            size: "full",
+            ttl: 60,
+            replaces: "finances.figures",
+            lambda: "finances.widget-figures",
+            settings: [
+              { key: "dir", label: "Whose", kind: "select", default: "owe", options: [{ value: "owe", label: "What I owe" }, { value: "owed", label: "What I am owed" }] },
+              { key: "names", label: "Which metrics (names, commas; empty: usual)", kind: "text", default: "" },
+            ],
+          },
+          {
+            id: "subscriptions",
+            label: "Subscriptions not in your contracts",
+            icon: "🔁",
+            description: "What goes out regularly but isn't in your contracts database: each with its cost a month and next payment, one click adds it.",
+            size: "half",
+            ttl: 300,
+            replaces: "finances.subscriptions",
+            lambda: "finances.widget-subscriptions",
+            actFlow: "finances.add-subscription",
+            settings: [{ key: "limit", label: "How many", kind: "number", default: 8, min: 1, max: 30 }],
+          },
           {
             id: "payments",
             label: "Payments coming up",
@@ -460,22 +794,22 @@ write(
           },
         ],
         metrics: [
-          M("owe-open", "Schuldenstand (Plugin)", "€", "What you owe in all, still open", "owe-open"),
-          M("owe-count", "Offene Schulden (Plugin)", "", "How many debts are still open", "owe-count"),
-          M("rates", "Tilgungsrate (Plugin)", "€/Monat", "The instalments you pay a month (the plans running now)", "rates"),
-          M("free-in", "Schuldenfrei in (Plugin)", "Monate", "Months until the last debt with a plan is paid off", "free-in"),
-          M("owe-unplanned", "Schulden ohne Plan (Plugin)", "€", "What you owe without a payment plan", "owe-unplanned"),
-          M("owed-open", "Forderungen (Plugin)", "€", "What others owe you, still open", "owed-open"),
-          M("owed-count", "Offene Forderungen (Plugin)", "", "How many debts others have with you, still open", "owed-count"),
-          M("owed-rates", "Rückzahlungen (Plugin)", "€/Monat", "What comes back to you a month", "owed-rates"),
-          M("owed-free-in", "Alles zurück in (Plugin)", "Monate", "Months until the last debt to you with a plan is paid back", "owed-free-in"),
-          M("owed-unplanned", "Forderungen ohne Plan (Plugin)", "€", "What you are owed without a payment plan", "owed-unplanned"),
-          M("income", "Nettoeinkommen (Plugin)", "€/Monat", "Your net income a month (set by hand, or read off your statements)", "income"),
-          M("spending", "Ausgaben (Plugin)", "€/Monat", "What was spent a month — the last three whole months of your bank statements, on average", "spending"),
-          M("credit", "Auf Kreditkonten (Plugin)", "€/Monat", "What went to the accounts you marked as credit accounts a month", "credit"),
-          M("free-monthly", "Frei im Monat (Plugin)", "€/Monat", "What is left of your income after the instalments and the fixed costs", "free-monthly"),
-          M("savings-rate", "Sparquote (Plugin)", "%", "Of your income, the part that didn't go out", "savings-rate"),
-          M("debt-service-rate", "Schuldendienstquote (Plugin)", "%", "Of your income, the part the instalments take", "debt-service-rate"),
+          M("owe-open", "Schuldenstand", "€", "What you owe in all, still open", "owe-open"),
+          M("owe-count", "Offene Schulden", "", "How many debts are still open", "owe-count"),
+          M("rates", "Tilgungsrate", "€/Monat", "The instalments you pay a month (the plans running now)", "rates"),
+          M("free-in", "Schuldenfrei in", "Monate", "Months until the last debt with a plan is paid off", "free-in"),
+          M("owe-unplanned", "Schulden ohne Plan", "€", "What you owe without a payment plan", "owe-unplanned"),
+          M("owed-open", "Forderungen", "€", "What others owe you, still open", "owed-open"),
+          M("owed-count", "Offene Forderungen", "", "How many debts others have with you, still open", "owed-count"),
+          M("owed-rates", "Rückzahlungen", "€/Monat", "What comes back to you a month", "owed-rates"),
+          M("owed-free-in", "Alles zurück in", "Monate", "Months until the last debt to you with a plan is paid back", "owed-free-in"),
+          M("owed-unplanned", "Forderungen ohne Plan", "€", "What you are owed without a payment plan", "owed-unplanned"),
+          M("income", "Nettoeinkommen", "€/Monat", "Your net income a month (set by hand, or read off your statements)", "income"),
+          M("spending", "Ausgaben", "€/Monat", "What was spent a month — the last three whole months of your bank statements, on average", "spending"),
+          M("credit", "Auf Kreditkonten", "€/Monat", "What went to the accounts you marked as credit accounts a month", "credit"),
+          M("free-monthly", "Frei im Monat", "€/Monat", "What is left of your income after the instalments and the fixed costs", "free-monthly"),
+          M("savings-rate", "Sparquote", "%", "Of your income, the part that didn't go out", "savings-rate"),
+          M("debt-service-rate", "Schuldendienstquote", "%", "Of your income, the part the instalments take", "debt-service-rate"),
         ],
       },
     },

@@ -13,6 +13,7 @@ import { ensureSystemPrompts, systemPrompts } from "@/lib/prompts";
 import { llmChoice } from "@/plugins/llm/run";
 import { getLlmSettings } from "@/plugins/llm/settings";
 import { LLM_TASKS } from "@/plugins/llm/tasks";
+import { pluginAiTasks } from "@/plugins/llm/plugin-tasks";
 import { isInstalled } from "@/plugins/state";
 
 /**
@@ -73,7 +74,8 @@ export async function LlmSections() {
           // "Context about you" is About me (lib/about-me.ts): as every place reads it — its prompt page wins when changed there.
           initial={{ ...getLlmSettings(), context: aboutMe() }}
           providers={providers.map((p) => ({ id: p.id, label: AI_PROVIDER_INFO[p.id].label }))}
-          effective={Object.fromEntries(LLM_TASKS.map((task) => [task.id, llmChoice(task.id)]))}
+          effective={Object.fromEntries([...LLM_TASKS.map((task) => task.id as string), ...pluginAiTasks().map((task) => task.id)].map((id) => [id, llmChoice(id as never)]))}
+          extraTasks={pluginAiTasks().map(({ id, label, what }) => ({ id, label, what }))}
           pages={await promptPages()}
         />
       </section>

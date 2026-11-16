@@ -12,7 +12,7 @@ import { LambdaIDE } from "./LambdaIDE";
  * view's <lookup> can search) or a function (any JSON in, JSON out — a flow's lambda.invoke).
  */
 
-type Item = { name: string; label: string; what: string; kind: "lookup" | "function"; builtin: boolean; changed: boolean; missing: string | null };
+type Item = { name: string; label: string; what: string; kind: "lookup" | "function" | "driver"; builtin: boolean; changed: boolean; missing: string | null };
 
 export function Lambdas({ initial }: { initial: string | null }) {
   const t = useT();

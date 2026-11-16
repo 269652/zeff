@@ -130,7 +130,8 @@ export async function normalizePeople(): Promise<NormalizeResult> {
     try {
       const x = await (await import("./extract")).extractKnowledge();
       // The promises kept since (the Open loops plugin): closed by their threads, or proposed closed by the AI — a failure there doesn't fail the step.
-      if (isInstalled("loops")) await (await import("@/plugins/loops/close")).afterExtraction().catch((e) => console.error("[loops] after the extraction:", e));
+      if (isInstalled("loops") && (await import("@/plugins/state")).onlyThroughPort("loops")) await (await import("@/lib/cases/there")).casesPortFlows(["loops.close-by-rule", ...(isInstalled("llm") ? ["loops.close-by-ai"] : [])]).catch((e) => console.error("[loops] after the extraction:", e));
+      else if (isInstalled("loops")) await (await import("@/plugins/loops/close")).afterExtraction().catch((e) => console.error("[loops] after the extraction:", e));
       return { ...r, claims: x.claims, links: x.links + x.derived };
     } catch {
       return r;

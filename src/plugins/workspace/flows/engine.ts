@@ -560,27 +560,31 @@ async function runOnEvent(f: Flow, t: EventTrigger, e: FlowEvent): Promise<void>
 export async function fireFlowEvent(e: FlowEvent): Promise<number> {
   if (firing > 3) return 0;
   const by = currentFlow();
+  // (Which flows listen is worked out first — counting only while flows run: events at the same time aren't a loop.)
+  const listening: { f: Flow; t: EventTrigger }[] = [];
+  for (const f of listFlows()) {
+    if (f.enabled === false || f.name === by) continue;
+    let t: EventTrigger | undefined;
+    for (const x of f.triggers) if (await listens(x, e)) t = x as EventTrigger;
+    if (t) listening.push({ f, t });
+  }
+  if (!listening.length) return 0;
   let ran = 0;
   firing++;
   try {
-    for (const f of listFlows()) {
-      if (f.enabled === false || f.name === by) continue;
-      let t: EventTrigger | undefined;
-      for (const x of f.triggers) if (await listens(x, e)) t = x as EventTrigger;
-      if (!t) continue;
+    for (const { f, t } of listening) {
       if (t.settle) {
         // Runs once, `settle` seconds after the last such event for this page or row (in the account it happened in).
         const key = `${f.pageId}|${e.page ?? e.row ?? e.event}`;
-        clearTimeout(settling.get(key));
         const { currentAccountId, withAccount } = await import("@/db/accounts");
         const account = currentAccountId();
-        const flow = f;
-        const trig = t;
+        // (Cleared and set with nothing between: events at the same moment leave one wait.)
+        clearTimeout(settling.get(key));
         settling.set(
           key,
           setTimeout(() => {
             settling.delete(key);
-            void withAccount(account, () => runOnEvent(flow, trig, e)).catch((err) => console.error(`[flows] ${flow.name}: ${err instanceof Error ? err.message : err}`));
+            void withAccount(account, () => runOnEvent(f, t, e)).catch((err) => console.error(`[flows] ${f.name}: ${err instanceof Error ? err.message : err}`));
           }, t.settle * 1000),
         );
         ran++;

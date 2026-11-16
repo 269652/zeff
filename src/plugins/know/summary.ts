@@ -12,22 +12,14 @@ import { getPref, setPref } from "@/lib/prefs";
 import { fillPrompt } from "@/lib/prompts";
 import { isInstalled } from "@/plugins/state";
 import { briefFor, meetingBrief, upcomingMeetings, type HealthLike } from "./brief";
-import { briefEmpty, type Brief, type BriefLink, type BriefSummary } from "./shared";
+import { briefEmpty, type Brief, type BriefSummary } from "./shared";
+import { KNOW_SUMMARY_INSTRUCTIONS, SCHEMA, day, meetingKey, summaryLines } from "./summary-lines";
+export { KNOW_SUMMARY_INSTRUCTIONS, meetingKey, summaryLines };
 
 /** What the AI answers. */
 type Answer = { points?: { text?: string; sources?: number[] }[] };
 /** An AI: the prompt and the schema in, its JSON out (null: none). */
 export type SummaryAi = (prompt: string, schema: object) => Promise<Answer | null>;
-
-const SCHEMA = {
-  type: "object",
-  properties: { points: { type: "array", items: { type: "object", properties: { text: { type: "string" }, sources: { type: "array", items: { type: "integer" } } }, required: ["text", "sources"] } } },
-  required: ["points"],
-};
-
-/** How the summary is asked for ({{what}}: the meeting or the thing) — a page of System → Prompts. */
-export const KNOW_SUMMARY_INSTRUCTIONS =
-  "Du bereitest mich auf {{what}} vor. Unten steht nummeriert, was Zeff darüber weiß: die Personen (Rolle, Fakten, Abwesenheit, Geburtstag, Geld), offene Zusagen (was ich schulde, was man mir schuldet), die letzten Kontakte und Ereignisse, verwandte Tickets, Vorgänge und Projekte. Schreib 2 bis 5 kurze Punkte auf Deutsch, was ich jetzt wissen sollte — Offenes und Überfälliges zuerst, dann was sich zuletzt getan hat, dann Persönliches (ein Geburtstag, eine Abwesenheit, offenes Geld), wenn es dasteht. Lieber ein Punkt zu viel als etwas Wichtiges weglassen. Jeder Punkt nennt in sources die Nummern der Zeilen, auf die er sich stützt; nichts, was nicht in den Zeilen steht. Nur JSON nach diesem Schema:";
 
 const AUTO = "know.autoSummary";
 /** Whether the summaries are made before your meetings by themselves (with the briefing) — on until you switch it off. */
@@ -41,29 +33,6 @@ const PER_RUN = 6;
 /** The summaries made: in the AI memo (lib/ai/memo; the old table know_summaries moved in once) — by key, at the brief's hash. */
 const SCOPE = "know-summary";
 const migrate = () => memoMigrate(SCOPE, "know_summaries", "select 'know-summary' as scope, key as ref, hash, points as value, at from know_summaries");
-
-const day = (iso: string) => iso.slice(0, 16).replace("T", " ");
-const euro = (n: number) => `${n.toFixed(2).replace(".", ",")} €`;
-
-/** The brief as numbered lines for the AI, each with what it links to. Line n is `lines[n - 1]`. */
-export function summaryLines(b: Brief): { text: string; link: BriefLink }[] {
-  const out: { text: string; link: BriefLink }[] = [];
-  const add = (text: string, link: BriefLink) => out.push({ text: text.replace(/\s+/g, " ").trim().slice(0, 400), link });
-  if (b.meeting) add(`Termin „${b.meeting.title}“ am ${day(b.meeting.start)}${b.meeting.location ? ` in ${b.meeting.location}` : ""}${b.meeting.attendees.length ? `, mit ${b.meeting.attendees.join(", ")}` : ""}`, { ref: `event:${b.meeting.id}`, label: b.meeting.title, href: b.meeting.href });
-  for (const p of b.people) {
-    const link = { ref: p.ref, label: p.name, href: p.href };
-    const bits = [p.role ? `Rolle: ${p.role}` : "", p.away ? `abwesend bis ${p.away.until}` : "", p.birthday ? `${p.birthday.label} am ${p.birthday.on} (in ${p.birthday.inDays} Tagen${p.birthday.turns ? `, wird ${p.birthday.turns}` : ""})` : "", p.money?.owe ? `ich schulde ${euro(p.money.owe)}` : "", p.money?.owed ? `schuldet mir ${euro(p.money.owed)}` : "", p.lastContact ? `letzter Kontakt ${day(p.lastContact.at)} (${p.lastContact.title})` : ""].filter(Boolean);
-    add(`Person ${p.name}${bits.length ? `: ${bits.join("; ")}` : ""}`, link);
-    for (const f of p.facts) add(`${p.name} — ${f.text}`, link);
-  }
-  for (const l of b.loops) {
-    const who = l.direction === "mine" ? `Ich schulde ${l.personName}` : l.direction === "theirs" ? `${l.personName} schuldet mir` : `Offen mit ${l.personName}`;
-    add(`${who}: ${l.text}${l.due ? ` (fällig ${l.due}${l.overdue ? ", überfällig" : ""})` : ""}`, { ref: `person:${l.personId}`, label: l.personName, href: b.people.find((p) => p.id === l.personId)?.href ?? "" });
-  }
-  for (const e of b.recent) add(`${day(e.at)} ${e.kind}: ${e.title}${e.summary && e.summary !== e.title ? ` — ${e.summary.slice(0, 200)}` : ""}`, { ref: `tl:${e.id}`, label: e.title, href: e.href });
-  for (const r of b.related) add(`Verwandt: ${r.label}`, r);
-  return out;
-}
 
 /** The summary kept for `key` — `current` when it was made from this hash (null hash: any). null: none made yet. */
 export function cachedSummary(key: string, hash: string | null): BriefSummary | null {
@@ -102,9 +71,6 @@ export async function summarizeBrief(key: string, b: Brief, opts: { ai?: Summary
   memoSet(SCOPE, key, b.hash, points, at);
   return { points, hash: b.hash, at, current: true };
 }
-
-/** A meeting's key for its summary (a series' occurrence by its day). */
-export const meetingKey = (id: number, occurrence?: string | null) => `event:${id}${occurrence ? `:${occurrence.slice(0, 10)}` : ""}`;
 
 /**
  * Before your meetings (run with the briefing — the People matching step): the summaries of the meetings with people in the next

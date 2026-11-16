@@ -17,6 +17,7 @@ export function LlmSettingsForm({
   providers,
   effective,
   pages,
+  extraTasks = [],
 }: {
   initial: LlmSettings;
   /** The installed backends. */
@@ -25,6 +26,8 @@ export function LlmSettingsForm({
   effective: Record<string, { provider: string; model: string }>;
   /** The instructions and the context as pages of the Workspace (System → Prompts) — changed there. */
   pages?: { instructions: string | null; context: string | null };
+  /** The tasks plugins declare in their manifest (Settings → AI rows of their own). */
+  extraTasks?: { id: string; label: string; what: string }[];
 }) {
   const t = useT();
   const router = useRouter();
@@ -96,7 +99,7 @@ export function LlmSettingsForm({
               </tr>
             </thead>
             <tbody>
-              {llmTasks(t).map((task) => (
+              {[...llmTasks(t), ...extraTasks].map((task) => (
                 <tr key={task.id}>
                   <td className="max-w-80">
                     <span className="font-medium">{task.label}</span>

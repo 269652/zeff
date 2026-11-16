@@ -1,0 +1,53 @@
+<state name="q" value=""/><state name="add" value=""/>
+<data name="k" lambda="knowledge.screen"/>
+<data name="chat" lambda="knowledge.chat"/>
+<on event="asked" action="reload"/>
+<on event="knowledge-changed" action="reload"/>
+<split side=left width=300>
+<col gap=4>
+<col gap=1><heading level=2>Chat</heading><small><muted>Questions to the knowledge — Confluence and what Zeff has synced; every answer with its sources.</muted></small></col>
+{{#if data.k.ok}}
+<grid cols=2 gap=3>
+{{#each data.k.counts}}<col gap=0><small><muted>{{ label }}</muted></small><b>{{ n }}</b></col>{{/each}}
+</grid>
+{{#if data.k.notCompiled}}<small><text tone=warn>{{ data.k.notCompiled }}</text></small>{{/if}}
+{{#if data.k.confluence}}<small><muted>{{ data.k.confluence }}</muted></small>{{/if}}
+{{#if data.k.last}}<small><muted>{{ data.k.last }}</muted></small>{{/if}}
+{{#else}}
+<box tone=bad><text>{{ data.k.error }}</text></box>
+{{/if}}
+<row gap=2 wrap=true>
+{{#if data.k.ok}}<button run="knowledge.sync" done="The knowledge server is reading Confluence and compiling what's new — that takes a while." emit="knowledge-changed" label="Read Confluence now" disabled="{{ data.k.busy }}"/>{{/if}}
+<button action="url" href="/graph" label="Graph ↗"/>
+</row>
+{{#if data.k.ok}}
+<col gap=1>
+<small><b>Add knowledge</b></small>
+<input bind="add" type=textarea placeholder="A fact, a note, how something works — or a link"/>
+<button run="knowledge.add" with="text={{ state.add }}" done="Remembered — being compiled." then="add=" label="Remember" disabled="{{ not state.add }}"/>
+</col>
+{{/if}}
+</col>
+<col gap=3>
+{{#if data.chat.turns}}
+{{#each data.chat.turns}}
+{{#if mine}}
+<row justify=end><box tone=accent><text>{{ text }}</text></box></row>
+{{#else}}
+<box>
+<text pre=true>{{ text }}</text>
+{{#if sources}}<col gap=0>{{#each sources}}<small>[{{ n }}] {{#if url}}<a href="{{ url }}">{{ title }}</a>{{#else}}{{ title }}{{/if}}{{#if heading}} <muted>› {{ heading }}</muted>{{/if}}</small>{{/each}}</col>{{/if}}
+{{#if queries}}<section title="How it was computed" collapsible=true open=false>
+{{#each queries}}<col gap=0><code>{{ explain }}</code><small>Total: <b>{{ total }}</b> · {{ rows }} rows</small>{{#each groups}}<small>{{ key }}: {{ value }} ({{ count }})</small>{{/each}}{{#if more}}<small><muted>… and {{ more }} more</muted></small>{{/if}}</col>{{/each}}
+</section>{{/if}}
+{{#if entities}}<row gap=1 wrap=true>{{#each entities}}<chip tip="{{ tip }}">{{ name }} {{ type }}</chip>{{/each}}</row>{{/if}}
+</box>
+{{/if}}
+{{/each}}
+{{#else}}
+<text tone=muted>Ask something about the documentation — e.g. “How does code get onto the test environment?” or “Who runs the ordering system?”</text>
+{{/if}}
+{{#if data.asked.error}}<box tone=bad><text>{{ data.asked.error }}</text></box>{{/if}}
+<row gap=2 wrap=false><col fill=true><input bind="q" placeholder="Ask a question …"/></col><button run="knowledge.ask" with="question={{ state.q }}" into="asked" emit="asked" then="q=" label="Ask" variant=primary disabled="{{ not state.q }}"/><button run="knowledge.chat-new" emit="asked" label="New"/></row>
+</col>
+</split>
