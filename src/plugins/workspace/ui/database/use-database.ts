@@ -5,6 +5,7 @@ import { toast } from "@/components/Toaster";
 import { useT } from "@/components/I18nProvider";
 import { pressButtonAction, addRowAction, archivePageAction, restorePageAction, duplicateRowAction, loadDatabaseAction, placeRowAction, setCellAction, updateSchemaAction, type DatabaseData } from "../../actions";
 import { isComputed, newId, TITLE, withCell, type DbSchema } from "../../model";
+import { createReloadGate } from "./reload-gate";
 
 /** The views' state and the changes to the database: shared by the page and the blocks. */
 export function useDatabase(initial: DatabaseData | null, dbId: number) {
@@ -19,13 +20,19 @@ export function useDatabase(initial: DatabaseData | null, dbId: number) {
   const schemaSaving = useRef<Promise<unknown>>(Promise.resolve());
   const schemaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // (Which reads may replace what is shown while edits are on their way: reload-gate.ts.)
+  const gate = useRef(createReloadGate()).current;
   const reload = useCallback(async () => {
+    // (Saves are open: the read waits for the last answer — then one read follows.)
+    if (!gate.request()) return;
+    const ticket = gate.begin();
     const r = await loadDatabaseAction(dbId);
+    if (r.ok && !gate.accept(ticket)) return;
     if (r.ok) {
       setData(r.data);
       setError("");
     } else setError(r.error);
-  }, [dbId]);
+  }, [dbId, gate]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the rows are fetched when the block appears
     if (!initial) void reload();
@@ -109,6 +116,7 @@ export function useDatabase(initial: DatabaseData | null, dbId: number) {
       const cur = dataRef.current;
       if (!cur) return;
       const key = `${rowId}:${propId}`;
+      gate.startEdit();
       const old = cur.rows.find((r) => r.id === rowId);
       const before = propId === TITLE ? old?.title : old?.cells[propId];
       const n = (edits.current.get(key) ?? 0) + 1;
@@ -120,6 +128,8 @@ export function useDatabase(initial: DatabaseData | null, dbId: number) {
       setPending((s) => new Set(s).add(key));
       // … saved after any schema change in flight (a new option must be there first); confirmed, or put back as it was.
       const settle = (r: { ok: boolean; error?: string }) => {
+        // (The last open save answered while a read was dropped: read once now, so what the server holds is what is shown.)
+        if (gate.endEdit()) reloadSoon();
         if (edits.current.get(key) !== n) return r;
         edits.current.delete(key);
         setPending((s) => {
@@ -141,7 +151,7 @@ export function useDatabase(initial: DatabaseData | null, dbId: number) {
           (e: unknown) => settle({ ok: false, error: e instanceof Error ? e.message : String(e) }),
         );
     },
-    [reloadSoon, t],
+    [reloadSoon, gate, t],
   );
   const isPending = useCallback((rowId: number, propId: string) => pending.has(`${rowId}:${propId}`), [pending]);
   /** Done when everything written so far is saved. */
