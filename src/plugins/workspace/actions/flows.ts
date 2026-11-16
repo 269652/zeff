@@ -18,7 +18,8 @@ function inputOf(raw: unknown): Record<string, unknown> {
 export async function runFlowAction(name: string, input: Record<string, unknown> = {}, opts: { row?: number; dry?: boolean } = {}) {
   return run(async () => {
     const { runFlow } = await import("../flows/engine");
-    return runFlow(String(name), inputOf(input), { trigger: { kind: "button" }, ...(Number(opts.row) > 0 ? { row: Number(opts.row) } : {}), dry: opts.dry === true });
+    const { timed } = await import("../perf");
+    return timed(`flow ${String(name)}`, () => runFlow(String(name), inputOf(input), { trigger: { kind: "button" }, ...(Number(opts.row) > 0 ? { row: Number(opts.row) } : {}), dry: opts.dry === true }));
   });
 }
 
@@ -33,7 +34,8 @@ export async function runLambdaAction(name: string, input: Record<string, unknow
     if (!l) throw new Error(`There is no lambda “${String(name)}”.`);
     if (l.manifest.kind !== "function") throw new Error(`“${l.manifest.name}” is a lookup, not a function.`);
     const { runLambda } = await import("../lambdas/run");
-    const r = await runLambda(l, inputOf(input));
+    const { timed } = await import("../perf");
+    const r = await timed(`lambda ${String(name)}`, () => runLambda(l, inputOf(input)));
     return r.ok ? { status: "done" as const, output: r.result, error: null } : { status: "failed" as const, output: null, error: r.error };
   });
 }

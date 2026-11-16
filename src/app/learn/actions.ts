@@ -9,6 +9,7 @@ export async function setupLearnAction(): Promise<void> {
   try {
     const { setupLearn, learnStatus } = await import("@/plugins/learn/setup");
     const done = await setupLearn();
+    (await import("@/lib/data-cache")).forgetSwr("learn:status");
     const s = await learnStatus();
     revalidatePath("/learn");
     target = s.coursesId ? `/workspace/${s.coursesId}` : `/learn?ok=${encodeURIComponent(done.join(" · "))}`;

@@ -19,7 +19,9 @@ export default async function LearnPage({ searchParams }: { searchParams: Promis
   await connection();
   if (!isInstalled("learn")) return <PluginNotInstalled id="learn" />;
   const sp = await searchParams;
-  const s = await learnStatus();
+  // (The last known status at once — a newer one is read in the background; after the setup's own click it is read fresh.)
+  const { swr } = await import("@/lib/data-cache");
+  const s = await swr("learn:status", 30_000, learnStatus, { fresh: !!(sp.ok || sp.err) });
   if (s.ready && s.coursesId && !sp.ok && !sp.err) return redirect(`/workspace/${s.coursesId}`);
   const todo = [
     !s.notebookPlugin && t("install the Notebook plugin (it runs Learn's server functions)"),
