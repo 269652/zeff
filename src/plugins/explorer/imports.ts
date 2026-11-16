@@ -151,3 +151,14 @@ export function readableFiles(folder: string): { files: string[]; cut: boolean }
   }
   return { files: out, cut: false };
 }
+
+/** What an import did, in a sentence (the Explorer's toast, a flow's answer). */
+export function importMessage(r: { added: number; updated: number; same: number; skipped: string[] }): string {
+  const parts = [
+    r.added && t("{n} imported", { n: r.added }),
+    r.updated && t("{n} updated", { n: r.updated }),
+    r.same && t("{n} already in Documents", { n: r.same }),
+    r.skipped.length && t("{n} skipped ({why})", { n: r.skipped.length, why: r.skipped.slice(0, 2).join("; ") }),
+  ].filter(Boolean);
+  return parts.length ? `${parts.join(", ")}.` : t("Nothing to import.");
+}

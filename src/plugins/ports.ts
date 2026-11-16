@@ -28,6 +28,7 @@ export const PORTS: Port[] = [
   { builtin: "keep", plugin: "keep-ext", switch: async () => (await import("./keep/to-plugin")).switchKeepToPlugin() },
   { builtin: "revolut", plugin: "revolut-ext", switch: async () => (await import("./revolut/to-plugin")).switchRevolutToPlugin() },
   { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },
+  { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

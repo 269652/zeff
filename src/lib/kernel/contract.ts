@@ -91,7 +91,7 @@ export const KERNEL_CONTRACT = {
     "a", "ask", "avatar", "b", "badge", "bar", "board", "box", "button", "calendar", "callout", "cards", "case", "chart", "chat", "check", "chip", "clamp",
     "code", "codewidget", "col", "column", "copy", "cover", "data", "datatable", "def", "dialog", "divider", "dossier", "dot", "drag", "drop",
     "empty", "entry", "facets", "field", "fill", "form", "gallery", "gauge", "girocode", "graph", "grid", "groups", "grow", "header", "heading", "heatmap",
-    "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
+    "hr", "i", "img", "input", "know", "kv", "let", "list", "logo", "lookup", "markdown", "media", "menu", "mono", "muted", "nav", "noprint", "on", "otherwise",
     "pair", "pane", "panes", "part", "pivot", "printonly", "progress", "qr", "quickadd", "quote", "rating", "row", "rowtimeline", "schedule", "search", "section",
     "select", "selected", "setting", "settings", "slider", "slot", "small", "sources", "sparkline", "split", "state", "step", "steps", "strike", "subview", "suggested",
     "switch", "tab", "table", "tabs", "tabset", "text", "theme", "tick", "tile", "timeline", "todomark", "toggle", "toolbar", "transitions", "truncate",

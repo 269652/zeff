@@ -26,6 +26,8 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   gitlab: { port: "gitlab-ext", steps: ["gitlab"] },
   jira: { port: "jira-ext", steps: ["jira"] },
   keep: { port: "keep-ext", steps: ["keep"] },
+  // (the Explorer: the port's screen is a view of the Workspace, its writes are flows; the disk, the viewer's file route, the watchers and the imports stay the kernel's — fs.* actions, /api/explorer/file)
+  explorer: { port: "explorer-ext", steps: [] },
 };
 
 /**

@@ -113,6 +113,8 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   column: T({ label: "text", align: { oneOf: ["left", "right", "center"] }, foot: "text", nowrap: { oneOf: ["true", "false"] }, width: "int", sort: "list" }),
   // A text as a QR code (a link, a ticket, a Wi-Fi login — at most 331 bytes), black on white; its caption under it.
   qr: T({ value: "text", size: "int", label: "text" }, true),
+  // A file the browser plays or shows beside the text: a PDF, audio or video, from an address of Zeff's own (src="/api/…") or the web; h = its height in px (a PDF, a video).
+  media: T({ src: "url", kind: { oneOf: ["pdf", "audio", "video"] }, h: "int", label: "text" }, true),
   // keep=true: what it is set to is kept in this browser for the view (a filter, a tab) — opened again, it is as you left it.
   state: T({ name: "text", value: "text", keep: { oneOf: ["true", "false"] } }, true),
   tabs: T({ bind: "text", options: "text" }, true),
@@ -1362,6 +1364,11 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "qr":
       if (!a.value?.trim()) return [];
       return [{ t: "qr", a: { value: a.value, size: String(Math.min(480, Math.max(64, Number(a.size) || 160))), ...(a.label ? { label: a.label } : {}) }, c: [] }];
+    case "media": {
+      const src = (a.src ?? "").trim();
+      if (!src || !["pdf", "audio", "video"].includes(a.kind ?? "")) return (err('<media> needs src="…" and kind="pdf", "audio" or "video".'), []);
+      return [{ t: "media", a: { src, kind: a.kind, label: a.label ?? "", ...(a.h ? { h: String(Math.min(1200, Math.max(120, Number(a.h) || 480))) } : {}) }, c: [] }];
+    }
     case "tick":
       return [{ t: "tick", a: { every: String(Math.min(3600, Math.max(1, Math.round(Number(a.every) || 1)))) }, c: [] }];
     case "datatable": {

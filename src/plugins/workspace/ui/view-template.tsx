@@ -534,6 +534,12 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return null;
       case "check":
         return <CheckBox key={key} a={a} onChange={(v) => setState(a.bind, v)} />;
+      case "media": {
+        const h = Math.min(1200, Number(a.h) || 560);
+        if (a.kind === "audio") return <audio key={key} src={a.src} controls className="w-full" aria-label={a.label || undefined} />;
+        if (a.kind === "video") return <video key={key} src={a.src} controls className="w-full rounded-md bg-black" style={{ maxHeight: h }} aria-label={a.label || undefined} />;
+        return <iframe key={key} src={a.src} title={a.label || "PDF"} className="w-full rounded-md border-0" style={{ height: h }} />;
+      }
       case "qr":
         return <QrCode key={key} value={a.value} size={Number(a.size) || 160} label={a.label} />;
       case "chat":
