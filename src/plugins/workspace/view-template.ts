@@ -59,7 +59,7 @@ export type ViewData = {
   settings?: Record<string, string>;
 };
 
-export const MAX_VIEW_TEMPLATE = 60000;
+export const MAX_VIEW_TEMPLATE = 200000;
 
 const ACTIONS: Record<string, { row?: boolean; what: string }> = {
   report: { what: "inside a <subview>: its result — score=\"{{ … }}\" (0..1), correct=, total=, feedback=\"…\", finished=true — to the subview's report flow (and the chat it tells), as a code widget's zeff.report" },

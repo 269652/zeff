@@ -6,6 +6,9 @@ import { formatHours } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
 import { setPauses } from "@/lib/pauses";
 import { parseBookOn } from "@/lib/projects-shared";
+import { spanOfHead } from "@/lib/entry-spans";
+import { createContext, deleteContext, unlinkContext } from "@/lib/contexts";
+import { isContextKind, type ContextInput } from "@/lib/contexts-shared";
 
 /**
  * The edits of a booked entry, one step each, with what the built-in's server actions say: the whole entry changed, copied to another day, joined to a
@@ -16,7 +19,24 @@ const text = (v: unknown) => (v == null ? "" : String(v).trim());
 const has = (v: unknown) => v !== undefined && v !== null && v !== "";
 const bool = (v: unknown) => v === true || v === "true" || v === "1" || v === "on";
 
-export function entryOp(i: Record<string, unknown>): { message: string } {
+/** A context written in a form (kind, title, author, body, one link, date, ticket) — no files. */
+export const contextOf = (i: Record<string, unknown>, p = "ctx"): ContextInput | null => {
+  const body = String(i[`${p}Body`] ?? "");
+  const link = text(i[`${p}Link`]);
+  const title = text(i[`${p}Title`]);
+  if (!body.trim() && !link && !title) return null;
+  return {
+    kind: (isContextKind(text(i[`${p}Kind`])) ? text(i[`${p}Kind`]) : "note") as ContextInput["kind"],
+    title: title || null,
+    author: text(i[`${p}Author`]) || null,
+    body,
+    links: link ? [{ url: link, label: null }] : [],
+    date: text(i[`${p}Date`]) || null,
+    ticket: text(i[`${p}Ticket`]) || null,
+  };
+};
+
+export async function entryOp(i: Record<string, unknown>): Promise<{ message: string }> {
   const op = text(i.op);
   const id = Number(i.id);
 
@@ -64,6 +84,41 @@ export function entryOp(i: Record<string, unknown>): { message: string } {
     return { message: t("Copied {hours} h to {date}.", { hours: formatHours(src.hours), date }) };
   }
 
+  if (op === "drop") {
+    // Dragged onto a collecting entry: the view's state holds the dragged entry under the collecting entry's name (dr<head id>).
+    let state: Record<string, unknown> = {};
+    try {
+      state = JSON.parse(text(i.state) || "{}") as Record<string, unknown>;
+    } catch {
+      state = {};
+    }
+    let n = 0;
+    for (const [k, v] of Object.entries(state)) {
+      const head = /^dr(\d+)$/.exec(k);
+      const entryId = Number(v);
+      if (!head || !Number.isInteger(entryId) || entryId <= 0) continue;
+      const span = spanOfHead(Number(head[1]));
+      const e = getEntry(entryId);
+      if (!span || !e || e.spanId === span.id) continue;
+      linkMember(entryId, span.id);
+      n++;
+    }
+    return { message: n ? t("Grouped: {what}", { what: String(n) }) : "" };
+  }
+  if (op === "context-add") {
+    const input = contextOf(i);
+    if (!input) throw new Error(t("Write something first."));
+    await createContext(input, [], id);
+    return { message: t("Saved.") };
+  }
+  if (op === "context-unlink") {
+    unlinkContext(id, Number(i.contextId));
+    return { message: t("Saved.") };
+  }
+  if (op === "context-delete") {
+    deleteContext(Number(i.contextId));
+    return { message: t("Saved.") };
+  }
   if (op === "link") {
     linkMember(id, text(i.spanId));
     return { message: t("Grouped: {what}", { what: (getEntry(id)?.description ?? "").slice(0, 80) }) };

@@ -477,3 +477,164 @@ test("a job's and a project's own page: entries, booking days on a project, dele
     assert.deepEqual(r.errors, [], JSON.stringify(state));
   }
 });
+
+test("places for the booking systems: a plugin's cards, buttons, marks, approvals, jobs column and closing steps are drawn — by data", { skip }, async () => {
+  const { run } = await setup();
+  const { timeSlots } = await import("@/plugins/zeiterfassung/time-slots");
+  const { listEntries } = await import("@/lib/entries");
+  const entries = listEntries({ from: "2026-10-05", to: "2026-10-06" });
+  const first = entries.find((e) => e.date === "2026-10-05")!;
+  const second = entries.find((e) => e.date === "2026-10-06")!;
+  timeSlots.contribute("zeiterfassung", {
+    week: ({ entries: es }) => ({
+      cards: [{ label: "Chrono", value: `${es.length} entries`, sub: "pulled", tone: "good" }],
+      actions: [{ label: "Pull", flow: "zeiterfassung.entry-op", with: "op=pauses, dates=2026-10-05, text=12:00-12:30" }],
+      exports: [{ label: "Export to Chrono →", href: "/export/chrono" }],
+      entries: { [first.id]: { text: "✓", tone: "good", approved: true, title: "approved" }, [second.id]: { text: "…", tone: "warn" } },
+      days: [{ text: "✓ 8", title: "day approved" }, null],
+    }),
+    month: ({ entries: es }) => ({
+      approvals: { system: "Chrono", days: Array.from({ length: 31 }, (_, d) => (d === 4 ? { approved: 1.5 } : d === 5 ? { approved: 0 } : d === 6 ? { approved: 99 } : null)) },
+      actions: [{ label: "Pull month", flow: "x" }],
+      oldestPull: "status from 1 Oct",
+      entries: { [es[0].id]: { text: "✓" } },
+    }),
+    jobs: () => ({ toolbar: [{ label: "Pull jobs", flow: "x" }], column: { title: "Chrono", cells: { 1: { text: "linked" } } } }),
+    weekClose: () => [{ key: "chrono", label: "Approved in Chrono", state: "open", detail: "2 left", href: "/" }],
+  });
+  const w = await run("zeiterfassung.week", { week: "2026-W41" });
+  assert.equal(w.slots.cards.length, 1);
+  assert.equal(w.slots.cards[0].label, "Chrono");
+  assert.equal(w.slots.exports[0].href, "/export/chrono");
+  assert.equal(w.slots.actions[0].label, "Pull");
+  const e1 = w.entryList.find((e: any) => e.id === first.id);
+  assert.equal(e1.mark, "✓");
+  assert.equal(e1.approved, true);
+  assert.equal(w.entryList.find((e: any) => e.id === second.id).mark, "…");
+  const cell = w.table.rows.flatMap((r: any) => r.days).filter((c: any) => c.mark === "✓");
+  assert.ok(cell.length >= 1 && cell.every((c: any) => c.tone === "good"), "a cell whose entries are all approved reads green");
+  assert.equal(w.table.foot.booked[0].mark, "✓ 8");
+  assert.ok(w.closing.items.some((i: any) => i.key === "chrono" && i.state === "open"), "the closing step of the plugin");
+  const m = await run("zeiterfassung.month", { month: "2026-10" });
+  const cells = m.calendar.flatMap((c: any) => c.cells).filter((c: any) => c.in);
+  assert.match(cells[4].hours, /^1\.5 \/ 6/, "partly approved: approved / booked");
+  assert.equal(cells[4].pending, true);
+  assert.equal(cells[5].pending, true, "none approved yet");
+  assert.equal(cells[6].tone, "bad", "hours missing win over approved, as in the built-in");
+  assert.match(cells[6].title, /all approved in Chrono/);
+  assert.ok(m.approvals.legendAll.includes("Chrono") && m.slotActions.length === 1 && m.oldestPull === "status from 1 Oct");
+  assert.match(m.calendarHint, /Chrono approval/);
+  const j = await run("zeiterfassung.jobs", {});
+  assert.equal(j.toolbar[0].label, "Pull jobs");
+  assert.equal(j.columnTitle, "Chrono");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const draw = (state: Record<string, string>, data: Record<string, unknown>) =>
+    renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  for (const [state, data] of [[{ view: "week" }, { w }], [{ view: "month", month: "2026-10" }, { m }], [{ view: "jobs" }, { j }]] as const) {
+    assert.deepEqual(draw({ ...state }, data).errors, [], JSON.stringify(state));
+  }
+  assert.match(JSON.stringify(draw({ view: "week" }, { w }).nodes), /Export to Chrono/);
+  timeSlots.contribute("zeiterfassung", {});
+});
+
+test("the week's rest: booking with a start, a group entry, a separate entry and a context; dropping an entry on a collecting entry; the entry's context", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { listEntries } = await import("@/lib/entries");
+  const add = (input: Record<string, unknown>) => runFlow("zeiterfassung.add-entry", { date: "2027-02-01", hours: "4", description: "x", bookOn: "j:100001", ...input });
+  // a mob day: a collecting entry, and work running parallel to it is grouped under it
+  const head = await add({ description: "Mob day", hours: "8", start: "09:00", isGroup: "true" });
+  assert.equal(head.status, "done", JSON.stringify(head));
+  const task = await add({ description: "Task A", hours: "2", start: "10:00" });
+  assert.match(String((task.output as any).message), /grouped under it/);
+  const sep = await add({ description: "Task B", hours: "1", start: "11:00", separate: "true" });
+  assert.doesNotMatch(String((sep.output as any).message), /grouped|parallel/i);
+  const all = listEntries({ from: "2027-02-01", to: "2027-02-01" });
+  const headE = all.find((e) => e.description === "Mob day")!;
+  const a = all.find((e) => e.description === "Task A")!;
+  const b = all.find((e) => e.description === "Task B")!;
+  assert.ok(headE.isGroup && a.spanId && !b.spanId);
+  // dragged onto the collecting entry: the state holds the dragged entry under the head's name
+  assert.equal((await runFlow("zeiterfassung.entry-op", { op: "drop", state: JSON.stringify({ [`dr${headE.id}`]: String(b.id), view: "week" }) })).status, "done");
+  assert.ok(listEntries({ from: "2027-02-01", to: "2027-02-01" }).find((e) => e.id === b.id)!.spanId, "it is a task of the group now");
+  const w = await run("zeiterfassung.week", { week: "2027-02-01" });
+  assert.equal(w.entryList.find((e: any) => e.id === headE.id).dropKey, `dr${headE.id}`);
+  assert.equal(w.dropClear, `dr${headE.id}=`);
+  assert.equal(w.entryList.find((e: any) => e.id === a.id).draggable, false, "a task of a group is not dragged again");
+  // a context written with the entry, and added to another
+  const withCtx = await add({ description: "Mit Kontext", hours: "1", date: "2027-02-02", ctxKind: "note", ctxTitle: "Notiz", ctxBody: "Was gesagt wurde", ctxLink: "" });
+  assert.equal(withCtx.status, "done", JSON.stringify(withCtx));
+  assert.match(String((withCtx.output as any).message), /Booked 1h on 100001 for 2027-02-02/);
+  const ctxEntry = listEntries({ from: "2027-02-02", to: "2027-02-02" }).find((e) => e.description === "Mit Kontext")!;
+  let d = await run("zeiterfassung.entry-detail", { id: ctxEntry.id });
+  assert.equal(d.contexts.length, 1);
+  assert.equal(d.contexts[0].headline, "Notiz");
+  assert.equal((await runFlow("zeiterfassung.entry-op", { op: "context-add", id: ctxEntry.id, ctxKind: "teams", ctxAuthor: "Anna", ctxBody: "Zweite Nachricht" })).status, "done");
+  d = await run("zeiterfassung.entry-detail", { id: ctxEntry.id });
+  assert.equal(d.contexts.length, 2);
+  assert.equal((await runFlow("zeiterfassung.entry-op", { op: "context-add", id: ctxEntry.id })).status, "failed", "nothing written");
+  assert.equal((await runFlow("zeiterfassung.entry-op", { op: "context-delete", contextId: d.contexts[0].id })).status, "done");
+  assert.equal((await run("zeiterfassung.entry-detail", { id: ctxEntry.id })).contexts.length, 1);
+  assert.equal((await run("zeiterfassung.entry-detail", { id: 999999 })).found, false);
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  for (const state of [{ view: "week", n_ctx: "true", n_group: "true" }, { view: "week", ctxentry: String(ctxEntry.id) }]) {
+    const r = renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data: { w, ctx: d }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+    assert.deepEqual(r.errors, [], JSON.stringify(state));
+  }
+});
+
+test("the rest of the details: the day's sums and 'spread the rest' follow the state; a job's customer can be emptied; the month opens an entry's week", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { suggestEntry } = await import("@/lib/work/suggestions");
+  const { todayIso } = await import("@/lib/week");
+  const { getDayTargets } = await import("@/lib/schedule");
+  const today = todayIso();
+  suggestEntry({ date: today, hours: 3, description: "Summen-Test", jobNumber: "100001" });
+  const f0 = await run("zeiterfassung.day", {});
+  const day = f0.days[0];
+  const line = day.lines.find((l: any) => l.description === "Summen-Test");
+  const base = day.sums.selected;
+  // another hour count in the state changes the sums at once
+  const f1 = await run("zeiterfassung.day", { state: JSON.stringify({ [line.kh]: "5" }) });
+  assert.notEqual(f1.days[0].sums.selected, base);
+  assert.match(f1.days[0].sums.selected, /^\+ selected /);
+  // a line unticked: not in the sum
+  const f2 = await run("zeiterfassung.day", { state: JSON.stringify({ [line.ki]: "0" }) });
+  assert.notEqual(f2.days[0].sums.selected, base);
+  const all = Object.fromEntries(f0.days[0].lines.map((l: any) => [l.ki, "0"]));
+  const f3 = await run("zeiterfassung.day", { state: JSON.stringify(all) });
+  assert.match(f3.days[0].sums.selected, /selected 0 h/);
+  assert.equal(f3.days[0].whyNot, "Nothing ticked to book.");
+  // spread: a ticket line without hours gets what is missing (only when there are tickets; otherwise nothing is offered)
+  assert.equal(f0.days[0].canSpread, false, "no ticket line: no spreading");
+  assert.ok(getDayTargets([new Date(`${today}T12:00:00`)])[0] !== undefined);
+  // a customer emptied: the dialog's "~"
+  const j = await runFlow("zeiterfassung.job-save", { number: "400001", name: "Mit Kunde", customer: "Kunde X", description: "d" });
+  assert.equal(j.status, "done");
+  const id = (await run("zeiterfassung.jobs", {})).jobs.find((x: any) => x.number === "400001").id;
+  assert.equal((await runFlow("zeiterfassung.job-save", { id, full: "true", number: "400001", name: "Mit Kunde", customer: "~", description: "d" })).status, "done");
+  const after = (await run("zeiterfassung.jobs", {})).jobs.find((x: any) => x.number === "400001");
+  assert.equal(after.customer, "");
+  assert.equal(after.description, "d");
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  const draw = (state: Record<string, string>, data: Record<string, unknown>) =>
+    renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+  assert.deepEqual(draw({ view: "day" }, { f: f1 }).errors, []);
+  assert.deepEqual(draw({ view: "jobs", jobedit: String(id) }, { j: await run("zeiterfassung.jobs", {}) }).errors, []);
+  const m = await run("zeiterfassung.month", { month: "2026-10" });
+  const r = draw({ view: "month", month: "2026-10" }, { m });
+  assert.deepEqual(r.errors, []);
+  assert.match(JSON.stringify(r.nodes), /openweek/);
+  const s = await run("zeiterfassung.schedule", {});
+  assert.equal(typeof s.punchOn, "boolean");
+});

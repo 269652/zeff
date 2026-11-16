@@ -1,4 +1,4 @@
-<data name="f" lambda="zeiterfassung.day" with="date={{ state.fdate }}, week={{ state.fweek }}" when="{{ state.view == 'day' }}"/>
+<data name="f" lambda="zeiterfassung.day" with="date={{ state.fdate }}, week={{ state.fweek }}, state={{ state | tojson }}" when="{{ state.view == 'day' }}" debounce=600/>
 <on event="day-changed" action="reload"/>
 {{#if data.f}}
 <col gap=3>
@@ -20,6 +20,13 @@
   <section title="{{ head }}" aside="{{ sub }}">
     {{#if lines}}
     <col gap=2>
+      <row gap=3 wrap=true align=center>
+        <small>{{ sums.booked }}</small><small>{{ sums.selected }}</small>
+        {{#if sums.itemized}}<small><muted>{{ sums.itemized }}</muted></small>{{/if}}
+        <text tone="{{ sums.tone }}">{{ sums.result }}</text>
+        {{#if canSpread}}<button action="state" state="{{ spreadKey }}" value="{{ spreadOn ? '' : '1' }}" label="{{ spreadOn ? '☑' : '☐' }} Spread the rest" tip="Spread the missing hours over the ticked ticket lines" variant=quiet/>{{/if}}
+      </row>
+      {{#if whyNot}}<small><text tone=warn>{{ whyNot }}</text></small>{{/if}}
       {{#each lines}}
       <let name="inc" value="state | get(ki) | default(include)"/>
       <box tone="{{ inc == '1' ? 'plain' : 'muted' }}">
@@ -37,7 +44,7 @@
         </row>
       </box>
       {{/each}}
-      <row gap=2 justify=end><button run="zeiterfassung.day-book" with="date={{ date }}, state={{ state | tojson }}" into="fbooked" emit="day-changed" label="Book the ticked rows" variant=primary/></row>
+      <row gap=2 justify=end><button run="zeiterfassung.day-book" with="date={{ date }}, state={{ state | tojson }}" into="fbooked" emit="day-changed" label="{{ bookLabel }}" disabled="{{ whyNot ? 'true' : 'false' }}" variant=primary/></row>
     </col>
     {{#else}}<text tone=muted>{{ empty }}</text>{{/if}}
   </section>

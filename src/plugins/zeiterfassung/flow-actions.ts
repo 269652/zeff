@@ -124,7 +124,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     group: "time",
     label: "Create or change a job",
     summary: "A job: without id it is created (number, name, customer, description, defaultTags comma separated), with id the given fields change (and active). Output { ok, message }; a refusal is an error.",
-    input: [f("id", "number"), f("number", "text"), f("name", "text"), f("customer", "text"), f("description", "text"), f("defaultTags", "text"), f("active", "boolean")],
+    input: [f("id", "number"), f("number", "text"), f("name", "text"), f("customer", "text"), f("description", "text"), f("defaultTags", "text"), f("active", "boolean"), f("full", "boolean")],
     output: "{ ok, message, id }",
     writes: true,
     run: async (i) => {
@@ -132,16 +132,17 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
       const { createJob, updateJob } = await import("@/lib/jobs");
       const { setDefaultTags } = await import("@/lib/default-tags");
       const tags = text(i.defaultTags).split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean);
+      const full = i.full === true || i.full === "true";
       if (!has(i.id)) {
         const job = createJob({ number: text(i.number).trim(), name: text(i.name).trim(), customer: text(i.customer).trim() || undefined, description: text(i.description).trim() || undefined });
         if (tags.length) setDefaultTags({ job: job.id }, tags);
         return { ok: true, id: job.id, message: t("Created job {number} — {name}.", { number: job.number, name: job.name }) };
       }
       const patch: Record<string, unknown> = {};
-      for (const k of ["number", "name", "customer", "description"] as const) if (has(i[k])) patch[k] = text(i[k]).trim();
+      for (const k of ["number", "name", "customer", "description"] as const) if (has(i[k]) || (full && (k === "customer" || k === "description") && i[k] !== undefined)) patch[k] = text(i[k]).trim() === "~" ? "" : text(i[k]).trim();
       if (has(i.active)) patch.active = i.active === true || i.active === "true";
       const job = updateJob(Number(i.id), patch);
-      if (has(i.defaultTags)) setDefaultTags({ job: job.id }, tags);
+      if (has(i.defaultTags) || full) setDefaultTags({ job: job.id }, tags);
       return { ok: true, id: job.id, message: t("Saved job {number}.", { number: job.number }) };
     },
   },
@@ -150,7 +151,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     group: "time",
     label: "Create or change a project",
     summary: "A project: without id it is created (title, description, customer, jobNumber, startDate, endDate, defaultTags), with id the given fields change (and active) — a changed job moves its entries. Output { ok, message }; a refusal is an error.",
-    input: [f("id", "number"), f("title", "text"), f("description", "text"), f("customer", "text"), f("jobNumber", "text"), f("startDate", "text"), f("endDate", "text"), f("defaultTags", "text"), f("active", "boolean")],
+    input: [f("id", "number"), f("title", "text"), f("description", "text"), f("customer", "text"), f("jobNumber", "text"), f("startDate", "text"), f("endDate", "text"), f("defaultTags", "text"), f("active", "boolean"), f("full", "boolean")],
     output: "{ ok, message, id }",
     writes: true,
     run: async (i) => {
@@ -158,6 +159,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
       const { createProject, updateProject } = await import("@/lib/projects");
       const { setDefaultTags } = await import("@/lib/default-tags");
       const tags = text(i.defaultTags).split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean);
+      const full = i.full === true || i.full === "true";
       const fields = { title: text(i.title).trim(), description: text(i.description).trim(), customer: text(i.customer).trim(), jobNumber: text(i.jobNumber).trim(), startDate: text(i.startDate).trim(), endDate: text(i.endDate).trim() };
       if (!has(i.id)) {
         const project = createProject(fields);
@@ -165,10 +167,10 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
         return { ok: true, id: project.id, message: project.job ? t("Created project {title} on {job}.", { title: project.title, job: project.job.number }) : t("Created project {title} (no job yet).", { title: project.title }) };
       }
       const patch: Record<string, unknown> = {};
-      for (const k of Object.keys(fields) as (keyof typeof fields)[]) if (has(i[k])) patch[k] = fields[k];
+      for (const k of Object.keys(fields) as (keyof typeof fields)[]) if (has(i[k]) || (full && k !== "title" && i[k] !== undefined)) patch[k] = fields[k] === "~" ? "" : fields[k];
       if (has(i.active)) patch.active = i.active === true || i.active === "true";
       const { project, moved } = updateProject(Number(i.id), patch);
-      if (has(i.defaultTags)) setDefaultTags({ project: project.id }, tags);
+      if (has(i.defaultTags) || full) setDefaultTags({ project: project.id }, tags);
       const where = project.job ? `${project.job.number} — ${project.job.name}` : t("No job yet");
       return { ok: true, id: project.id, message: t("Saved project {title}.", { title: project.title }) + (moved ? ` ${moved === 1 ? t("Moved 1 entry to {where}.", { where }) : t("Moved {n} entries to {where}.", { n: moved, where })}` : "") };
     },
@@ -190,7 +192,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     group: "time",
     label: "Save the schedule, the default break or the flex-time job",
     summary: "Input what: \"hours\" (mon … sun: hours per weekday), \"pauses\" (text: the default break, empty = none) or \"flex\" (jobNumber, empty = off; comment). Output { ok, message }; a refusal is an error.",
-    input: [f("what", "text", { required: true }), f("mon", "text"), f("tue", "text"), f("wed", "text"), f("thu", "text"), f("fri", "text"), f("sat", "text"), f("sun", "text"), f("text", "text"), f("jobNumber", "text"), f("comment", "text")],
+    input: [f("what", "text", { required: true }), f("mon", "text"), f("tue", "text"), f("wed", "text"), f("thu", "text"), f("fri", "text"), f("sat", "text"), f("sun", "text"), f("text", "text"), f("jobNumber", "text"), f("comment", "text"), f("punch", "text")],
     output: "{ ok, message }",
     writes: true,
     run: async (i) => {
@@ -203,7 +205,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
         return { ok: true, message: t("Working hours saved.") };
       }
       if (what === "pauses") {
-        const s = sch.updateDefaultPauses(text(i.text).trim(), sch.getWorkSchedule().punchDefaultPauses);
+        const s = sch.updateDefaultPauses(text(i.text).trim(), has(i.punch) ? i.punch === true || i.punch === "true" || i.punch === "1" : sch.getWorkSchedule().punchDefaultPauses);
         return { ok: true, message: s.defaultPauses ? t("Default break saved: {pauses}.", { pauses: s.defaultPauses }) : t("Default break removed.") };
       }
       if (what === "flex") {
@@ -272,12 +274,12 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     name: "time.day",
     group: "time",
     label: "The day (or the week) drafted for booking",
-    summary: "End of day: the day's finished meetings not booked yet, the agents' open suggestions and the tickets worked on, as lines to take over (input date: an earlier day, default today; week: a week key or \"current\" for the whole week, day by day). Each line names the view states its edits live in (kh hours, kj job, kd words, ki ticked, ks separate).",
-    input: [f("date", "text"), f("week", "text")],
+    summary: "End of day: the day's finished meetings not booked yet, the agents' open suggestions and the tickets worked on, as lines to take over (input date: an earlier day, default today; week: a week key or \"current\" for the whole week, day by day; state: the view's state as JSON — the sums, \"spread the rest\" and the lines' hours follow the edits in it). Each line names the view states its edits live in (kh hours, kj job, kd words, ki ticked, ks separate).",
+    input: [f("date", "text"), f("week", "text"), f("state", "text")],
     output: "{ mode, title, intro, days: [{ date, head, sub, rows: [{ k, kh, kj, kd, ki, ks, kind, include, hours, description, from, jobOptions … }] }] }",
     run: async (i) => {
       const { dayScreen } = await import("./day-data");
-      return dayScreen({ date: text(i.date), week: text(i.week) });
+      return dayScreen({ date: text(i.date), week: text(i.week), state: text(i.state) });
     },
   },
   {
@@ -340,12 +342,12 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     label: "Edit an entry, its group or a day's break",
     summary:
       "One edit, as the weekly report's own actions do it. op: update (id, date, bookOn, hours, description, ticket, type, tags, comment, start, isGroup), copy (id, date), link (id, spanId), unlink (id), collect (id of a collecting entry), start (id, start), span-mode (spanId, mode), ungroup (spanId), parallel (ids, mode combine|divide|sequential) or pauses (dates comma separated, text: the break, \"none\" for no break, empty to remove). Output { ok, message }; a refusal is an error.",
-    input: [f("op", "text", { required: true }), f("id", "number"), f("date", "text"), f("bookOn", "text"), f("hours", "text"), f("description", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("spanId", "text"), f("mode", "text"), f("ids", "text"), f("dates", "text"), f("text", "text")],
+    input: [f("op", "text", { required: true }), f("id", "number"), f("date", "text"), f("bookOn", "text"), f("hours", "text"), f("description", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("spanId", "text"), f("mode", "text"), f("ids", "text"), f("dates", "text"), f("text", "text"), f("state", "text"), f("contextId", "number"), f("ctxKind", "text"), f("ctxTitle", "text"), f("ctxAuthor", "text"), f("ctxBody", "text"), f("ctxLink", "text"), f("ctxDate", "text"), f("ctxTicket", "text")],
     output: "{ ok, message }",
     writes: true,
     run: async (i) => {
       const { entryOp } = await import("./entry-ops");
-      return { ok: true, ...entryOp(i) };
+      return { ok: true, ...(await entryOp(i)) };
     },
   },
   {
@@ -354,7 +356,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     label: "Book time",
     summary:
       'Books an entry as the weekly report\'s form does (input date, hours, description, bookOn: "j:<job number>" or "p:<project id>" — none: the job the ticket was last booked on —, ticket, type, tags (comma separated), comment): the default tags are the form\'s, work running parallel to a collecting entry is grouped with it. Output { ok, message }; a refusal is an error.',
-    input: [f("date", "date", { required: true }), f("hours", "text", { required: true }), f("description", "text"), f("bookOn", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text")],
+    input: [f("date", "date", { required: true }), f("hours", "text", { required: true }), f("description", "text"), f("bookOn", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("separate", "text"), f("reportedBy", "text"), f("ctxKind", "text"), f("ctxTitle", "text"), f("ctxAuthor", "text"), f("ctxBody", "text"), f("ctxLink", "text"), f("ctxDate", "text"), f("ctxTicket", "text")],
     output: "{ ok, message, error, id }",
     writes: true,
     run: async (i) => {
@@ -382,15 +384,34 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
             ticket,
             type: text(i.type).trim() || undefined,
             tags: text(i.tags).split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean),
-            isGroup: false,
+            isGroup: i.isGroup === true || i.isGroup === "true",
+            start: text(i.start).trim() || undefined,
+            reportedBy: text(i.reportedBy).trim() || undefined,
           },
           "web",
         );
-        const { autoGroup, parallelSaid } = await import("@/lib/entry-parallel");
-        const g = autoGroup(entry.id);
+        // "+ Add context": written with the entry (checked first, so a bad one leaves nothing half booked).
+        const { contextOf } = await import("./entry-ops");
+        const context = contextOf(i);
+        if (context) {
+          try {
+            await (await import("@/lib/contexts")).createContext(context, [], entry.id);
+          } catch (err) {
+            (await import("@/lib/entries")).deleteEntry(entry.id);
+            throw new Error(t("Context: {error}", { error: errorMessage(err) }));
+          }
+        }
+        const { autoGroup, collectIntoHead, parallelSaid } = await import("@/lib/entry-parallel");
+        // A new collecting entry takes in what that day has; other work is grouped with what it runs parallel to unless "Separate entry".
+        let grouped = "";
+        if (entry.isGroup) {
+          const n = collectIntoHead(entry.id);
+          if (n) grouped = n === 1 ? t("1 parallel entry of that day was grouped under it.") : t("{n} parallel entries of that day were grouped under it.", { n });
+        }
+        const g = entry.isGroup || i.separate === true || i.separate === "true" ? null : autoGroup(entry.id);
         const v = { hours: formatHours(hours), project: entry.project?.title, job: entry.job.name, number: entry.job.number, date: entry.date };
         const base = entry.project ? t("Booked {hours}h on {project} ({job}) for {date}.", v) : t("Booked {hours}h on {number} for {date}.", v);
-        return { ok: true, id: entry.id, message: g ? `${base} ${parallelSaid(g)}` : base };
+        return { ok: true, id: entry.id, message: grouped ? `${base} ${grouped}` : g ? `${base} ${parallelSaid(g)}` : base };
       } catch (err) {
         throw new Error(errorMessage(err));
       }
@@ -417,6 +438,18 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
       } catch (err) {
         throw new Error(errorMessage(err));
       }
+    },
+  },
+  {
+    name: "time.entry-detail",
+    group: "time",
+    label: "What stands behind an entry",
+    summary: "An entry's context items (kind, headline, author, date, text, links) and what its todos bring (the todos, where they came from, their notes) — what the entry's page shows (input id).",
+    input: [f("id", "number", { required: true })],
+    output: "{ found, title, contexts, todos, sources, notes, kindOptions }",
+    run: async (i) => {
+      const { entryDetail } = await import("./entry-context");
+      return entryDetail({ id: i.id });
     },
   },
   {

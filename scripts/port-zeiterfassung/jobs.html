@@ -52,12 +52,14 @@
     </col>
   </section>
   <section title="{{ data.j.jobsHead }}">
+    {{#if data.j.toolbar}}<row gap=2 wrap=true justify=end>{{#each data.j.toolbar}}<button run="{{ flow }}" with="{{ with }}" emit="jobs-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
     <datatable source="data.j.jobs" empty="No jobs yet.">
       <column label="Number"><mono>{{ number }}</mono></column>
       <column label="Name"><b>{{ name }}</b>{{#if description}}<small><muted>{{ description }}</muted></small>{{/if}} <small>{{ tags }}</small></column>
       <column label="Customer">{{ customer }}</column>
       <column label="Hours" align=right>{{ hours }}</column>
       <column label="Entries" align=right>{{ entries }}</column>
+      <column label="{{ data.j.columnTitle }}"><small tip="{{ markTitle }}">{{ mark }}</small></column>
       <column label="Status">{{ status }}</column>
       <column label="">
         <row gap=1 justify=end>
@@ -70,6 +72,8 @@
   </section>
   <dialog bind="jobedit" title="Edit job">
     {{#each data.j.jobs | where('id', state.jobedit)}}
+    <let name="ecu" value="state | get('ej_customer') | default(customer)"/>
+    <let name="ede" value="state | get('ej_description') | default(description)"/>
     <col gap=2>
       <grid cols=2 gap=2 min=150>
         <input bind="ej_number" label="Number" value="{{ number }}"/>
@@ -78,7 +82,7 @@
         <input bind="ej_tags" label="Default tags" value="{{ tags }}"/>
       </grid>
       <input bind="ej_description" label="Description" value="{{ description }}"/>
-      <row gap=2><button run="zeiterfassung.job-save" with="id={{ id }}, number={{ state.ej_number | default(number) }}, name={{ state.ej_name | default(name) }}, customer={{ state.ej_customer | default(customer) }}, description={{ state.ej_description | default(description) }}, defaultTags={{ state.ej_tags | default(tags) }}" into="jsaved" then="jobedit=" emit="jobs-changed" label="Save" variant=primary/></row>
+      <row gap=2><button run="zeiterfassung.job-save" with="id={{ id }}, full=true, number={{ state.ej_number | default(number) }}, name={{ state.ej_name | default(name) }}, customer={{ state.ej_customer == '' ? '~' : ecu }}, description={{ state.ej_description == '' ? '~' : ede }}, defaultTags={{ state.ej_tags | default(tags) }}" into="jsaved" then="jobedit=" emit="jobs-changed" label="Save" variant=primary/></row>
     </col>
     {{/each}}
   </dialog>
@@ -120,6 +124,8 @@
   </section>
   <dialog bind="projectedit" title="Edit project">
     {{#each data.j.projects | where('id', state.projectedit)}}
+    <let name="pcu" value="state | get('ep_customer') | default(customer)"/>
+    <let name="pde" value="state | get('ep_description') | default(description)"/>
     <col gap=2>
       <grid cols=2 gap=2 min=150>
         <input bind="ep_title" label="Title" value="{{ title }}"/>
@@ -128,7 +134,7 @@
         <input bind="ep_tags" label="Default tags" value="{{ tags }}"/>
       </grid>
       <input bind="ep_description" label="Description" value="{{ description }}"/>
-      <row gap=2><button run="zeiterfassung.project-save" with="id={{ id }}, title={{ state.ep_title | default(title) }}, jobNumber={{ state.ep_job | default(jobNumber) }}, customer={{ state.ep_customer | default(customer) }}, description={{ state.ep_description | default(description) }}, defaultTags={{ state.ep_tags | default(tags) }}" into="jsaved" then="projectedit=" emit="jobs-changed" label="Save" variant=primary/></row>
+      <row gap=2><button run="zeiterfassung.project-save" with="id={{ id }}, full=true, title={{ state.ep_title | default(title) }}, jobNumber={{ state.ep_job | default(jobNumber) }}, customer={{ state.ep_customer == '' ? '~' : pcu }}, description={{ state.ep_description == '' ? '~' : pde }}, defaultTags={{ state.ep_tags | default(tags) }}" into="jsaved" then="projectedit=" emit="jobs-changed" label="Save" variant=primary/></row>
     </col>
     {{/each}}
   </dialog>

@@ -9,17 +9,23 @@ import { formatDate } from "@/lib/format";
 import { typeMapOf } from "@/lib/entry-types-shared";
 import { getJob } from "@/lib/jobs";
 import { todayIso } from "@/lib/week";
+import { fullAction, jobsSlotData } from "./time-slots";
 
 /**
  * The jobs and the projects as lists, ready to draw: what src/app/jobs/page.tsx and src/app/projects/page.tsx show (the same functions, the same
  * words) as plain data — the numbers jobs are booked on with their hours, entries and default tags, and the projects under them. Read only.
  */
-export function jobsScreen() {
+export async function jobsScreen() {
   const jobs = listJobs({ includeInactive: true });
   const projects = listProjects({ includeInactive: true });
   const tags = listDefaultTagMaps();
+  // What the booking systems add (their places as data): buttons above the table and a column of their own.
+  const slots = await jobsSlotData(jobs);
+  const columns = slots.flatMap((x) => (x.slot.column ? [x.slot.column] : []));
   return {
     jobsHead: t("All jobs ({n})", { n: jobs.length }),
+    toolbar: slots.flatMap((x) => (x.slot.toolbar ?? []).map(fullAction)),
+    columnTitle: columns.map((c) => c.title).join(" · "),
     projectsHead: t("All projects ({n})", { n: projects.length }),
     jobs: jobs.map((j) => ({
       id: j.id,
@@ -28,6 +34,8 @@ export function jobsScreen() {
       customer: j.customer ?? "",
       description: j.description ?? "",
       tags: (tags.jobs[j.number] ?? []).map((x) => `#${x}`).join(" "),
+      mark: columns.map((c) => c.cells[j.id]?.text ?? "").filter(Boolean).join(" "),
+      markTitle: columns.map((c) => c.cells[j.id]?.title ?? "").filter(Boolean).join(" · "),
       hours: formatHours(j.totalHours),
       entries: j.entryCount,
       active: j.active,

@@ -18,7 +18,8 @@
     <col gap=2>
       <text tone=muted>Your usual break window on workdays, e.g. 12:00-13:00 (several with “;”). The weekly table shows it greyed out on days without an entered break.</text>
       <input bind="sp_text" label="Default break" value="{{ data.s.defaultPauses }}" placeholder="12:00-13:00"/>
-      <row gap=2><button run="zeiterfassung.schedule-save" with="what=pauses, text={{ state.sp_text | default(data.s.defaultPauses) }}" into="ssaved" emit="settings-changed" label="Save" variant=primary/></row>
+      {{#if data.s.punchOn}}<button action="state" state="sp_punch" value="{{ (state | get('sp_punch') | default(data.s.punchExport)) == '1' ? '0' : '1' }}" label="{{ (state | get('sp_punch') | default(data.s.punchExport)) == '1' ? '☑' : '☐' }} Punch records it too" variant=quiet/>{{/if}}
+      <row gap=2><button run="zeiterfassung.schedule-save" with="what=pauses, punch={{ state | get('sp_punch') | default(data.s.punchExport) }}, text={{ state.sp_text | default(data.s.defaultPauses) }}" into="ssaved" emit="settings-changed" label="Save" variant=primary/></row>
     </col>
   </section>
 
