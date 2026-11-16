@@ -398,7 +398,8 @@ write(
     {
       format: 1,
       id: "documents-ext",
-      version: "1.0.0",
+      // (1.1.0: the screens' flows and the settings page — an installed 1.0.0 is offered the update)
+      version: "1.1.0",
       name: "Documents",
       description: "Your documents: the text read out of them, the AI's todos from them and which documents belong to which todo, your local folders read in by themselves.",
       icon: "📄",
@@ -436,7 +437,8 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "documents-ext",
       name: "Documents",
-      version: old.version ?? "0.1.0",
+      // (0.2.0: the screens, the source, the abstracts)
+      version: "0.2.0",
       description: "Your documents: the text read out of text files, Office files, PDFs, pictures and recordings, the AI's todos from them, which documents belong to which todo, your local folders read in by themselves. Its steps are lambdas and flows you or the AI can change.",
       author: "Zeff",
       apiVersion: 1,
