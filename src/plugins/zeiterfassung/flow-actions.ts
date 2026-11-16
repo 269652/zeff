@@ -255,6 +255,32 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "time.rules",
+    group: "time",
+    label: "The rules of time tracking",
+    summary: "The entry type rules, the report rewriting rules (when → label, tags), the meeting → job rules with their default job, the meeting exclude rules and the entry types (with their use), as Settings → Time tracking edits them — and the options of the forms.",
+    input: [],
+    output: "{ typeRules, reportRules, meetingRules, meetingDefaultJob, excludeRules, entryTypes, jobOptions, typeOptions, fieldOptions, meetings }",
+    run: async () => {
+      const { rulesScreen } = await import("./rules-data");
+      return rulesScreen();
+    },
+  },
+  {
+    name: "time.rule-op",
+    group: "time",
+    label: "Change a list of rules, one step",
+    summary:
+      "One change of a list: what types | report | meetings | exclude | entry-type, op add | remove | up | down (| default for the meeting default job | update for an entry type), index of the rule. add: types (jobNumber, description, type), report (f1,v1 … f3,v3 conditions as field/value, template, tags), meetings (match, jobNumber, group), exclude (value), entry-type (label, color); update/remove entry-type take key. apply: also re-type / re-tag / re-book existing entries. Output { ok, message }; a refusal is an error.",
+    input: [f("what", "text", { required: true }), f("op", "text", { required: true }), f("index", "number"), f("apply", "boolean"), f("jobNumber", "text"), f("description", "text"), f("type", "text"), f("f1", "text"), f("v1", "text"), f("f2", "text"), f("v2", "text"), f("f3", "text"), f("v3", "text"), f("template", "text"), f("tags", "text"), f("match", "text"), f("group", "boolean"), f("value", "text"), f("label", "text"), f("color", "text"), f("key", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { ruleOp } = await import("./rules-data");
+      return { ok: true, ...ruleOp(i) };
+    },
+  },
+  {
     name: "time.entry-add",
     group: "time",
     label: "Book time",

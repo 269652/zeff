@@ -324,3 +324,54 @@ test("end of day: the day drafted as the built-in has it, booked as the lines st
   assert.deepEqual(d.errors, []);
   assert.match(JSON.stringify(d.nodes), /zeiterfassung\.day-book/);
 });
+
+test("the rules: type rules, report rules, meeting rules and entry types are listed and changed step by step — as the built-in's forms save them", { skip }, async () => {
+  const { run } = await setup();
+  const life = await import("@/plugins/workspace/package-life");
+  const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "zeiterfassung.package.json"), "utf8"));
+  if (!life.getInstalled("zeiterfassung-ext")) await life.installTracked(pkg, null, { allow: true });
+  const { runFlow } = await import("@/plugins/workspace/flows/engine");
+  const { getTypeRules } = await import("@/lib/type-rules");
+  const { getReportRules, getReportSettings, getMeetingJobRules, getMeetingDefaultJob, getMeetingExcludeRules } = await import("@/lib/report");
+  const { listEntryTypes } = await import("@/lib/entry-types");
+  const op = (input: Record<string, unknown>) => runFlow("zeiterfassung.rule-op", input);
+  // type rules
+  assert.equal((await op({ what: "types", op: "add", jobNumber: "100001", description: "Urlaub", type: "absence" })).status, "done");
+  assert.equal((await op({ what: "types", op: "add", jobNumber: "", description: "Meeting", type: "meeting" })).status, "done");
+  assert.deepEqual(getTypeRules().map((r) => [r.jobNumber, r.description, r.type]), [["100001", "Urlaub", "absence"], ["", "Meeting", "meeting"]]);
+  assert.equal((await op({ what: "types", op: "down", index: 0 })).status, "done");
+  assert.equal(getTypeRules()[1].description, "Urlaub");
+  assert.equal((await op({ what: "types", op: "add", jobNumber: "999", description: "x", type: "other" })).status, "failed", "an unknown job");
+  assert.equal((await op({ what: "types", op: "remove", index: 1 })).status, "done");
+  assert.equal(getTypeRules().length, 1);
+  // report rules
+  const before = getReportRules(getReportSettings()).length;
+  const added = await op({ what: "report", op: "add", f1: "type", v1: "meeting", f2: "title", v2: "Daily", template: "Dailys", tags: "daily" });
+  assert.equal(added.status, "done", JSON.stringify(added));
+  const rules = getReportRules(getReportSettings());
+  assert.equal(rules.length, before + 1);
+  assert.deepEqual(rules[rules.length - 1].conditions, [{ field: "type", value: "meeting" }, { field: "title", value: "Daily" }]);
+  assert.deepEqual(rules[rules.length - 1].tags, ["daily"]);
+  // meeting rules and entry types
+  assert.equal((await op({ what: "meetings", op: "add", match: "Mob", jobNumber: "100002", group: "true" })).status, "done");
+  assert.deepEqual(getMeetingJobRules(getReportSettings()).map((r) => [r.match, r.jobNumber, !!r.group]), [["Mob", "100002", true]]);
+  assert.equal((await op({ what: "meetings", op: "default", jobNumber: "100001" })).status, "done");
+  assert.equal(getMeetingDefaultJob(getReportSettings()), "100001");
+  assert.equal((await op({ what: "exclude", op: "add", value: "Zeiten erfassen" })).status, "done");
+  assert.deepEqual(getMeetingExcludeRules(getReportSettings()), ["Zeiten erfassen"]);
+  assert.equal((await op({ what: "entry-type", op: "add", label: "Schulung", color: "#112233" })).status, "done");
+  assert.ok(listEntryTypes().some((x) => x.key === "schulung"));
+  assert.equal((await op({ what: "entry-type", op: "update", key: "schulung", label: "Weiterbildung", color: "#445566" })).status, "done");
+  assert.equal(listEntryTypes().find((x) => x.key === "schulung")!.label, "Weiterbildung");
+  assert.equal((await op({ what: "entry-type", op: "remove", key: "other" })).status, "failed", "a built-in type stays");
+  assert.equal((await op({ what: "entry-type", op: "remove", key: "schulung" })).status, "done");
+  const r = await run("zeiterfassung.rules", {});
+  assert.equal(r.typeRules.length, 1);
+  assert.ok(r.reportRules.some((x: any) => x.template === "Dailys"));
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("zeiterfassung-ext"), "views", "report.html"), "utf8");
+  for (const state of [{ view: "settings" }, { view: "settings", typeedit: "meeting" }]) {
+    const d = renderView(template, { rows: [], props: [], titleName: "Name", state, app: {}, data: { s: await run("zeiterfassung.schedule", {}), r: { ...r, meetings: true } }, db: { id: 1, title: "Report" }, now: new Date(), locale: "de-DE" } as never, { parts: [], actions: [] });
+    assert.deepEqual(d.errors, [], JSON.stringify(state));
+  }
+});
