@@ -98,18 +98,8 @@ export function dateOf(s?: string | null): Date | null {
 const day = (s?: string | null) => (s ? s.slice(0, 10) : "?");
 const stamp = (s?: string | null) =>
   s ? s.slice(0, 16).replace("T", " ") : "?";
-/** Jira wiki markup and whitespace thinned out, cut to `max`. */
-export function plain(s: string | null | undefined, max: number): string {
-  const t = (s ?? "")
-    .replace(/\{(code|noformat|quote|panel)[^}]*\}/g, "")
-    .replace(/!([^!\s|]+)(\|[^!]*)?!/g, "[Bild]")
-    .replace(/\[~([^\]]+)\]/g, "@$1")
-    .replace(/\[([^|\]]+)\|([^\]]+)\]/g, "$1")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
-}
+import { plain } from "@/lib/plain-text";
+export { plain };
 
 /** The history entries worth telling, as one line each. */
 export const CHANGE_LABELS: Record<string, string> = {

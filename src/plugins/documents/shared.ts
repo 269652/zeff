@@ -42,6 +42,9 @@ const OFFICE_EXT = new Set(["docx", "xlsx", "pptx", "odt", "ods", "odp"]);
 const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp"]);
 const AUDIO_EXT = new Set(["mp3", "wav", "m4a", "ogg", "oga", "opus", "flac", "aac", "wma", "webm", "amr"]);
 
+/** The file endings Zeff reads (a kind of its own): what a folder scan looks for. */
+export const READABLE_EXTS: string[] = ["pdf", ...TEXT_EXT, ...OFFICE_EXT, ...IMAGE_EXT, ...AUDIO_EXT];
+
 /** A file's kind, by its name and type. */
 export function kindOf(name: string, mime = ""): DocKind {
   const ext = EXT(name);
@@ -64,3 +67,10 @@ export function sizeText(bytes: number): string {
 
 /** Largest file taken in. */
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
+
+/** A name that stays in its folder: no path, no odd characters. */
+export function safeName(name: string): string {
+  const base = (name.split(/[\\/]/).pop() ?? "").replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").replace(/^\.+/, "").trim().slice(0, 120);
+  return base || "document";
+}
+

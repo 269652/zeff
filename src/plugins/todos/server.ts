@@ -6,6 +6,7 @@ import { TODOS_API } from "./api";
 import { TODOS_REVIEW } from "./review";
 import { TODOS_SOURCE } from "./workspace-source";
 import { TODOS_WIDGETS } from "./widgets";
+import "./flow-actions"; // (todos.open, todos.sources … for lambdas and flows)
 
 /** What Todos registers for other plugins (loaded through plugins/contributions). */
 apiPoint.contribute("todos", TODOS_API);

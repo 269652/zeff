@@ -197,7 +197,7 @@ export function dismissTodoContext(todoId: number, ref: string): void {
  * A relation run's pick: per todo, what it's about — its refs of one kind ("mail:" / "keep:")
  * replaced, the other kind's kept. Todos not in `picks` keep theirs.
  */
-function setRelatedRefs(accept: (ref: string) => boolean, picks: Map<number, string[]>): number {
+export function setRelatedRefs(accept: (ref: string) => boolean, picks: Map<number, string[]>): number {
   if (!picks.size) return 0;
   let changed = 0;
   getDb().transaction((tx) => {
@@ -714,8 +714,9 @@ export function addMailTodo(v: { ticket: string; text: string; kind: string; own
 
 /** A todo from the Notiz-Durchsicht (Keep's extension): what a note asks of you, the notes as its source. */
 /** A todo from a document (the Dokument-Durchsicht): what the document asks of you, due when it says so; the document is its source. */
-export function addDocTodo(v: { ticket: string; text: string; kind: string; owner?: "me" | "other"; refs: string[]; runId: number | null; due?: string | null }): Gated {
-  const g = gateTodo({ ticket: v.ticket, text: v.text, kind: v.kind, owner: v.owner, refs: v.refs.filter((r) => r.startsWith("doc:")), due: v.due, runId: v.runId, byWorker: false, source: "Dokument-Durchsicht" }, { closed: true });
+/** A todo from something the AI went through (documents, notes …): its source's name and the kind of ref it keeps ("doc:") — through the gate. */
+export function addRefTodo(v: { ticket: string; text: string; kind: string; owner?: "me" | "other"; refs: string[]; runId: number | null; due?: string | null }, o: { source: string; prefix: string }): Gated {
+  const g = gateTodo({ ticket: v.ticket, text: v.text, kind: v.kind, owner: v.owner, refs: v.refs.filter((r) => r.startsWith(o.prefix)), due: v.due, runId: v.runId, byWorker: false, source: o.source }, { closed: true });
   if (g) return g;
   const now = new Date().toISOString();
   const row = getDb()
@@ -726,8 +727,8 @@ export function addDocTodo(v: { ticket: string; text: string; kind: string; owne
       kind: isTodoKind(v.kind) ? v.kind : "other",
       owner: v.owner === "other" ? "other" : "me",
       status: "open",
-      source: "Dokument-Durchsicht",
-      refs: JSON.stringify(v.refs.filter((r) => r.startsWith("doc:")).slice(0, 15)),
+      source: o.source,
+      refs: JSON.stringify(v.refs.filter((r) => r.startsWith(o.prefix)).slice(0, 15)),
       runId: v.runId,
       due: dueDay(v.due),
       createdAt: now,
@@ -739,6 +740,8 @@ export function addDocTodo(v: { ticket: string; text: string; kind: string; owne
   emitChange("todos"); // (after it is written: a page that refreshes on it must find it)
   return toTodo(row);
 }
+
+export const addDocTodo = (v: Parameters<typeof addRefTodo>[0]): Gated => addRefTodo(v, { source: "Dokument-Durchsicht", prefix: "doc:" });
 
 export function addNoteTodo(v: { ticket: string; text: string; kind: string; owner?: "me" | "other"; refs: string[]; runId: number | null; due?: string | null }): Gated {
   const g = gateTodo({ ticket: v.ticket, text: v.text, kind: v.kind, owner: v.owner, refs: v.refs.filter(isNoteRef), due: v.due, runId: v.runId, byWorker: false, source: "Notiz-Durchsicht" }, { closed: true });

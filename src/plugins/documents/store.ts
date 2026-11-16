@@ -10,7 +10,7 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { dataDir, getDb, schema } from "@/db";
 import { emitChange } from "@/lib/events";
 import { t } from "@/lib/i18n/server";
-import { docRef, kindOf, MAX_DOCUMENT_BYTES, type DocKind, type DocStatus, type DocView } from "./shared";
+import { docRef, kindOf, MAX_DOCUMENT_BYTES, safeName, type DocKind, type DocStatus, type DocView } from "./shared";
 import { forget, pendingIds } from "./gate";
 
 const { documents } = schema;
@@ -19,11 +19,7 @@ type Row = typeof documents.$inferSelect;
 /** Where this account's documents are kept. */
 export const documentsDir = () => path.join(dataDir(), "documents");
 
-/** A name that stays in its folder: no path, no odd characters. */
-export function safeName(name: string): string {
-  const base = (name.split(/[\\/]/).pop() ?? "").replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").replace(/^\.+/, "").trim().slice(0, 120);
-  return base || "document";
-}
+export { safeName };
 
 /** The beginning of a text, as an abstract stand-in (until the knowledge server's comes). */
 const excerpt = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 420);

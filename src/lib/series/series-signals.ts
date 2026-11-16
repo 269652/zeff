@@ -7,6 +7,7 @@ import { isInstalled } from "@/plugins/state";
 import { filled, localDate, localDay } from "./days";
 import type { Series, SeriesInfo, SeriesProvider, SeriesRange } from "./series-point";
 import { addDays } from "@/lib/dates";
+import { financesThere } from "@/lib/finances/there";
 
 /**
  * Zeff's own signals as daily series, read where they live: meeting hours (the calendars that block time, overlaps counted once, not
@@ -128,7 +129,7 @@ function todoSeries(range: SeriesRange): Series[] {
 }
 
 function spending(range: SeriesRange): Series[] {
-  if (!isInstalled("finances") || !hasTable("bank_transactions")) return [];
+  if (!financesThere() || !hasTable("bank_transactions")) return [];
   const span = db().prepare("select min(date) a, max(date) b from bank_transactions").get() as { a: string | null; b: string | null };
   const rows = db().prepare("select date, -sum(amount) v from bank_transactions where amount < 0 and date between ? and ? group by date").all(range.from, range.to) as { date: string; v: number }[];
   // To the last booking read: the days after it aren't known yet (not 0).
@@ -168,7 +169,7 @@ function signalCatalog(): SeriesInfo[] {
     ...CHANNELS().flatMap(([ch, name]) => [of(`messages:${ch}:received`, t("{channel} received", { channel: name }), t("Messages")), of(`messages:${ch}:sent`, t("{channel} sent", { channel: name }), t("Messages"))]),
     of("todos:created", t("Todos created"), t("Todos")),
     of("todos:done", t("Todos done"), t("Todos")),
-    ...(isInstalled("finances") ? [of("finances:spending", t("Spending"), t("Finances"), "€")] : []),
+    ...(financesThere() ? [of("finances:spending", t("Spending"), t("Finances"), "€")] : []),
     of("activity:first", t("First activity (hour)"), t("Activity"), "h"),
     of("activity:last", t("Last activity (hour)"), t("Activity"), "h"),
   ];

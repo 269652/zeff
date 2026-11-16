@@ -1,4 +1,6 @@
 import { promptText } from "@/lib/prompts";
+import { FUNNEL_INSTRUCTIONS, FUNNEL_SCHEMA, type Answer } from "./funnel-prompt";
+export { FUNNEL_INSTRUCTIONS };
 import { bumpFunnel, clearStale, funnelCandidates, getPrefs, setGate, tasteSignals } from "./store";
 
 /**
@@ -9,31 +11,6 @@ import { bumpFunnel, clearStale, funnelCandidates, getPrefs, setGate, tasteSigna
  * filters out the rest (drop), each with a short why. For you then shows only what it let through; what it filtered out
  * stays a day in its own view, so you can see what it does — a 👍 there teaches it.
  */
-
-/** Its instructions — a page of System → Prompts. */
-export const FUNNEL_INSTRUCTIONS = "Du bist der Nachrichten-Filter einer Person: Du siehst die neuen Meldungen, bevor sie sie sieht, und lässt nur durch, was sie wirklich interessiert — wie eine Redakteurin, die sie gut kennt.\nEntscheide für jede nummerierte Meldung:\n- top: wichtig — ein großes Ereignis, das man heute kennen sollte (auch außerhalb ihrer Interessen), oder etwas, das sie direkt betrifft (ihre Arbeit, ihre Themen, ihr Umfeld). Selten: höchstens jede zehnte Meldung.\n- pass: passt zu dem, was sie gern liest (Geschmack, Interessen, was sie gemocht hat), oder ist ungewöhnlich lesenswert.\n- drop: alles andere — Routine, Klatsch, Füllstoff, Ratgeber, Werbung, Themen, die sie meidet, das Zweite über dasselbe Ereignis.\nSei wählerisch, aber verliere nichts, was klar zu ihren Interessen passt: im Zweifel bei einem ihrer Themen durchlassen, bei allem anderen filtern.\nwhy: ein kurzer Satz (höchstens 12 Wörter) auf Deutsch — bei pass und top so, dass sie sieht, was es mit ihr zu tun hat; bei drop, warum nicht.\nNutze nur, was unten steht. Gib für jede Nummer genau einen Eintrag.";
-
-type Verdict = { n?: number; verdict?: unknown; why?: unknown };
-type Answer = { items?: Verdict[] };
-
-const SCHEMA = {
-  type: "object",
-  properties: {
-    items: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          n: { type: "integer" },
-          verdict: { type: "string", enum: ["top", "pass", "drop"] },
-          why: { type: "string", description: "Ein kurzer Satz, höchstens 12 Wörter." },
-        },
-        required: ["n", "verdict", "why"],
-      },
-    },
-  },
-  required: ["items"],
-};
 
 export type FunnelContext = { taste: string; likes: string[]; avoids: string[]; profile: string[]; liked: string[]; disliked: string[] };
 
@@ -104,7 +81,7 @@ export async function runFunnel(deps: { ask?: (prompt: string) => Promise<Answer
       deps.ask ??
       (async (prompt: string) => {
         const { runAi } = await import("@/lib/ai");
-        return (await runAi<Answer>(prompt, SCHEMA, { task: "news-funnel", timeoutMs: 5 * 60000, maxBudgetUsd: 0.4 })).output;
+        return (await runAi<Answer>(prompt, FUNNEL_SCHEMA, { task: "news-funnel", timeoutMs: 5 * 60000, maxBudgetUsd: 0.4 })).output;
       });
     const ctx = await (deps.context ?? context)();
     const answer = await ask(funnelPrompt(ctx, items.map((it, i) => ({ n: i + 1, source: it.sourceName, title: it.title, summary: it.summary }))));

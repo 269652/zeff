@@ -2,7 +2,7 @@
 
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { isInstalled } from "@/plugins/state";
+import { isInstalled, onlyThroughPort } from "@/plugins/state";
 import type { Brief, BriefSummary } from "./shared";
 
 /** The know plugin's server actions: a brief (of a meeting, a row, refs) with its kept summary; the AI's summary made on request; your verdict; the switch. */
@@ -26,7 +26,14 @@ async function answer(q: KnowQuery, make: boolean, force = false): Promise<KnowA
   const got = await briefOfKey(clean(q));
   if (!got) return { ok: false, error: t("Nothing to say about it.") };
   const canSummarize = isInstalled("llm");
-  const summary = make && canSummarize ? await summarizeBrief(got.key, got.brief, { force }) : cachedSummary(got.key, got.brief.hash);
+  let summary: BriefSummary | null;
+  if (make && canSummarize && onlyThroughPort("know")) {
+    // The plugin stands in for the built-in (state.ts PROVIDED_BY): its flow summarizes and keeps the summary.
+    const { runFlow } = await import("@/plugins/workspace/flows/engine");
+    const r = await runFlow("know.summarize", { ...clean(q), force });
+    if (r.status !== "done") throw new Error(r.error ?? "The summary failed.");
+    summary = ((r.output as { summary?: BriefSummary | null } | undefined)?.summary ?? null) as BriefSummary | null;
+  } else summary = make && canSummarize ? await summarizeBrief(got.key, got.brief, { force }) : cachedSummary(got.key, got.brief.hash);
   return { ok: true, key: got.key, brief: got.brief, summary, canSummarize, auto: autoSummary() };
 }
 

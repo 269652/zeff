@@ -12,11 +12,12 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { getSqlite } from "@/db";
 import { getPref, setPref } from "@/lib/prefs";
-import { toLocalPath } from "@/lib/hostpath";
+import { normFolder, SKIP_DIRS, walkFiles } from "@/lib/files/local";
 import { t } from "@/lib/i18n/server";
 import { kindOf, MAX_DOCUMENT_BYTES } from "./shared";
 import { addDocument, replaceDocument } from "./store";
 import { hold } from "./gate";
+import { diffFolder, type KnownFile } from "./folders-core";
 
 export type FolderMode = "auto" | "confirm";
 export type LocalFolder = { id: string; path: string; mode: FolderMode; addedAt: string; lastScanAt: string | null; files: number };
@@ -27,9 +28,6 @@ const PREF = "documents:folders";
 const PER_RUN = 150;
 /** At most this many entries looked at per folder (a whole drive by mistake stays bounded). */
 const MAX_ENTRIES = 50_000;
-/** Folders never looked into (version control, packages, the system's own). */
-const SKIP_DIRS = new Set(["node_modules", "$recycle.bin", "system volume information", "__pycache__"]);
-
 let made = false;
 function db() {
   const d = getSqlite();
@@ -42,14 +40,11 @@ function db() {
   return d;
 }
 
-/** A folder's path as kept: absolute, without a trailing separator — but a drive's root stays "C:\" ("C:" alone is the current folder on C). */
-const norm = (p: string) => {
-  const given = toLocalPath(p.trim());
-  const abs = path.resolve(/^[A-Za-z]:$/.test(given) ? `${given}\\` : given);
-  const root = path.parse(abs).root;
-  return abs === root || abs.replace(/[\\/]+$/, "") === root.replace(/[\\/]+$/, "") ? root : abs.replace(/[\\/]+$/, "");
-};
+const norm = normFolder;
 const same = (a: string, b: string) => (process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b);
+
+/** The table is there (made on first use: a port that adopts it needs it now). */
+export const ensureLocalFiles = (): void => void db();
 
 export const listFolders = (): LocalFolder[] => getPref<LocalFolder[]>(PREF, []);
 const save = (list: LocalFolder[]) => setPref(PREF, list);
@@ -98,38 +93,9 @@ export function localOrigins(): Map<number, { folder: string; path: string; show
 }
 
 /** The files of a folder Zeff can read: subfolders too; hidden ones, Office's lock files and unknown kinds left out. */
-function walk(root: string): { path: string; rel: string; size: number; mtime: number }[] {
-  const out: { path: string; rel: string; size: number; mtime: number }[] = [];
-  const stack = [root];
-  let seen = 0;
-  while (stack.length && seen < MAX_ENTRIES) {
-    const dir = stack.pop()!;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue; // not readable (permissions): left out
-    }
-    for (const e of entries) {
-      seen++;
-      if (e.name.startsWith(".") || e.name.startsWith("~$")) continue;
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        if (!SKIP_DIRS.has(e.name.toLowerCase())) stack.push(p);
-      } else if (e.isFile() && kindOf(e.name, "") !== "other") {
-        try {
-          const st = fs.statSync(p);
-          if (st.size > 0 && st.size <= MAX_DOCUMENT_BYTES) out.push({ path: p, rel: path.relative(root, p), size: st.size, mtime: Math.round(st.mtimeMs) });
-        } catch {
-          // gone meanwhile
-        }
-      }
-    }
-  }
-  return out;
-}
+const walk = (root: string) => walkFiles(root, { accept: (name) => kindOf(name, "") !== "other", maxBytes: MAX_DOCUMENT_BYTES, maxEntries: MAX_ENTRIES });
 
-type Row = { path: string; folder_id: string; rel: string; doc_id: number | null; size: number; mtime: number; missing_at: string | null };
+type Row = KnownFile;
 
 /**
  * Every folder looked at: new files read in, changed ones updated, deleted ones marked. What was read in waits for the
@@ -146,18 +112,11 @@ export async function scanFolders(): Promise<{ added: number; updated: number; m
       continue;
     }
     const files = walk(folder.path);
-    const known = new Map((d.prepare("select * from doc_local_files where folder_id = ?").all(folder.id) as Row[]).map((r) => [r.path, r]));
     const now = new Date().toISOString();
-    for (const f of files) {
-      const had = known.get(f.path);
-      known.delete(f.path);
-      if (had && had.size === f.size && had.mtime === f.mtime && !had.missing_at) continue;
-      if (had && had.missing_at && had.size === f.size && had.mtime === f.mtime) {
-        d.prepare("update doc_local_files set missing_at = null where path = ?").run(f.path);
-        continue;
-      }
-      if (budget <= 0) continue;
-      budget--;
+    const plan = diffFolder(files, d.prepare("select * from doc_local_files where folder_id = ?").all(folder.id) as Row[], budget);
+    budget = plan.budget;
+    for (const p of plan.restore) d.prepare("update doc_local_files set missing_at = null where path = ?").run(p);
+    for (const { file: f, had } of plan.work) {
       try {
         const data = fs.readFileSync(f.path);
         const name = path.basename(f.path);
@@ -185,8 +144,7 @@ export async function scanFolders(): Promise<{ added: number; updated: number; m
       }
     }
     // What's left of the known ones is gone from the folder: marked, its document kept.
-    for (const r of known.values()) {
-      if (r.missing_at) continue;
+    for (const r of plan.gone) {
       d.prepare("update doc_local_files set missing_at = ? where path = ?").run(now, r.path);
       res.missing++;
     }
