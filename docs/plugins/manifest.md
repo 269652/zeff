@@ -406,6 +406,14 @@ They are there while the plugin is on, gone when it is off or Zeff is in safe mo
 
 The functions are the plugin's own (`contributes.functions`) and do only what you granted them.
 
+### `personFormulas` and a widget's `actFlow`
+
+- **`personFormulas`**: formulas of a contact or a circle (`Schulden(@Chris)`, `SUMME(Schulden(@Freunde))`): a contact gives one number, a circle one per
+  contact who has any, no argument the total. Each reads a **snapshot** a lambda keeps — `{ "total": 0, "byId": { "<contact id>": 0 }, "byName": { "<lower-case name>": 0 } }` —
+  asked again in the background after `everyMinutes` (the formula language evaluates at once; a lambda is a process, so it never waits for one).
+- **A widget's `actFlow`**: the flow of the plugin's package a button runs, with `{ action, payload, config }`. The flow may write what its package was allowed — where
+  `act` / `actLambda` only read.
+
 ## `contributes.widgets`, `pageNav`, `reviewSources`, `reviewLinks` — more extension points from functions
 
 ```json
@@ -573,3 +581,22 @@ ever dropped.
 - **Types.** `text`, `integer`, `real`, `json` (any value, read back as it was).
 - **A port keeps the built-in's data.** `"adopts": "cases"` makes the store the built-in's own table — only one the kernel lets that
   port adopt (`ADOPTABLE` in `src/lib/ext/stores.ts`). Nothing is copied: the built-in and its port see the same rows while you switch.
+
+### `knowledgeDocs`
+
+Pages a plugin gives the knowledge server (Zeff's export, space of your choice): `{ id, lambda, args, everyMinutes, replaces? }`. The lambda returns
+`[{ id ("zeff:…"), space, title, version, updatedAt, author, body }]`; its last answer is kept and asked for again in the background after `everyMinutes`.
+`replaces` names the built-in whose pages these are: given only while that one is not installed. Example: `finances-ext`'s bank statements (`finances.bank-docs`).
+
+### `aiTasks` (named AI tasks, capability H)
+
+The AI tasks a plugin has Zeff run: `[{ id, label, what, idempotent? }]`. Each is a row in Settings → AI (its own backend and model; "Runs with now" shows what it uses) and is asked for
+as `<plugin id>.<id>` — the flow action `ai.json` with `task=…` (a lambda asks through a flow). A task nobody declared counts as the general one. Example: `{ "id": "summary", "label": "What you should know", "what": "…" }` of the plugin `know-ext` → task `know-ext.summary`.
+
+### SQL over a plugin's stores (`sql.query`, `sql.exec` — capability J)
+
+What code needs when it works on many rows at once — a join, a count, an update of every row that matches — and a key-by-key store (`store.query` / `store.put`) can't do.
+`sql.query` (a plugin's lambdas read, a flow too): one `SELECT`/`WITH` over the tables of the plugin's stores — tables of its own (`contributes.stores`) or the built-in's it adopted (`adopts`) —,
+values bound with `?` (`params`), at most `limit` rows (500; 2000 at most). `sql.exec` (a flow only, with the permission `store`): `INSERT`/`UPDATE`/`DELETE`/`REPLACE`
+statements in one transaction. The check is SQLite's own: the statement is EXPLAINed and every table or index it opens must belong to those stores — another table, the master table, a virtual table or
+another database is refused. Declare a store for every table the SQL touches (an adopted one lists the columns the plugin uses).

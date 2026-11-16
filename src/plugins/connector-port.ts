@@ -6,7 +6,7 @@ import { getPref } from "@/lib/prefs";
  * built-in did (by hand only stays by hand) —, the built-in off. Reading the source stays the kernel's driver; everything else of the
  * built-in (its replies, its settings, its pages) keeps working through the port (state.ts PROVIDED_BY). Server only.
  */
-export async function switchConnectorToPlugin(builtin: string, opts: { port: string; flow: string; minutes: () => number | Promise<number> }): Promise<{ flow: string }> {
+export async function switchConnectorToPlugin(builtin: string, opts: { port: string; flow: string; minutes: () => number | Promise<number>; /** The built-in stays on (its screens and data are the kernel's): the port takes over only its sync step (state.ts STEPS_TAKEN_BY_PORT). */ keepBuiltin?: boolean }): Promise<{ flow: string }> {
   const reg = await import("@/lib/ext/registry");
   if (!reg.scanPlugins(true).plugins.some((x) => x.id === opts.port)) throw new Error(`The plugin ${opts.port} isn't in the plugins folder — install it from its repository first (Plugins → Sources).`);
   const minutes = await opts.minutes();
@@ -21,6 +21,6 @@ export async function switchConnectorToPlugin(builtin: string, opts: { port: str
     await life.installTracked(pkg, system && getPage(system) && !getPage(system)!.archivedAt ? system : null, { allow: true });
   }
   flows.setSyncFlowMinutes(opts.flow, minutes);
-  (await import("@/plugins/state")).setInstalled(builtin as never, false);
+  if (!opts.keepBuiltin) (await import("@/plugins/state")).setInstalled(builtin as never, false);
   return { flow: opts.flow };
 }

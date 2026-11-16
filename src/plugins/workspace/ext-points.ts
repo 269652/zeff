@@ -96,9 +96,106 @@ export function storedMetricValue(plugin: string, m: { id: string; function?: st
   return k.value;
 }
 
+// ---------------------------------------------------------------------------
+// Formulas of a contact or a circle: a snapshot a lambda keeps
+// ---------------------------------------------------------------------------
+
+type Snapshot = { total: number; byId: Record<string, number>; byName: Record<string, number> };
+type KeptSnapshot = { at: number; value: Snapshot | null; asking: boolean };
+const snapshots: Map<string, KeptSnapshot> = ((globalThis as { __zeffExtSnapshots?: Map<string, KeptSnapshot> }).__zeffExtSnapshots ??= new Map());
+
+/** The snapshot a person formula reads: the last answer of its lambda, asked again in the background when older than everyMinutes. */
+export function storedSnapshot(plugin: string, f: { name: string; lambda: string; args?: Record<string, string | number | boolean>; everyMinutes: number }, now = Date.now()): Snapshot | null {
+  const key = `${currentAccountId()}|${plugin}|${f.name}`;
+  const k = snapshots.get(key) ?? { at: 0, value: null, asking: false };
+  snapshots.set(key, k);
+  if (!k.asking && now - k.at >= f.everyMinutes * 60_000) {
+    k.asking = true;
+    void import("./mcp-plugin-tools")
+      .then((x) => x.runOwnLambda(plugin, f.lambda, { ...(f.args ?? {}) }))
+      .then((v) => {
+        const o = obj(v);
+        const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : 0);
+        const map = (m: unknown) => Object.fromEntries(Object.entries(obj(m) ?? {}).map(([a, b]) => [a, num(b)]));
+        k.value = o ? { total: num(o.total), byId: map(o.byId), byName: map(o.byName) } : null;
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        k.at = Date.now();
+        k.asking = false;
+      });
+  }
+  return k.value;
+}
+
+/** A person formula as the formula language calls it: a contact one number, a circle one per contact who has any, nothing the total. */
+export function personFormulaFunction(plugin: string, d: { name: string; aliases: string[]; unit: string; what: string; lambda: string; args: Record<string, string | number | boolean>; everyMinutes: number }): FormulaFunction {
+  return {
+    name: d.name,
+    aliases: d.aliases,
+    ...(d.unit ? { unit: d.unit } : {}),
+    signature: `${d.name}(@Person | @Kreis)`,
+    what: d.what,
+    call: (args: FormulaValue[]) => {
+      const snap = storedSnapshot(plugin, d);
+      const round = (n: number) => Math.round(n * 100) / 100;
+      if (!snap) return null;
+      if (!args.length || args[0] === null) return round(snap.total);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { needPeople } = require("@/plugins/people/formulas") as typeof import("@/plugins/people/formulas");
+      const who = needPeople(args[0], d.name);
+      const amount = (p: { id: number; name: string; aliases: string[] }) => round((snap.byId[String(p.id)] ?? 0) + [p.name, ...p.aliases].reduce((s, n) => s + (snap.byName[n.toLowerCase()] ?? 0), 0));
+      if (!who.group) return amount(who.people[0]);
+      return who.people.map(amount).filter((x) => x !== 0);
+    },
+  };
+}
+
+type KeptDocs = { at: number; value: unknown[]; asking: boolean };
+const keptDocs: Map<string, KeptDocs> = ((globalThis as { __zeffExtKnowledgeDocs?: Map<string, KeptDocs> }).__zeffExtKnowledgeDocs ??= new Map());
+
+/** The pages the plugins give the knowledge server: each lambda's last answer, asked again in the background once older than everyMinutes. */
+export function pluginKnowledgeDocs(now = Date.now()): unknown[] {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const installed = (id: string) => (require("@/plugins/state") as typeof import("@/plugins/state")).isInstalled(id as never);
+  return enabledPlugins().flatMap((p) =>
+    p.manifest.contributes.knowledgeDocs.flatMap((d) => {
+      if (d.replaces && installed(d.replaces)) return [];
+      const key = `${currentAccountId()}|${p.id}|${d.id}`;
+      const k = keptDocs.get(key) ?? { at: 0, value: [], asking: false };
+      keptDocs.set(key, k);
+      if (!k.asking && now - k.at >= d.everyMinutes * 60_000) {
+        k.asking = true;
+        void import("./mcp-plugin-tools")
+          .then((x) => x.runOwnLambda(p.id, d.lambda, { ...d.args }))
+          .then((v) => {
+            const list = Array.isArray(v) ? v : Array.isArray((v as { docs?: unknown })?.docs) ? (v as { docs: unknown[] }).docs : [];
+            k.value = list;
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            k.at = Date.now();
+            k.asking = false;
+          });
+      }
+      return k.value;
+    }),
+  );
+}
+
+workspaceFormulaFunctions.provide("ext:personFormulas", () =>
+  enabledPlugins().flatMap((p) => {
+    const fns = p.manifest.contributes.personFormulas.filter((f) => !isBuiltInFormulaName(f.name)).map((f) => personFormulaFunction(p.id, f));
+    return fns.length ? [{ plugin: who(p), impl: fns }] : [];
+  }),
+);
+
 workspaceMetrics.provide("ext:metrics", () =>
   enabledPlugins().flatMap((p) => {
-    const list = p.manifest.contributes.metrics.map((m): MetricProvider => ({ label: m.label, unit: m.unit, what: m.what || p.manifest.name, read: () => storedMetricValue(p.id, m) }));
+    // (a port's Kennzahl of the built-in's name: not there while the built-in is — its own counts then)
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const installed = (id: string) => (require("@/plugins/state") as typeof import("@/plugins/state")).isInstalled(id as never);
+    const list = p.manifest.contributes.metrics.map((m): MetricProvider => ({ label: m.label, unit: m.unit, what: m.what || p.manifest.name, read: () => storedMetricValue(p.id, m), ...(m.replaces ? { available: () => !installed(m.replaces!) } : {}) }));
     return list.length ? [{ plugin: who(p), impl: list }] : [];
   }),
 );
@@ -298,9 +395,16 @@ workspaceWidgets.provide("ext:widgets", () =>
           return w.settings.map(({ optionsFrom, ...s }) => (optionsFrom === "series" ? { ...s, kind: "select" as const, options: seriesOptions(), default: s.default ?? seriesOptions()[0]?.value ?? "" } : s));
         },
         data: async (config) => widgetDataFrom(await runPart(p.id, { function: w.function, lambda: w.lambda }, { config })),
-        ...(w.act || w.actLambda
+        ...(w.act || w.actLambda || w.actFlow
           ? {
               act: async (action: string, payload: Record<string, string>, config: Record<string, string | number | boolean>) => {
+                // (a flow: it may write what its package was allowed — Finances' "add to contracts"; a lambda or function only reads)
+                if (w.actFlow) {
+                  const { runFlow } = await import("./flows/engine");
+                  const r = await runFlow(w.actFlow, { action, payload, config }, { trigger: { kind: "manual" } });
+                  if (r.status === "failed") throw new Error(r.error ?? "The action failed.");
+                  return obj(r.output)?.kind ? widgetDataFrom(r.output) : undefined;
+                }
                 const v = await runPart(p.id, { function: w.act, lambda: w.actLambda }, { action, payload, config });
                 return obj(v)?.kind ? widgetDataFrom(v) : undefined;
               },
