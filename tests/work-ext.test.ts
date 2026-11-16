@@ -131,7 +131,7 @@ test("a session's page: the conversation lines as the log reads them, the state,
 
 test("what changes something is a flow with the permission api: archive and delete a session, stop a queued run; the dry run touches nothing", { skip }, async () => {
   const { a, b, c, allowed } = await world();
-  assert.deepEqual([...allowed].sort(), ["work.archive", "work.delete", "work.live", "work.send", "work.start", "work.stop"]);
+  assert.deepEqual([...allowed].sort(), ["work.archive", "work.delete", "work.git", "work.live", "work.send", "work.start", "work.stop"]);
   const engine = await import("@/plugins/workspace/flows/engine");
   const { sessionTickets } = await import("@/lib/work/sessions");
   const ids = () => sessionTickets().flatMap((t) => t.sessions.map((s) => s.id));
@@ -203,4 +203,42 @@ test("the screen's template draws without an error: new, a session (idle and ask
   assert.deepEqual(draw(asking, { sel: "run:7" }).errors, []);
   const pkg = JSON.parse(fs.readFileSync(path.join(repoPlugin("work-ext"), "work.package.json"), "utf8")) as { items: { schema?: { views: { template: string }[] } }[] };
   assert.equal(pkg.items.find((i) => i.schema)?.schema?.views[0].template, template);
+});
+
+test("the panes: a session's changes as the built-in's diff reads them (a changed, a new file), and a commit through the flow; the dev servers", { skip }, async () => {
+  const { call, b: a } = await world(); // (the other two are gone by now)
+  const { execFileSync } = await import("node:child_process");
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), "zeff-work-repo-"));
+  const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: repo, encoding: "utf8" });
+  git("init", "-q");
+  fs.writeFileSync(path.join(repo, "a.txt"), "one\n");
+  git("add", ".");
+  git("commit", "-q", "-m", "first");
+  const base = git("rev-parse", "HEAD").trim();
+  const { updateRun, getRun } = await import("@/lib/work/store");
+  updateRun(a.run, { cwd: repo, repo, baseSha: base });
+  fs.writeFileSync(path.join(repo, "a.txt"), "one\ntwo\n");
+  fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
+  type Panes = { found: boolean; summary: string; empty: boolean; files: { path: string; status: string; added: number; removed: number; patch: string }[]; procs: unknown[]; noProcs: string };
+  const panes = await call<Panes>("work.panes", { run: a.run });
+  const { sessionDiff } = await import("@/lib/work/session-git");
+  const built = await sessionDiff(getRun(a.run)!);
+  assert.deepEqual(panes.files.map((f) => [f.path, f.added, f.removed]), built.files.map((f) => [f.path, f.added, f.removed]));
+  assert.deepEqual(panes.files.map((f) => f.path).sort(), ["a.txt", "b.txt"]);
+  assert.match(panes.files.find((f) => f.path === "a.txt")!.patch, /\+two/);
+  assert.ok(panes.noProcs, "no launch file: said so");
+  const engine = await import("@/plugins/workspace/flows/engine");
+  assert.equal((await engine.runFlow("work.git", { run: a.run, do: "commit", message: "both" }, { dry: true })).status, "done");
+  assert.equal(git("log", "--oneline").trim().split("\n").length, 1, "the dry run committed nothing");
+  const done = await engine.runFlow("work.git", { run: a.run, do: "commit", message: "both" });
+  assert.equal(done.status, "done", done.error ?? undefined);
+  assert.equal(git("log", "--oneline").trim().split("\n").length, 2);
+  assert.equal((await engine.runFlow("work.git", { run: a.run, do: "nonsense" })).status, "failed");
+  // The template draws with the panes.
+  const { renderView } = await import("@/plugins/workspace/view-template");
+  const template = fs.readFileSync(path.join(repoPlugin("work-ext"), "views", "work.html"), "utf8");
+  const x = await call("work.screen", { sel: `run:${a.run}` });
+  const withProcs = { ...panes, procs: [{ name: "web", running: true, url: "http://localhost:3000", showUrl: true, log: "ready", dot: "🟢" }, { name: "api", running: false, url: "", showUrl: false, log: "", dot: "⚪" }] };
+  for (const pane of ["chat", "changes", "preview"])
+    assert.deepEqual(renderView(template, { rows: [], props: [], titleName: "Code", state: { sel: `run:${a.run}`, pane }, app: {}, data: { x, panes: withProcs, gitresult: { message: "ok" } }, db: { id: 1, title: "Code" } } as never).errors, [], pane);
 });

@@ -124,6 +124,72 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "work.session-changes",
+    group: "work",
+    label: "A session's changes",
+    summary: "Every file a session changed since it began (git, in its folder): path, status, added, removed, the patch (cut) — and its dev servers from .claude/launch.json with their state and output (procs).",
+    input: [f("run", "number", { required: true })],
+    output: "{ found, base, files: [{ path, status, added, removed, patch, binary }], truncated, procs: [{ name, port, url, running, startedAt, log }], error }",
+    run: async (i) => {
+      need();
+      const { getRun } = await import("@/lib/work/store");
+      const run = getRun(int(i.run));
+      if (!run) return { found: false, error: t("That session doesn't exist any more.") };
+      const { sessionDiff } = await import("@/lib/work/session-git");
+      const { listProcs } = await import("@/lib/work/session-procs");
+      let diff: Awaited<ReturnType<typeof sessionDiff>> = { base: "", files: [], truncated: false };
+      let error = "";
+      try {
+        diff = await sessionDiff(run);
+      } catch (e) {
+        error = e instanceof Error ? e.message : String(e);
+      }
+      let procs: unknown[] = [];
+      try {
+        procs = listProcs(run).map((p) => ({ ...p, log: clip(p.log ?? "", 6000) }));
+      } catch {
+        // no launch file
+      }
+      return { found: true, base: diff.base, files: diff.files.map((x) => ({ ...x, patch: clip(x.patch ?? "", 20000) })), truncated: diff.truncated, procs, error };
+    },
+  },
+  {
+    name: "work.session-git",
+    group: "work",
+    label: "Commit, push, merge request, dev servers of a session",
+    summary: "do = commit (message) | push | mr (title) | proc-start (name) | proc-stop (name) in the session's folder. Needs the “api” permission. Output { message, url }.",
+    input: [f("run", "number", { required: true }), f("do", "text", { required: true }), f("message", "text"), f("title", "text"), f("name", "text")],
+    output: "{ message, url }",
+    writes: true,
+    run: async (i, ctx) => {
+      mayChange(ctx);
+      need();
+      if (ctx.dryRun) return { dryRun: true };
+      const { getRun } = await import("@/lib/work/store");
+      const run = getRun(int(i.run));
+      if (!run) throw new Error(t("That session doesn't exist any more."));
+      const g = await import("@/lib/work/session-git");
+      switch (String(i.do)) {
+        case "commit":
+          return { message: t("Committed: {c}", { c: await g.commitSession(run, String(i.message ?? "").slice(0, 4000)) }) };
+        case "push":
+          return { message: t("Pushed {b}", { b: await g.pushSession(run) }) };
+        case "mr": {
+          const r = await g.openSessionMr(run, String(i.title ?? "").slice(0, 300));
+          return { message: r.existed ? t("There was one already: {u}", { u: r.url ?? "" }) : t("Opened: {u}", { u: r.url ?? "" }), url: r.url ?? "" };
+        }
+        case "proc-start":
+          await (await import("@/lib/work/session-procs")).startProc(run, String(i.name ?? ""));
+          return { message: "" };
+        case "proc-stop":
+          (await import("@/lib/work/session-procs")).stopProc(run, String(i.name ?? ""));
+          return { message: "" };
+        default:
+          throw new Error(t("Unknown action."));
+      }
+    },
+  },
+  {
     name: "work.session-start",
     group: "work",
     label: "Start a session",

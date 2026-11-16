@@ -25,7 +25,7 @@ fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 // The texts of the screen's data in the languages the packs have: every t("…") of the lambda.
 const KEYS: string[] = [];
-for (const m of fs.readFileSync(path.join(SRC, "work.screen.mjs"), "utf8").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
+for (const m of ["work.screen.mjs", "work.panes.mjs"].map((f) => fs.readFileSync(path.join(SRC, f), "utf8")).join(" ").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
   const k = JSON.parse('"' + m[1] + '"');
   if (!KEYS.includes(k)) KEYS.push(k);
 }
@@ -63,6 +63,12 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
     zeff: ["work.session-list", "work.session-open"],
     timeoutMs: 30000,
   },
+  "work.panes": {
+    label: "Code: a session's changes and dev servers",
+    what: "The files a session changed since it began, with their diffs, and its dev servers from .claude/launch.json.",
+    zeff: ["work.session-changes"],
+    timeoutMs: 60000,
+  },
 };
 for (const [name, l] of Object.entries(LAMBDAS)) {
   write(`lambdas/${name}/lib.mjs`, libText);
@@ -85,7 +91,7 @@ const flow = (id: string, name: string, title: string, description: string, acti
     inputs: [],
     nodes: [
       { id: "do", kind: "action", action, input },
-      { id: "done", kind: "return", value: { runId: "{{ steps.do.runId }}", runs: "{{ steps.do.runs }}" } },
+      { id: "done", kind: "return", value: { runId: "{{ steps.do.runId }}", runs: "{{ steps.do.runs }}", message: "{{ steps.do.message }}", url: "{{ steps.do.url }}" } },
     ],
     requested: { api: true },
     triggers: [{ kind: "manual" }],
@@ -134,6 +140,7 @@ write(
           mode: "{{ input.mode }}",
           option: "{{ input.option }}",
         }),
+        flow("i9", "work.git", "Commit, push, merge request, dev servers", "In a session's folder: input run, do (commit | push | mr | proc-start | proc-stop), message, title, name. Output { message, url }.", "work.session-git", { run: "{{ input.run }}", do: "{{ input.do }}", message: "{{ input.message }}", title: "{{ input.title }}", name: "{{ input.name }}" }),
         flow("i6", "work.stop", "Stop a session's run", "A run stopped or taken out of the queue (input run).", "work.session-stop", { run: "{{ input.run }}" }),
         flow("i7", "work.archive", "Archive a session", "A session out of the list, or back (input todo, archived: true | false).", "work.session-archive", { todo: "{{ input.todo }}", archived: "{{ input.archived }}" }),
         flow("i8", "work.delete", "Delete a session", "A session deleted for good — its runs and logs; its todo stays (input todo).", "work.session-delete", { todo: "{{ input.todo }}" }),

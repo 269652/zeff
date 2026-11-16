@@ -1,5 +1,6 @@
-<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/>
+<state name="sel" value="" keep=true/><state name="q" value=""/><state name="sort" value="newest" keep=true/><state name="archived" value="false"/><state name="msg" value=""/><state name="newmsg" value=""/><state name="newticket" value=""/><state name="pane" value="chat"/><state name="commitmsg" value=""/>
 <data name="x" lambda="work.screen" with="sel={{ state.sel }}, q={{ state.q }}, sort={{ state.sort }}, archived={{ state.archived }}" every=2 debounce="300"/>
+<data name="panes" lambda="work.panes" with="run={{ data.x.session.runId }}" when="{{ data.x.session.runId }}" every=5/>
 <on event="work-changed" action="reload"/>
 <on event="work-started" action="state" state="sel" value="run:{{ data.started.runId }}"/>
 <on event="work-gone" action="state" state="sel" value=""/>
@@ -88,6 +89,49 @@
 <a href="/api/work/{{ data.x.session.runId }}/prompt">Prompt</a>
 {{#if data.x.session.active}}<button run="work.stop" with="run={{ data.x.session.runId }}" emit="work-changed" label="⏹ Stop" variant=danger/>{{/if}}
 </row>
+<tabs bind="pane" options="chat:Conversation, changes:Changes, preview:Preview"/>
+{{#if state.pane == 'changes'}}
+<col gap=2>
+{{#if data.panes.found}}
+<row gap=2 wrap=true align=center>
+<small><muted>{{ data.panes.summary }}</muted></small>
+<grow/>
+<input bind="commitmsg" placeholder="Commit message"/>
+<button run="work.git" with="run={{ data.x.session.runId }}, do=commit, message={{ state.commitmsg }}" into="gitresult" emit="work-changed" label="Commit all" disabled="{{ data.panes.empty or not state.commitmsg }}"/>
+<button run="work.git" with="run={{ data.x.session.runId }}, do=push" into="gitresult" confirm="Push this branch to origin?" emit="work-changed" label="Push"/>
+<button run="work.git" with="run={{ data.x.session.runId }}, do=mr, title={{ state.commitmsg }}" into="gitresult" confirm="Open a merge request for this branch on GitLab?" emit="work-changed" label="Merge request"/>
+</row>
+{{#if data.gitresult.message}}<text tone=good>{{ data.gitresult.message }}</text>{{/if}}
+{{#if data.panes.error}}<text tone=bad>{{ data.panes.error }}</text>{{/if}}
+{{#if data.panes.empty}}<muted>{{ data.panes.emptyText }}</muted>{{/if}}
+{{#each data.panes.files}}
+<section title="{{ status }} · {{ path }}" aside="+{{ added }} −{{ removed }}" collapsible=true open=false>
+{{#if binary}}<small><muted>{{ binaryText }}</muted></small>{{/if}}
+{{#if noPatch}}<small><muted>{{ noPatch }}</muted></small>{{/if}}
+{{#if patch}}<small><text pre=true>{{ patch }}</text></small>{{/if}}
+</section>
+{{/each}}
+{{#if data.panes.truncated}}<small><muted>{{ data.panes.truncated }}</muted></small>{{/if}}
+{{#else}}<muted>Loading …</muted>{{/if}}
+</col>
+{{/if}}
+{{#if state.pane == 'preview'}}
+<col gap=2>
+{{#if data.panes.noProcs}}<muted>{{ data.panes.noProcs }}</muted>{{/if}}
+{{#each data.panes.procs}}
+<box>
+<row gap=2 wrap=true align=center>
+<text>{{ dot }} <b>{{ name }}</b></text>
+{{#if showUrl}}<a href="{{ url }}">{{ url }} ↗</a>{{/if}}
+<grow/>
+{{#if running}}<button run="work.git" with="run={{ data.x.session.runId }}, do=proc-stop, name={{ name }}" emit="work-changed" label="Stop"/>{{#else}}<button run="work.git" with="run={{ data.x.session.runId }}, do=proc-start, name={{ name }}" emit="work-changed" label="Start" variant=primary/>{{/if}}
+</row>
+{{#if log}}<section title="Output" collapsible=true open=false><small><text pre=true>{{ log }}</text></small></section>{{/if}}
+</box>
+{{/each}}
+</col>
+{{/if}}
+{{#if state.pane == 'chat'}}
 <col gap=2 scroll=65 end=true>
 {{#each data.x.session.turns}}
 {{#if ask}}<box tone=muted><b>You</b><text pre=true>{{ ask }}</text></box>{{/if}}
@@ -163,6 +207,7 @@
 {{/if}}
 </row>
 </col>
+{{/if}}
 </col>
 {{/if}}
 {{/if}}
