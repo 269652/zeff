@@ -26,7 +26,7 @@ export const ADOPTABLE: Record<string, string[]> = {
   // (keep_own_notes: only read — which of your boards' notes are synced with Google Keep)
   "keep-ext": ["keep_notes", "keep_own_notes"],
   // (the documents, the ones waiting for your confirmation and what is known of the files of your local folders)
-  "documents-ext": ["documents", "doc_gate", "doc_local_files"],
+  "documents-ext": ["documents", "doc_gate", "doc_local_files", "document_seen"],
   // (the Jira briefing: which tickets are open, on which boards, and the comments it reads fresh — the tables the Jira reader keeps)
   "jira-lage-ext": ["jira_tickets", "jira_boards", "jira_comments"],
   // (what became of each open loop: closed, dismissed, a proposal to close it, put off)
@@ -46,7 +46,7 @@ export const ADOPTABLE_PREFS: Record<string, string[]> = {
   "auto-actions-ext": ["autoactions:offered"],
   "know-ext": ["know.autoSummary"],
   // (the folders read in by themselves, and when each was looked at)
-  "documents-ext": ["documents:folders"],
+  "documents-ext": ["documents:folders", "plugin:documents"],
   // (Calendar: how many days ahead appointments are read for todos, and the AI's verdicts on which give you something to do)
   "calendar-ext": ["calendar:todos-days", "calendar:todo-verdicts"],
   "news-ext": ["news:prefs", "news:taste", "news:digest", "news:funnel-stats", "news:discover-queries", "news:autodiscover-at", "news:lowdiscover-at", "news:low-turn", "news:discoveries", "news:expand-at"],

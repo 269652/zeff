@@ -11,7 +11,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { id } = await params;
   const file = Number.isInteger(Number(id)) ? documentFile(Number(id)) : null;
   if (!file) return new Response("Not found", { status: 404 });
-  const inline = INLINE.test(file.mime);
+  // (?download=1: saved, not shown)
+  const inline = INLINE.test(file.mime) && new URL(req.url).searchParams.get("download") !== "1";
   // Opening the file (?open=1 - a link you click, not a thumbnail on a page) is reading the document: it is seen (the Workspace's document inbox follows).
   if (new URL(req.url).searchParams.get("open") === "1") (await import("@/plugins/documents/seen")).markSeen([Number(id)]);
   return new Response(new Uint8Array(fs.readFileSync(file.path)), {

@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
 import { Overlay } from "@/components/Overlay";
 import type { VNode } from "../view-template";
 import type { BlockEnv } from "./view-blocks";
 import { NODE_R, type GraphLayout } from "../view-graph";
+import { runFlowAction } from "../actions/flows";
+import { stageUploadAction } from "../actions/uploads";
+import { parseWith } from "../flows/with";
 import { SkillMap, type SkillMapNode } from "@/components/skill-tree/SkillMap";
 import { AgendaList } from "@/plugins/calendar/AgendaList";
 import { MonthGrid } from "@/plugins/calendar/MonthGrid";
@@ -282,6 +285,89 @@ function GraphBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
 
 /** A file read as text into the view's state (state.<bind>, its name in state.<bind>_name). */
 function UploadBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
+  return a.run ? <UploadFiles a={a} env={env} /> : <UploadText a={a} env={env} />;
+}
+
+/** <upload run="flow">: each file as it is (bytes) staged, then handed to the flow with its name, type, size and token — one after the other. */
+function UploadFiles({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
+  const t = useT();
+  const ref = useRef<HTMLLabelElement>(null);
+  const maxKb = Number(a.max) || 51200;
+  const live = useRef({ a, env, t });
+  useEffect(() => {
+    live.current = { a, env, t };
+  });
+  const take = async (files: File[]) => {
+    const { a, env, t } = live.current;
+    if (!files.length) return;
+    env.setState(a.bind, "true");
+    let done = 0;
+    try {
+      for (const file of files) {
+        if (file.size > maxKb * 1024) {
+          toast(t("“{name}” is too large (at most {n} MB).", { name: file.name, n: Math.round(maxKb / 1024) }), { tone: "error" });
+          continue;
+        }
+        const form = new FormData();
+        form.append("file", file);
+        const staged = await stageUploadAction(form);
+        if (!staged.ok) {
+          toast(staged.error, { tone: "error" });
+          continue;
+        }
+        const r = await runFlowAction(a.run, { ...parseWith(a.with), name: staged.name, mime: staged.mime, size: staged.size, token: staged.token });
+        if (!r.ok) toast(r.error, { tone: "error" });
+        else if (r.status === "failed") toast(r.error ?? t("The flow failed."), { tone: "error" });
+        else done++;
+      }
+    } finally {
+      env.setState(a.bind, "");
+    }
+    if (done) {
+      if (a.done) toast(a.done, { tone: "ok" });
+      if (a.emit) env.emitLater?.(a.emit);
+    }
+  };
+  // zone=view: the whole view takes files dropped on it (outlined while they are dragged over).
+  const zone = a.zone === "view";
+  useEffect(() => {
+    if (!zone) return;
+    const root = (ref.current?.closest("[data-print-root]") as HTMLElement | null) ?? null;
+    if (!root) return;
+    const lit = (on: boolean) => ["ring-2", "ring-indigo-300/50", "rounded-xl"].forEach((c) => root.classList.toggle(c, on));
+    const over = (e: DragEvent) => {
+      if (![...(e.dataTransfer?.types ?? [])].includes("Files")) return;
+      e.preventDefault();
+      lit(true);
+    };
+    const leave = (e: DragEvent) => !root.contains(e.relatedTarget as globalThis.Node | null) && lit(false);
+    const drop = (e: DragEvent) => {
+      lit(false);
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (!files.length) return;
+      e.preventDefault();
+      void take(a.multiple === "true" ? files : files.slice(0, 1));
+    };
+    root.addEventListener("dragover", over);
+    root.addEventListener("dragleave", leave);
+    root.addEventListener("drop", drop);
+    return () => {
+      root.removeEventListener("dragover", over);
+      root.removeEventListener("dragleave", leave);
+      root.removeEventListener("drop", drop);
+      lit(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone, a.multiple]);
+  return (
+    <label ref={ref} className="btn btn-primary btn-sm cursor-pointer print:hidden">
+      {a.label || t("Choose a file")}
+      <input type="file" hidden multiple={a.multiple === "true"} accept={a.accept || undefined} onChange={(e) => (void take([...(e.target.files ?? [])]), (e.target.value = ""))} />
+    </label>
+  );
+}
+
+function UploadText({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
   const t = useT();
   const maxKb = Number(a.max) || 200;
   const pick = async (file: File | undefined) => {

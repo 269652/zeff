@@ -15,6 +15,7 @@ export async function switchDocumentsToPlugin(): Promise<{ flows: string[] }> {
   // (the built-in makes these on first use)
   (await import("./gate")).ensureGate();
   (await import("./folders")).ensureLocalFiles();
+  (await import("./seen")).ensureSeen();
   const minutes = (await import("@/lib/sync/intervals")).stepMinutes("localdocs");
   reg.setEnabled(PORT, true);
   const flows = await import("@/plugins/workspace/flows/store");

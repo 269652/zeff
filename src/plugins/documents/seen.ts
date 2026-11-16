@@ -37,6 +37,9 @@ function baseline(): void {
   setPref(BASELINE_RECENT, true);
 }
 
+/** The table is there and the first-time baseline taken (made on first use: a port that adopts the table needs it now). */
+export const ensureSeen = (): void => baseline();
+
 /** The ids of the documents you have not seen. */
 export function unreadIds(): Set<number> {
   baseline();

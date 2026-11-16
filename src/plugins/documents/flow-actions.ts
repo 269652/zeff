@@ -7,7 +7,7 @@ const text = (v: unknown): string => (v == null ? "" : String(v));
 const list = (v: unknown): string[] => (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => String(x).trim()).filter(Boolean);
 /** A folder of the account's data folder a flow may keep files in: a plain name — not Zeff's own (plugins, accounts, backups …). */
 const KEEP_DIR = /^[a-z][a-z0-9_-]{0,39}$/;
-const OWN_DIRS = new Set(["plugins", "accounts", "backups", "lambdas", "notebooks", "logs", "launcher", "work", "account-secret", "files", "ext"]);
+const OWN_DIRS = new Set(["plugins", "accounts", "backups", "lambdas", "notebooks", "logs", "launcher", "work", "account-secret", "files", "ext", "uploads"]);
 
 /** A file's place inside a folder of the account's data folder — throws for anything else (no path in a name, no folder of Zeff's own). */
 async function inDataDir(dir: unknown, file: unknown): Promise<string> {
@@ -41,6 +41,22 @@ export const DOCUMENTS_FLOW_ACTIONS: FlowAction[] = [
         return { docs: getSqlite().prepare("select id, name, summary, substr(text, 1, ?) text, created_at at from documents where status = 'ready'").all(chars) };
       } catch {
         return { docs: [] }; // (never ran here)
+      }
+    },
+  },
+  {
+    name: "documents.origins",
+    group: "documents",
+    label: "Where documents came from",
+    summary: "The mail an attachment-document was taken from (the first one, when several mails had it), by document id: { origins: { <id>: { mailKey, source, subject, from, receivedAt, file } } }. Empty for documents that did not come by mail.",
+    input: [f("ids", "list", { required: true })],
+    output: "{ origins }",
+    run: async (i) => {
+      const ids = list(i.ids).map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 5000);
+      try {
+        return { origins: (await import("@/lib/mail/attachments-store")).documentOrigins(ids) };
+      } catch {
+        return { origins: {} };
       }
     },
   },
@@ -129,6 +145,153 @@ export const DOCUMENTS_FLOW_ACTIONS: FlowAction[] = [
       if (ctx.dryRun || !fs.existsSync(target)) return { removed: false };
       fs.rmSync(/*turbopackIgnore: true*/ target, { force: true });
       return { removed: true };
+    },
+  },
+  {
+    name: "files.take",
+    group: "files",
+    label: "Keep an uploaded file in the data folder",
+    summary:
+      "Takes the file a view's upload staged (token — what the upload gives the flow) into a folder of your data folder (dir) under the hash of its content: dir/<first 16 characters of the sha256>-<name>; the staged file is gone after. { sha256, size, file, fresh } — fresh false: it was there already. Not empty, at most maxBytes (50 MB), else it throws with the reason.",
+    input: [f("token", "text", { required: true }), f("dir", "text", { required: true }), f("name", "text", { required: true }), f("maxBytes", "number", { default: 50 * 1024 * 1024 })],
+    output: "{ sha256, size, file, name, fresh }",
+    writes: true,
+    run: async (i, ctx) => {
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const { createHash } = await import("node:crypto");
+      const { stagedPath } = await import("@/plugins/workspace/uploads-staging");
+      const from = await stagedPath(i.token);
+      if (!fs.existsSync(from)) throw new Error("The uploaded file isn't there any more — upload it again.");
+      const bytes = fs.readFileSync(/*turbopackIgnore: true*/ from);
+      // (a name that stays in its folder: no path, no odd characters)
+      const name = (text(i.name).split(/[\\/]/).pop() ?? "").replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").replace(/^\.+/, "").trim().slice(0, 120) || "file";
+      const max = Math.max(1, Math.min(50 * 1024 * 1024, Number(i.maxBytes) || 50 * 1024 * 1024));
+      if (!bytes.length) throw new Error(`“${name}” is empty.`);
+      if (bytes.length > max) throw new Error(`“${name}” is too large (at most ${Math.round(max / 1024 / 1024)} MB).`);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const file = `${sha256.slice(0, 16)}-${name}`;
+      const target = await inDataDir(i.dir, file);
+      const fresh = !fs.existsSync(target);
+      if (!ctx.dryRun) {
+        if (fresh) {
+          fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(target), { recursive: true });
+          fs.writeFileSync(/*turbopackIgnore: true*/ target, bytes);
+        }
+        fs.rmSync(/*turbopackIgnore: true*/ from, { force: true });
+      }
+      return { sha256, size: bytes.length, file, name, fresh };
+    },
+  },
+  {
+    name: "files.browse",
+    group: "files",
+    label: "The subfolders of a folder of this computer",
+    summary: "A folder's subfolders (none given: the drives, or / elsewhere; hidden ones left out): { path, parent, dirs: [{ name, path }] } — for choosing a folder. Needs the flow's api permission (it reads this computer).",
+    input: [f("path", "text")],
+    output: "{ path, parent, dirs }",
+    run: async (i, ctx) => {
+      ctx.may("api");
+      const fs = await import("node:fs");
+      const path = await import("node:path");
+      const { normFolder, SKIP_DIRS } = await import("@/lib/files/local");
+      const raw = text(i.path).trim();
+      if (!raw && process.platform === "win32") {
+        const drives = "CDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((l) => `${l}:\\`).filter((p) => fs.existsSync(p));
+        return { path: null, parent: null, dirs: drives.map((p) => ({ name: p, path: p })) };
+      }
+      const p = normFolder(raw || "/");
+      let entries: import("node:fs").Dirent[] = [];
+      try {
+        entries = fs.readdirSync(/*turbopackIgnore: true*/ p, { withFileTypes: true });
+      } catch {
+        throw new Error(`“${raw}” can't be opened.`);
+      }
+      const dirs = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("$") && !SKIP_DIRS.has(e.name.toLowerCase()))
+        .map((e) => ({ name: e.name, path: path.join(p, e.name) }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, 500);
+      const up = path.dirname(p);
+      return { path: p, parent: up === p ? null : up, dirs };
+    },
+  },
+  {
+    name: "knowledge.pages",
+    group: "knowledge",
+    label: "What the knowledge server made of pages",
+    summary: "Pages (by their ids, \"zeff:doc:12\") as the knowledge server has them: compiled in their current version, their abstract and concepts — { pages: [{ id, title, summary, concepts, compiled }] }. Empty while there is no knowledge server.",
+    input: [f("ids", "list", { required: true })],
+    output: "{ pages }",
+    run: async (i) => {
+      const { isInstalled } = await import("@/plugins/state");
+      const ids = list(i.ids).filter((x) => /^zeff:[\w:.-]{1,80}$/.test(x)).slice(0, 200);
+      if (!ids.length || !isInstalled("knowledge")) return { pages: [] };
+      try {
+        return { pages: await (await import("@/plugins/knowledge/client")).knowledgePages(ids) };
+      } catch {
+        return { pages: [] }; // (the server isn't answering: the abstracts come when it has compiled)
+      }
+    },
+  },
+  {
+    name: "knowledge.sync",
+    group: "knowledge",
+    label: "Ask the knowledge server to take in what is new",
+    summary: "The knowledge server is asked to read Zeff's pages again and compile what changed. { started } — false while there is no knowledge server (or it isn't answering).",
+    input: [],
+    output: "{ started }",
+    writes: true,
+    run: async (_i, ctx) => {
+      const { isInstalled } = await import("@/plugins/state");
+      if (ctx.dryRun || !isInstalled("knowledge")) return { started: false };
+      try {
+        return { started: !!(await (await import("@/plugins/knowledge/client")).knowledgeSync()).started };
+      } catch {
+        return { started: false };
+      }
+    },
+  },
+  {
+    name: "todos.drop-ref",
+    group: "todos",
+    label: "Let the todos go of a thing",
+    summary: "Takes a ref (\"doc:12\") out of what every todo keeps as its source or its context (the thing is gone): { changed } — how many todos changed.",
+    input: [f("ref", "text", { required: true })],
+    output: "{ changed }",
+    writes: true,
+    run: async (i, ctx) => {
+      const ref = text(i.ref);
+      if (!/^[a-z][a-z0-9-]{0,15}:[\w.-]{1,80}$/.test(ref)) throw new Error("ref: a thing's ref (\"doc:12\").");
+      if (ctx.dryRun) return { changed: 0 };
+      const { getDb, schema } = await import("@/db");
+      const { eq, sql } = await import("drizzle-orm");
+      const { emitChange } = await import("@/lib/events");
+      const db = getDb();
+      let changed = 0;
+      for (const todo of db.select({ id: schema.todos.id, refs: schema.todos.refs }).from(schema.todos).where(sql`${schema.todos.refs} like ${`%"${ref}"%`}`).all()) {
+        const refs = (JSON.parse(todo.refs) as string[]).filter((x) => x !== ref);
+        db.update(schema.todos).set({ refs: JSON.stringify(refs) }).where(eq(schema.todos.id, todo.id)).run();
+        changed++;
+      }
+      if (changed) emitChange("todos");
+      return { changed };
+    },
+  },
+  {
+    name: "todos.add-context",
+    group: "todos",
+    label: "Attach things to a todo",
+    summary: "Adds refs (\"doc:12\") to a todo's context — what it is about, shown with it and read by the AI with it; what it has stays. { ok } — false: there is no such todo. Needs the flow's permission todos.",
+    input: [f("todo", "number", { required: true }), f("refs", "list", { required: true }), f("by", "text", { default: "Zeff" })],
+    output: "{ ok }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (!ctx.perms.todos) throw new Error("This flow may not change todos — grant it under the flow's permissions (todos).");
+      const refs = list(i.refs).filter((r) => /^[a-z][a-z0-9-]{0,15}:[\w.-]{1,80}$/.test(r)).slice(0, 30);
+      if (ctx.dryRun) return { ok: true };
+      const { addTodoContext } = await import("@/lib/todos/store");
+      return { ok: !!addTodoContext(Number(i.todo), refs, "", text(i.by) || "Zeff") };
     },
   },
   {
@@ -267,7 +430,7 @@ export const DOCUMENTS_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
-    name: "todos.set-related",
+    name: "todos.set-doc-related",
     group: "todos",
     label: "What the todos are related to",
     summary: "Adds to the todos the things an AI found them related to (what they have stays until you dismiss it): picks: { <todo id>: [ref] }, only refs starting with prefix (\"doc:\"). { changed } — how many todos changed.",
