@@ -25,6 +25,7 @@ export const PORTS: Port[] = [
   { builtin: "google-calendar", plugin: "google-calendar-ext", switch: async () => (await import("./google-calendar/to-plugin")).switchGoogleCalendarToPlugin() },
   { builtin: "gitlab", plugin: "gitlab-ext", switch: async () => (await import("./gitlab/to-plugin")).switchGitlabToPlugin() },
   { builtin: "jira", plugin: "jira-ext", switch: async () => (await import("./jira/to-plugin")).switchJiraToPlugin() },
+  { builtin: "jira-lage", plugin: "jira-lage-ext", switch: async () => (await import("./jira-lage/to-plugin")).switchJiraLageToPlugin() },
   { builtin: "keep", plugin: "keep-ext", switch: async () => (await import("./keep/to-plugin")).switchKeepToPlugin() },
   { builtin: "revolut", plugin: "revolut-ext", switch: async () => (await import("./revolut/to-plugin")).switchRevolutToPlugin() },
   { builtin: "cases", plugin: "cases-ext", switch: async () => (await import("./cases/to-plugin")).switchCasesToPlugin() },

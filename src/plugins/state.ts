@@ -25,6 +25,8 @@ export const PROVIDED_BY: Partial<Record<PluginId, { port: string; /** Its own s
   revolut: { port: "revolut-ext", steps: [] },
   gitlab: { port: "gitlab-ext", steps: ["gitlab"] },
   jira: { port: "jira-ext", steps: ["jira"] },
+  // (the Board-Lage run is the port's flow; the boards' databases, Meine Lage, the ticket picker and the assign button stay the kernel's — they read the same tables)
+  "jira-lage": { port: "jira-lage-ext", steps: ["boardlage"] },
   keep: { port: "keep-ext", steps: ["keep"] },
   // (the review of the todos for actions: the port's flow takes the step; the briefing runs the flow — lib/runs/run.ts)
   "auto-actions": { port: "auto-actions-ext", steps: ["autoactions"] },

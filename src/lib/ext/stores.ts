@@ -27,6 +27,8 @@ export const ADOPTABLE: Record<string, string[]> = {
   "keep-ext": ["keep_notes", "keep_own_notes"],
   // (the documents, the ones waiting for your confirmation and what is known of the files of your local folders)
   "documents-ext": ["documents", "doc_gate", "doc_local_files"],
+  // (the Jira briefing: which tickets are open, on which boards, and the comments it reads fresh — the tables the Jira reader keeps)
+  "jira-lage-ext": ["jira_tickets", "jira_boards", "jira_comments"],
   // (what became of each open loop: closed, dismissed, a proposal to close it, put off)
   "loops-ext": ["loops_state"],
   // (News: its sources, items, what was cleared away, the words it learned and the finds for an item)

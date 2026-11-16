@@ -2,6 +2,7 @@ import { runJiraSession, jiraPortOn } from "@/lib/jira/port-ops";
 import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { dateOf, FIELDS, plain, who, type Issue } from "@/lib/runs/collect";
+import { relevantKeysOf, type BoardLageResult } from "./core";
 import { followedTickets } from "@/lib/todos/followed";
 import { analyzedByTicketLage } from "@/lib/runs/ticket-lage";
 import { keepComments } from "@/lib/jira/comments";
@@ -20,31 +21,21 @@ import { accountFlag, setAccountFlag } from "@/lib/sync/account-flags";
 
 const { jiraTickets, jiraBoards } = schema;
 
-/** Relevant: moved within this many days (or in progress). */
-const RECENT_DAYS = 30;
-/** At most this many tickets read from Jira per run (the newest changes first). */
-const MAX_TICKETS = 150;
-
 /**
  * The Jira tickets relevant now on the enabled boards — open, moved lately or in progress — but those the Ticket-Lage just
- * read; of them the ones you're in (on you, followed) — or all (`all`).
+ * read; of them the ones you're in (on you, followed) — or all (`all`). (The rules: core.ts, which the port bundles too.)
  */
-function relevantKeys(all: boolean): string[] {
+export function relevantKeys(all: boolean): string[] {
   const db = getDb();
   const boards = db.select({ id: jiraBoards.id }).from(jiraBoards).where(eq(jiraBoards.enabled, true)).all().map((b) => b.id);
   if (!boards.length) return [];
-  const since = Date.now() - RECENT_DAYS * 864e5;
-  const mine = analyzedByTicketLage();
-  const involved = all ? null : new Set([...followedTickets().keys(), ...db.select({ key: jiraTickets.key }).from(jiraTickets).where(eq(jiraTickets.mine, true)).all().map((r) => r.key.toUpperCase())]);
-  return db
+  const tickets = db
     .select({ key: jiraTickets.key, updatedAt: jiraTickets.updatedAt, category: jiraTickets.statusCategory })
     .from(jiraTickets)
     .where(and(inArray(jiraTickets.boardId, boards), isNull(jiraTickets.resolvedAt), ne(jiraTickets.statusCategory, "done")))
-    .all()
-    .filter((t) => !mine.has(t.key.toUpperCase()) && (!involved || involved.has(t.key.toUpperCase())) && (t.category === "inprogress" || (dateOf(t.updatedAt)?.getTime() ?? 0) >= since))
-    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
-    .slice(0, MAX_TICKETS)
-    .map((t) => t.key);
+    .all();
+  const involved = all ? null : [...followedTickets().keys(), ...db.select({ key: jiraTickets.key }).from(jiraTickets).where(eq(jiraTickets.mine, true)).all().map((r) => r.key)];
+  return relevantKeysOf({ tickets, analyzed: analyzedByTicketLage(), involved, now: Date.now() });
 }
 
 /** The relevant Jira tickets read fresh from Jira: their comments kept (the review reads them). The number read. */
@@ -67,7 +58,7 @@ async function freshFromJira(keys: string[]): Promise<number> {
   return issues.length;
 }
 
-export type BoardLageResult = { ok: boolean; all: boolean; relevant: number; analyzed: number; unchanged: number; failed: number; error?: string };
+export type { BoardLageResult };
 
 /** The next run's scope (set by the button before it starts the step): all Jira tickets read fresh, or the ones you're in. */
 export function setBoardLageScope(all: boolean): void {

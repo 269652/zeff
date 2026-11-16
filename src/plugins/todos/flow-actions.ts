@@ -343,6 +343,57 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     output: "{ name }",
     run: async () => ({ name: (await import("@/lib/jira/store")).myJiraName() ?? "" }),
   },
+  {
+    name: "todos.followed",
+    group: "todos",
+    label: "The tickets I follow",
+    summary: "The keys of the tickets followed — by you (marked), by what you work on (a todo, a booking) — less those you switched off: { keys }.",
+    input: [],
+    output: "{ keys }",
+    run: async () => ({ keys: [...(await import("@/lib/todos/followed")).followedTickets().keys()] }),
+  },
+  {
+    name: "runs.analyzed-tickets",
+    group: "runs",
+    label: "The tickets the last board run analyzed",
+    summary: "The keys of the tickets the last good board (briefing) run read through and assessed — not only listed: { keys }.",
+    input: [],
+    output: "{ keys }",
+    run: async () => ({ keys: [...(await import("@/lib/runs/ticket-lage")).analyzedByTicketLage()] }),
+  },
+  {
+    name: "jira.read-issues",
+    group: "jira",
+    label: "Read Jira tickets fresh",
+    summary:
+      "The tickets with these keys (up to 200) read fresh from Jira, with their comments and history (in one session of the Jira connection, the plugin's or Zeff's own): { read, comments: [{ id, ticket, author, at, body }] } — the comments as Zeff keeps them (jira_comments). Nothing is written; empty while Jira isn't set up.",
+    input: [f("keys", "list", { required: true })],
+    output: "{ read, comments }",
+    run: async (i) => {
+      const keys = (Array.isArray(i.keys) ? i.keys : typeof i.keys === "string" ? i.keys.split(",") : []).map((k) => String(k).trim()).filter(Boolean).slice(0, 200);
+      const { getJiraSyncConfig } = await import("@/lib/jira/sync");
+      const { runJiraSession, jiraPortOn } = await import("@/lib/jira/port-ops");
+      const cfg = getJiraSyncConfig();
+      if (!keys.length || ((!cfg.configured || !cfg.command) && !(await jiraPortOn()))) return { read: 0, comments: [] };
+      const { FIELDS, dateOf, plain, who } = await import("@/lib/runs/collect");
+      type Issue = import("@/lib/runs/collect").Issue;
+      const { resultToPayload } = await import("@/lib/mcp/stdio");
+      const issues: Issue[] = await runJiraSession(
+        "Jira (read tickets)",
+        async (call) => {
+          const out: Issue[] = [];
+          for (let n = 0; n < keys.length; n += 50) {
+            const chunk = keys.slice(n, n + 50);
+            const p = resultToPayload(await call("jira_search", { jql: `key in (${chunk.join(",")})`, limit: chunk.length, fields: FIELDS, expand: "changelog" })) as { issues?: Issue[] };
+            out.push(...(p.issues ?? []).filter((x) => x?.key));
+          }
+          return out;
+        },
+        240000,
+      );
+      return { read: issues.length, comments: issues.flatMap((x) => (x.comments ?? []).flatMap((c) => (c.id ? [{ id: c.id, ticket: x.key.toUpperCase(), author: who(c.author), at: dateOf(c.created)?.toISOString() ?? "", body: plain(c.body, 4000) }] : []))) };
+    },
+  },
 ];
 
 extensionPoint<FlowAction[]>("workspace.flowActions").contribute("todos", TODO_FLOW_ACTIONS);

@@ -462,17 +462,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
         // The pipelines with their AI steps: the fields of the rows that changed, the summaries.
         await (await import("@/plugins/workspace/pipeline")).runPipelines({ ai: true }).catch((e) => console.error("[workspace] the pipelines failed", e));
       }
-      return r.ok
-        ? {
-            ok: true,
-            message: [
-              r.all ? t("{n} tickets (all)", { n: r.relevant }) : t("{n} tickets (with you)", { n: r.relevant }),
-              t("{n} reassessed", { n: r.analyzed }),
-              t("{n} unchanged", { n: r.unchanged }),
-              ...(r.failed ? [t("{n} failed", { n: r.failed })] : []),
-            ].join(" · "),
-          }
-        : { ok: false, message: r.error ?? t("Failed.") };
+      return (await import("@/plugins/jira-lage/core")).boardLageMessage(r, t);
     },
     busy: () => flag("__zeffBoardLage"),
     schedule: () => ({ everyMinutes: getBoardSettings().autoMinutes, lastAt: recorded("boardlage").lastAt, window: t("workdays, with the briefing"), workdays: true }),
@@ -832,7 +822,10 @@ export function startSyncAllHere(): { ok: boolean; message: string } {
     void (async () => {
       try {
         // The Mail-Durchsicht and -Zuordnung come with the Ticket-Lage (its last steps) — not twice.
-        for (const key of allKeys().filter((k) => k !== "relations" && k !== "mailtodos" && k !== "autoactions" && k !== "boardlage" && k !== "knowledgerel" && k !== "peoplenorm" && k !== "tododupes" && k !== "notetodos" && k !== "noterelations" && k !== "calendarrelations" && k !== "calendartodos" && k !== "review" && k !== "matching" && k !== "doctodos" && k !== "docrelations" && stepAvailable(k))) {
+        // (a port's flow standing in for one of those steps — its `replaces` — is left out like it)
+        const chained = new Set<string>(["relations", "mailtodos", "autoactions", "boardlage", "knowledgerel", "peoplenorm", "tododupes", "notetodos", "noterelations", "calendarrelations", "calendartodos", "review", "matching", "doctodos", "docrelations"]);
+        const kindOf = (k: string): string => (k.startsWith("flow:") ? (flowByName(k.slice(5))?.sync?.replaces ?? k) : k);
+        for (const key of allKeys().filter((k) => !chained.has(kindOf(k)) && stepAvailable(k))) {
           if (l.allStopped) break;
           l.all = key;
           await runStep(key);
