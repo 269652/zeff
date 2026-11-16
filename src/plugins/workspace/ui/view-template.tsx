@@ -998,9 +998,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   };
 
   const theme = themeStyle(findTheme(r.nodes) ?? {});
+  // (A <data> showing its last answer while the new one is on its way: a thin line at the top says so — it takes no room, so nothing jumps.)
+  const refreshing = Object.keys(flowData).some((k) => k.endsWith("_status") && (flowData[k] === "stale" || flowData[k] === "loading") && flowData[k.slice(0, -7)] != null);
+  const refreshLine = refreshing ? <div aria-hidden className="ws-refresh pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden rounded-full bg-indigo-500/10 print:hidden"><div className="ws-refresh-bar h-full w-1/3 rounded-full bg-indigo-500/50" /></div> : null;
   if (nav && !inTree && props.view.nav !== "off")
     return (
-      <div className="flex flex-col gap-5 md:flex-row md:items-start" data-print-root style={theme as CSSProperties}>
+      <div className="relative flex flex-col gap-5 md:flex-row md:items-start" data-print-root style={theme as CSSProperties}>
+        {refreshLine}
         <ViewNav title={nav.title} entries={nav.entries} active={(e) => (e.state ? (r.state[e.state] ?? "") === (e.value ?? "") : false)} onPick={go} />
         <div className="min-w-0 flex-1 space-y-5">
           {!onErrors && <PackageUpdateNote dbId={props.data.id} reload={props.reload} />}
@@ -1009,7 +1013,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       </div>
     );
   return (
-    <div className="space-y-5" data-print-root style={theme as CSSProperties}>
+    <div className="relative space-y-5" data-print-root style={theme as CSSProperties}>
+      {refreshLine}
       {!onErrors && <PackageUpdateNote dbId={props.data.id} reload={props.reload} />}
       {!onErrors && r.errors.length > 0 && <TemplateTrouble errors={r.errors} view={props.view.name} dbId={props.data.id} dbTitle={props.data.title} reload={props.reload} />}
       <Level nodes={r.nodes} ext={ext} />

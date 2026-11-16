@@ -170,14 +170,22 @@ async function stepsNow(): Promise<HealthStep[]> {
 const cache = globalThis as { __zeffSourceHealth?: Map<string, { at: number; health: SourceHealth[] }> };
 
 /** Every step's health (cached for a minute unless `fresh`). */
-export async function sourceHealth({ fresh = false } = {}): Promise<SourceHealth[]> {
+export async function sourceHealth({ fresh = false, stale = false } = {}): Promise<SourceHealth[]> {
   const map = (cache.__zeffSourceHealth ??= new Map());
   const account = currentAccountId();
   const hit = map.get(account);
   if (!fresh && hit && Date.now() - hit.at < 60000) return hit.health;
-  const health = computeSourceHealth(await stepsNow());
-  map.set(account, { at: Date.now(), health });
-  return health;
+  const load = async () => {
+    const health = computeSourceHealth(await stepsNow());
+    map.set(account, { at: Date.now(), health });
+    return health;
+  };
+  // (stale: what was known last, at once — a page waits for no sync step's state — and the newer one is read for the next ask)
+  if (stale && !fresh && hit) {
+    void load().catch(() => undefined);
+    return hit.health;
+  }
+  return load();
 }
 
 /** The health as text (MCP, API): one line per step — its state, why, when it last ran and when its newest item came. */

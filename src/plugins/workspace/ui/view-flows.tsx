@@ -32,11 +32,40 @@ export function runFlowShared(flow: string, inputs: Record<string, unknown>, opt
   if (hit) return hit.answer;
   // (<data lambda="…">: a lambda answers instead of a flow — read-only, the same shape of answer)
   // (<data do="…">: one of Zeff's own actions a view may do by itself — read a conversation, mark one read — as you)
-  const userAnswer = () => runUserAction(flow, { ...(opts.row ? { row: opts.row } : {}), ...inputs }, { auto: true }).then((r) => (r.ok ? { ok: true as const, status: "done" as const, output: r.output, error: null } : r));
-  const entry = { done: Infinity, answer: (opts.user ? userAnswer() : opts.lambda ? runLambdaAction(flow, inputs) : runFlowAction(flow, inputs, { row: opts.row })) as Promise<FlowAnswer> };
+  // (Asked through /api/workspace/data: the <data> of a page run side by side — server actions would queue one behind the other.)
+  const entry = { done: Infinity, answer: askData(opts.user ? "do" : opts.lambda ? "lambda" : "flow", flow, inputs, opts.row) };
   entry.answer.finally(() => (entry.done = Date.now())).catch(() => undefined);
   shared.set(key, entry);
   return entry.answer;
+}
+
+type DataKind = "flow" | "lambda" | "do";
+
+/** One <data> asked of the server's route (parallel with the others); when the route can't be reached, the server action as before. */
+function askData(kind: DataKind, name: string, inputs: Record<string, unknown>, row?: number): Promise<FlowAnswer> {
+  const viaAction = (): Promise<FlowAnswer> =>
+    (kind === "do"
+      ? runUserAction(name, { ...(row ? { row } : {}), ...inputs }, { auto: true }).then((r) => (r.ok ? { ok: true as const, status: "done" as const, output: r.output, error: null } : r))
+      : kind === "lambda"
+        ? runLambdaAction(name, inputs)
+        : runFlowAction(name, inputs, { row })) as Promise<FlowAnswer>;
+  if (typeof fetch === "undefined") return viaAction();
+  return fetch("/api/workspace/data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, name, input: inputs, ...(row ? { row } : {}) }) })
+    .then((r) => (r.ok ? (r.json() as Promise<FlowAnswer>) : Promise.reject(new Error(String(r.status)))))
+    .catch(viaAction);
+}
+
+/** The answer the server kept the last time (nothing computed): shown at once where this browser kept none. Null when there is none. */
+async function peekData(kind: DataKind, name: string, inputs: Record<string, unknown>, row?: number): Promise<unknown | null> {
+  if (kind === "do" || typeof fetch === "undefined") return null;
+  try {
+    const r = await fetch("/api/workspace/data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, name, input: inputs, peek: true, ...(row ? { row } : {}) }) });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { hit?: boolean; answer?: { ok?: boolean; status?: string; output?: unknown } };
+    return j.hit && j.answer?.ok && j.answer.status === "done" ? { output: j.answer.output } : null;
+  } catch {
+    return null;
+  }
 }
 
 const RELOAD_EVENT = "zeff:flowdata-reload";
@@ -79,11 +108,19 @@ export function FlowData({ a, setData, row, reload }: { a: Record<string, string
       }
     }
     const mine = ++seq.current;
+    // (This browser kept nothing: the server's last answer, asked for at the same time as the fresh one — whichever is there first.)
+    let freshIn = false;
+    if (!keptText.current && (a.flow || a.lambda)) {
+      void peekData(a.flow ? "flow" : "lambda", a.flow ?? a.lambda, parseWith(a.with), row).then((kept) => {
+        if (kept && !freshIn && mine === seq.current) setData(name, { [name]: (kept as { output: unknown }).output, [`${name}_status`]: "stale", [`${name}_error`]: null });
+      });
+    }
     const timer = setTimeout(
       async () => {
         setData(name, { [`${name}_status`]: "loading" });
         const r = await runFlowShared(a.flow ?? a.do ?? a.lambda, parseWith(a.with), { ...(row ? { row } : {}), ...(!a.flow && a.do ? { user: true } : !a.flow && a.lambda ? { lambda: true } : {}) });
         if (mine !== seq.current) return;
+        freshIn = true;
         if (!r.ok) return setData(name, { [`${name}_status`]: "error", [`${name}_error`]: r.error });
         const res = r;
         if (res.status === "failed") setData(name, { [`${name}_status`]: "error", [`${name}_error`]: res.error });

@@ -15,7 +15,7 @@ export async function syncOverviewAction(): Promise<import("@/lib/sync/shared").
   try {
     const { sourceHealth } = await import("@/lib/sync/source-health");
     const { healthReason } = await import("@/lib/sync/source-health-shared");
-    const health = (await sourceHealth()).flatMap((h) => (h.state === "ok" ? [] : [{ key: h.key, state: h.state, reason: healthReason(t, h) }]));
+    const health = (await sourceHealth({ stale: true })).flatMap((h) => (h.state === "ok" ? [] : [{ key: h.key, state: h.state, reason: healthReason(t, h) }]));
     return { ...overview, health };
   } catch (e) {
     console.error("[sync] source health", e);

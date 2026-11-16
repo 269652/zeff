@@ -1858,3 +1858,11 @@ body.ws-dragging-block * {
   outline: 2px dashed var(--color-indigo-500, #6366f1);
   outline-offset: 4px;
 }
+
+/* A view showing its last answer while a newer one loads: a thin line that runs (view-template.tsx). */
+@keyframes ws-refresh-run {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+.ws-refresh-bar { animation: ws-refresh-run 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ws-refresh-bar { animation: none; width: 100%; } }

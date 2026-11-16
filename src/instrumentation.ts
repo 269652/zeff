@@ -159,5 +159,20 @@ export async function register() {
     const { startSyncScheduler } = await import("./lib/sync-scheduler");
     startSyncScheduler();
   }
+  // The first page after a start no longer pays for loading the flow engine, the lambda runner and the plugin scan: done now, in the
+  // background, once the server is up (a failure here only means the first page does it, as before).
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const { listAccounts, withAccount } = await import("./db/accounts");
+        const { scanPlugins } = await import("./lib/ext/registry");
+        await import("./plugins/contributions");
+        await Promise.all([import("./plugins/workspace/flows/engine"), import("./plugins/workspace/lambdas/run"), import("./plugins/workspace/actions/flows"), import("./lib/data-cache")]);
+        for (const a of listAccounts()) withAccount(a.id, () => scanPlugins());
+      } catch {
+        // the first page does it
+      }
+    })();
+  }, 1500).unref?.();
   boot?.bootReady();
 }
