@@ -8,8 +8,6 @@ import Link from "next/link";
 import { connection } from "next/server";
 import { HashRedirect } from "@/components/HashRedirect";
 import { BackupSettings } from "@/plugins/backup/BackupSettings";
-import { ParallelDefaultSetting } from "@/components/ParallelControls";
-import { defaultParallelMode } from "@/lib/entry-parallel";
 import { getBackupSettings, listBackups } from "@/plugins/backup/backup";
 import { LanguagePicker } from "@/components/LanguagePicker";
 import { TouchSettings } from "@/components/TouchSettings";
@@ -79,17 +77,6 @@ export default async function PreferencesPage() {
         </p>
         <LanguagePicker available={availableLanguages()} />
       </section>
-      {isInstalled("zeiterfassung") && (
-        <section id="parallel" className="card scroll-mt-4 space-y-3 p-4">
-          <div>
-            <h2 className="text-sm font-semibold text-zinc-500 uppercase">{t("Parallel work")}</h2>
-            <p className="max-w-[75ch] text-sm text-zinc-500">
-              {t("Two tasks of one job done at the same time (by their start and hours) are not booked on top of each other. Choose how they are booked when Zeff notices — you can change each case afterwards.")}
-            </p>
-          </div>
-          <ParallelDefaultSetting mode={defaultParallelMode()} />
-        </section>
-      )}
       <section id="touch" className="card scroll-mt-4 space-y-3 p-4">
         <div>
           <h2 className="text-sm font-semibold text-zinc-500 uppercase">{t("Touch to approve")}</h2>

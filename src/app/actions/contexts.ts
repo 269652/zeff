@@ -16,24 +16,6 @@ export async function fetchImagesAction(urls: string[]): Promise<import("@/lib/c
   return fetchRemoteImages(urls.map(String));
 }
 
-/**
- * The entry's context search: add a synced Teams message or GitLab item to the entry — as an
- * item of its own, the one there is for its link when there is one.
- */
-export async function addContextSourceAction(entryId: number, url: string, ticket: string | null): Promise<ActionState> {
-  try {
-    const { resolveLinks } = await import("@/lib/context-links");
-    const e = resolveLinks([String(url)])[String(url).trim()];
-    if (!e) return { ok: false, error: t("That isn't a synced Teams message or GitLab item.") };
-    const { addSource } = await import("@/lib/contexts");
-    addSource(String(url), e, { entryId, ticket });
-    revalidateAll();
-    return { ok: true, message: t("Added.") };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 /** "Add context": a new item (with its files), linked to the entry when there is one. */
 export async function createContextAction(entryId: number | null, _prev: ActionState, fd: FormData): Promise<ActionState> {
   try {
@@ -73,20 +55,6 @@ export async function deleteContextFileAction(fd: FormData): Promise<void> {
   revalidateAll();
 }
 
-/** "Link existing": put an item that's already there on this entry too. */
-export async function linkContextAction(entryId: number, _prev: ActionState, fd: FormData): Promise<ActionState> {
-  try {
-    const contextId = int(fd, "contextId");
-    if (contextId === undefined) return { ok: false, error: t("Pick a context item to link.") };
-    const { linkContext } = await import("@/lib/contexts");
-    linkContext(entryId, contextId);
-    revalidateAll();
-    return { ok: true, message: t("Context linked.") };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
-}
-
 export async function unlinkContextAction(fd: FormData): Promise<void> {
   const entryId = int(fd, "entryId");
   const contextId = int(fd, "contextId");
@@ -94,19 +62,6 @@ export async function unlinkContextAction(fd: FormData): Promise<void> {
   const { unlinkContext } = await import("@/lib/contexts");
   unlinkContext(entryId, contextId);
   revalidateAll();
-}
-
-/** An entry's context dragged into a new order (item ids, first to last). */
-export async function reorderEntryContextsAction(entryId: number, contextIds: number[]): Promise<ActionState> {
-  try {
-    if (!Number.isInteger(entryId) || !Array.isArray(contextIds) || !contextIds.every(Number.isInteger)) return { ok: false, error: t("Nothing to reorder.") };
-    const { reorderEntryContexts } = await import("@/lib/contexts");
-    reorderEntryContexts(entryId, contextIds);
-    revalidateAll();
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: errorMessage(err) };
-  }
 }
 
 /**

@@ -7,7 +7,8 @@ import { getMeetingDefaultJob, getMeetingExcludeRules, getMeetingJobRules, getRe
 import { newRuleId, RULE_FIELDS, ruleFieldLabels, type ReportRule, type RuleField } from "@/lib/report-shared";
 import { getTypeRules } from "@/lib/type-rules";
 import { isInstalled } from "@/plugins/state";
-import { listTags } from "@/lib/tags";
+import { createTag, deleteTag, listTags, listTagsWithCounts, renameTag } from "@/lib/tags";
+import { defaultParallelMode, setDefaultParallelMode, type ParallelMode } from "@/lib/entry-parallel";
 import { listProjects } from "@/lib/projects";
 
 /**
@@ -33,16 +34,29 @@ export function rulesScreen() {
     fieldOptions: RULE_FIELDS.map((f) => [f, labels[f]] as [string, string]),
     tagNames: listTags().map((x) => x.name),
     projectNames: listProjects({ includeInactive: true }).map((p) => p.title),
-    typeRules: getTypeRules().map((r, i) => ({ i, job: r.jobNumber ? jobName(r.jobNumber) : t("any job"), text: r.description ? `“${r.description}”` : t("any description"), type: typeName(r.type) })),
+    typeRules: getTypeRules().map((r, i) => ({ i, job: r.jobNumber ? jobName(r.jobNumber) : t("any job"), text: r.description ? `“${r.description}”` : t("any description"), type: typeName(r.type), jobNumber: r.jobNumber, description: r.description, typeKey: r.type })),
     reportRules: getReportRules(settings).map((r, i) => ({
       i,
       when: r.conditions.length ? r.conditions.map(clause).join(` ${t("and")} `) : t("every entry"),
       template: r.template,
       tags: (r.tags ?? []).map((x) => `#${x}`).join(" "),
+      tagsText: (r.tags ?? []).join(", "),
+      f1: r.conditions[0]?.field ?? "type", v1: r.conditions[0]?.value ?? "",
+      f2: r.conditions[1]?.field ?? "type", v2: r.conditions[1]?.value ?? "",
+      f3: r.conditions[2]?.field ?? "type", v3: r.conditions[2]?.value ?? "",
     })),
-    meetingRules: getMeetingJobRules(settings).map((r, i) => ({ i, match: r.match, job: jobName(r.jobNumber), group: !!r.group })),
+    meetingRules: getMeetingJobRules(settings).map((r, i) => ({ i, match: r.match, job: jobName(r.jobNumber), jobNumber: r.jobNumber, group: !!r.group, groupFlag: r.group ? "true" : "false" })),
     meetingDefaultJob: meetingDefault ?? "",
     excludeRules: getMeetingExcludeRules(settings).map((value, i) => ({ i, value })),
+    tagList: listTagsWithCounts().map((x) => ({ id: x.id, name: x.name, count: x.entryCount })),
+    tagsHead: t("All tags ({n})", { n: listTagsWithCounts().length }),
+    parallelMode: defaultParallelMode(),
+    parallelOptions: [["combine", t("Book all on group")], ["divide", t("Divide time on subtasks")], ["sequential", t("Book sequential")]] as [string, string][],
+    parallelWhat: {
+      combine: t("One spanning entry for the stretch (its hours = what the tasks span) books it all; the tasks stay as they are and book nothing themselves."),
+      divide: t("The group's time is shared between the tasks (3 h over two → 1.5 + 1.5); each task keeps its real hours."),
+      sequential: t("Each task books what it worked, one after the other (the hours add up); the group itself books nothing."),
+    }[defaultParallelMode() as "combine" | "divide" | "sequential"] ?? "",
     entryTypes: types.map((x) => ({ key: x.key, label: x.label, color: x.color, builtin: x.builtin, used: usage[x.key] ?? 0 })),
   };
 }
@@ -67,11 +81,11 @@ export function ruleOp(i: Record<string, unknown>): { message: string } {
 
   if (what === "types") {
     let rules = getTypeRules();
-    if (op === "add") {
-      const rule = { id: newRuleId(), jobNumber: text(i.jobNumber), description: text(i.description), type: text(i.type) as never };
+    if (op === "add" || op === "update") {
+      const rule = { id: op === "update" ? (rules[at]?.id ?? newRuleId()) : newRuleId(), jobNumber: text(i.jobNumber), description: text(i.description), type: text(i.type) as never };
       if (!rule.jobNumber && !rule.description) throw new Error(t("A rule needs a job or a description."));
       if (rule.jobNumber && !known().has(rule.jobNumber)) throw new Error(t("Unknown job {job}.", { job: rule.jobNumber }));
-      rules = [...rules, rule];
+      rules = op === "update" ? rules.map((r, j) => (j === at ? rule : r)) : [...rules, rule];
     } else if (op === "remove") rules = rules.filter((_, j) => j !== at);
     else if (op === "up" || op === "down") rules = move(rules, at, op === "up" ? -1 : 1);
     updateReportSettings({ typeRules: rules });
@@ -83,9 +97,10 @@ export function ruleOp(i: Record<string, unknown>): { message: string } {
 
   if (what === "report") {
     let rules: ReportRule[] = getReportRules(settings);
-    if (op === "add") {
+    if (op === "add" || op === "update") {
       const conditions = [1, 2, 3].flatMap((n) => (text(i[`f${n}`]) && text(i[`v${n}`]) ? [{ field: text(i[`f${n}`]) as RuleField, value: text(i[`v${n}`]) }] : []));
-      rules = [...rules, { id: newRuleId(), conditions, template: text(i.template), tags: text(i.tags).split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean) }];
+      const rule = { id: op === "update" ? (rules[at]?.id ?? newRuleId()) : newRuleId(), conditions, template: text(i.template), tags: text(i.tags).split(",").map((x) => x.trim().replace(/^#/, "")).filter(Boolean) };
+      rules = op === "update" ? rules.map((r, j) => (j === at ? rule : r)) : [...rules, rule];
     } else if (op === "remove") rules = rules.filter((_, j) => j !== at);
     else if (op === "up" || op === "down") rules = move(rules, at, op === "up" ? -1 : 1);
     updateReportSettings({ rules });
@@ -96,9 +111,10 @@ export function ruleOp(i: Record<string, unknown>): { message: string } {
   if (what === "meetings") {
     let rules = getMeetingJobRules(settings);
     let defaultJob: string | null = getMeetingDefaultJob(settings);
-    if (op === "add") {
+    if (op === "add" || op === "update") {
       if (!text(i.match)) throw new Error(t("A rule needs a part of the meeting's title."));
-      rules = [...rules, { match: text(i.match), jobNumber: text(i.jobNumber), ...(i.group === true || i.group === "true" ? { group: true } : {}) }];
+      const rule = { match: text(i.match), jobNumber: text(i.jobNumber), ...(i.group === true || i.group === "true" ? { group: true } : {}) };
+      rules = op === "update" ? rules.map((r, j) => (j === at ? rule : r)) : [...rules, rule];
     } else if (op === "remove") rules = rules.filter((_, j) => j !== at);
     else if (op === "up" || op === "down") rules = move(rules, at, op === "up" ? -1 : 1);
     else if (op === "default") defaultJob = text(i.jobNumber) || null;
@@ -116,6 +132,7 @@ export function ruleOp(i: Record<string, unknown>): { message: string } {
   if (what === "exclude") {
     let rules = getMeetingExcludeRules(settings);
     if (op === "add") rules = [...rules.filter((r) => r.toLowerCase() !== text(i.value).toLowerCase()), text(i.value)].filter(Boolean);
+    else if (op === "update") rules = rules.map((r, j) => (j === at ? text(i.value) : r)).filter(Boolean);
     else if (op === "remove") rules = rules.filter((_, j) => j !== at);
     updateReportSettings({ meetingExcludeRules: rules });
     return { message: rules.length === 1 ? t("Saved 1 exclude rule.") : t("Saved {n} exclude rules.", { n: rules.length }) };
@@ -135,5 +152,18 @@ export function ruleOp(i: Record<string, unknown>): { message: string } {
       return { message: t("Type deleted.") };
     }
   }
-  throw new Error("what: types, report, meetings, exclude or entry-type");
+  if (what === "tag") {
+    if (op === "add") return { message: t("Added tag #{name}.", { name: createTag(text(i.name), text(i.color) || null).name }) };
+    if (op === "rename") return { message: t("Saved #{name}.", { name: renameTag(Number(i.id), text(i.name), text(i.color) || null).name }) };
+    if (op === "remove") {
+      deleteTag(Number(i.id));
+      return { message: "" };
+    }
+  }
+  if (what === "parallel") {
+    if (!["combine", "divide", "sequential"].includes(text(i.mode))) throw new Error(t("Unknown way of booking."));
+    setDefaultParallelMode(text(i.mode) as ParallelMode);
+    return { message: t("Saved.") };
+  }
+  throw new Error("what: types, report, meetings, exclude, entry-type, tag or parallel");
 }

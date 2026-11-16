@@ -50,6 +50,8 @@ export const PORTS: Port[] = [
   // (Todos: the engine — the todos, their actions, the settle hooks — stays Zeff's, so the built-in stays on; the port is its screens: the Todos page, its panel, the recap, the tickets)
   { builtin: "todos", plugin: "todos-ext", switch: async () => (await import("./todos/to-plugin")).switchTodosToPlugin() },
   { builtin: "explorer", plugin: "explorer-ext", switch: async () => (await import("./explorer/to-plugin")).switchExplorerToPlugin() },
+  // (Time tracking: the port's page is the report and its tabs; the bookings, jobs, projects, the schedule and the report rules stay the kernel's)
+  { builtin: "zeiterfassung", plugin: "zeiterfassung-ext", switch: async () => (await import("./zeiterfassung/to-plugin")).switchZeiterfassungToPlugin() },
 ];
 
 /** The port of a built-in, when there is one and it is in the plugins folder (installed from its repository). */

@@ -15,8 +15,8 @@ const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
 // Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
-const PLUGIN_VERSION = "0.3.0";
-const PACKAGE_VERSION = "1.2.0";
+const PLUGIN_VERSION = "0.4.0";
+const PACKAGE_VERSION = "1.3.0";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -32,6 +32,7 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "zeiterfassung.rules": { label: "Time tracking: the rules", what: "The entry type rules, the report rewriting rules, the meeting rules, the exclude rules and the entry types with the options of their forms.", zeff: ["time.rules"], timeoutMs: 30000 },
   "zeiterfassung.job-detail": { label: "Time tracking: a job's or project's page", what: "What a job's or a project's own page shows: what it has booked, its entries, for a project the days to book.", zeff: ["time.job-detail"], timeoutMs: 30000 },
   "zeiterfassung.entry-detail": { label: "Time tracking: what stands behind an entry", what: "An entry's context items and what its todos bring along.", zeff: ["time.entry-detail"], timeoutMs: 30000 },
+  "zeiterfassung.source-search": { label: "Time tracking: sources to add to an entry", what: "Teams messages, GitLab items, todos and mails found by words or a pasted link, each with the link that adds it.", zeff: ["time.source-search"], timeoutMs: 30000 },
   "zeiterfassung.analysis": { label: "Time tracking: the analysis", what: "The analysis of the booked time — the cards, the split by type, hours by job, the weeks, the Jira metrics where tickets are synced, tags and top tickets.", zeff: ["time.analysis"], timeoutMs: 60000 },
   "zeiterfassung.week": { label: "Time tracking: the week's report", what: "The weekly report's figures and words for a week — the booked card, hours per job and day, the closing steps, the suggestions, what was done today, the report, the entries.", zeff: ["time.week"], timeoutMs: 60000 },
   "zeiterfassung.month": { label: "Time tracking: the month's report", what: "The monthly report's figures and words for a month — the booked card, the calendar, hours per job and week, by type and tag, what each job's time went to.", zeff: ["time.month"], timeoutMs: 60000 },
@@ -44,7 +45,7 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
 const TABS = ["month", "analysis", "day", "jobs", "settings"];
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
-  '<state name="view" value="week" keep=true/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
+  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
   '<tabs bind="view" options="week:Week, month:Month, analysis:Analysis, day:End of day, jobs:Jobs, settings:Settings"/>',
   // one branch per tab, the week the one left over
@@ -79,8 +80,8 @@ const i = (...names: string[]) => Object.fromEntries(names.map((n) => [n, `{{ in
 const FLOWS = [
   flow("f15", "zeiterfassung.job-delete", "Delete a job or a project", "Deletes a job or a project (input kind job|project, id). Run by the Jobs tab.", "time.job-delete", i("kind", "id")),
   flow("f16", "zeiterfassung.book-days", "Book the working days on a project", "One entry per working day of a range on a project (input id, from, to, hours, fillUp, description, type). Run by the Jobs tab.", "time.book-days", i("id", "from", "to", "hours", "fillUp", "description", "type")),
-  flow("f14", "zeiterfassung.entry-op", "Edit an entry, its group or a day's break", "One edit of the weekly report (input op update|copy|link|unlink|collect|start|span-mode|ungroup|parallel|pauses and its fields). Run by the report.", "time.entry-op", i("op", "id", "date", "bookOn", "hours", "description", "ticket", "type", "tags", "comment", "start", "isGroup", "spanId", "mode", "ids", "dates", "text", "state", "contextId", "ctxKind", "ctxTitle", "ctxAuthor", "ctxBody", "ctxLink", "ctxDate", "ctxTicket")),
-  flow("f13", "zeiterfassung.rule-op", "Change a list of rules", "One change of a list of rules or of the entry types (input what types|report|meetings|exclude|entry-type, op add|remove|up|down|default|update|none, index, apply, and the rule's fields). Run by the Settings tab.", "time.rule-op", i("what", "op", "index", "apply", "jobNumber", "description", "type", "f1", "v1", "f2", "v2", "f3", "v3", "template", "tags", "match", "group", "value", "label", "color", "key")),
+  flow("f14", "zeiterfassung.entry-op", "Edit an entry, its group or a day's break", "One edit of the weekly report (input op update|copy|link|unlink|collect|start|span-mode|ungroup|parallel|pauses and its fields). Run by the report.", "time.entry-op", i("op", "id", "date", "bookOn", "hours", "description", "ticket", "type", "tags", "comment", "start", "isGroup", "spanId", "mode", "ids", "dates", "text", "state", "contextId", "ctxKind", "ctxTitle", "ctxAuthor", "ctxBody", "ctxLink", "ctxDate", "ctxTicket", "ctxLinks", "token", "name", "mime", "fileId", "dir", "url")),
+  flow("f13", "zeiterfassung.rule-op", "Change a list of rules", "One change of a list of rules or of the entry types (input what types|report|meetings|exclude|entry-type, op add|remove|up|down|default|update|none, index, apply, and the rule's fields). Run by the Settings tab.", "time.rule-op", i("what", "op", "index", "apply", "jobNumber", "description", "type", "f1", "v1", "f2", "v2", "f3", "v3", "template", "tags", "match", "group", "value", "label", "color", "key", "name", "id", "mode")),
   flow("f11", "zeiterfassung.day-book", "Book the day", "The day's lines booked as you took them over (input date, state: the view's state as JSON). Run by the End of day tab.", "time.day-book", i("date", "state")),
   flow("f12", "zeiterfassung.day-undo", "Take the day's booking back", "Takes back what a booking of the day created, as far as it is still as booked (input created). Run by the End of day tab.", "time.day-undo", i("created")),
   flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment", "punch")),

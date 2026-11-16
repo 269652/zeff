@@ -327,8 +327,8 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     group: "time",
     label: "Change a list of rules, one step",
     summary:
-      "One change of a list: what types | report | meetings | exclude | entry-type, op add | remove | up | down (| default for the meeting default job | update for an entry type), index of the rule. add: types (jobNumber, description, type), report (f1,v1 … f3,v3 conditions as field/value, template, tags), meetings (match, jobNumber, group), exclude (value), entry-type (label, color); update/remove entry-type take key. apply: also re-type / re-tag / re-book existing entries. Output { ok, message }; a refusal is an error.",
-    input: [f("what", "text", { required: true }), f("op", "text", { required: true }), f("index", "number"), f("apply", "boolean"), f("jobNumber", "text"), f("description", "text"), f("type", "text"), f("f1", "text"), f("v1", "text"), f("f2", "text"), f("v2", "text"), f("f3", "text"), f("v3", "text"), f("template", "text"), f("tags", "text"), f("match", "text"), f("group", "boolean"), f("value", "text"), f("label", "text"), f("color", "text"), f("key", "text")],
+      "One change of a list: what types | report | meetings | exclude | entry-type | tag (op add: name, color — rename: id, name — remove: id) | parallel (mode combine|divide|sequential: how parallel work is booked by default), op add | remove | up | down (| default for the meeting default job | update for an entry type), index of the rule. add: types (jobNumber, description, type), report (f1,v1 … f3,v3 conditions as field/value, template, tags), meetings (match, jobNumber, group), exclude (value), entry-type (label, color); update/remove entry-type take key. apply: also re-type / re-tag / re-book existing entries. Output { ok, message }; a refusal is an error.",
+    input: [f("what", "text", { required: true }), f("op", "text", { required: true }), f("index", "number"), f("apply", "boolean"), f("jobNumber", "text"), f("description", "text"), f("type", "text"), f("f1", "text"), f("v1", "text"), f("f2", "text"), f("v2", "text"), f("f3", "text"), f("v3", "text"), f("template", "text"), f("tags", "text"), f("match", "text"), f("group", "boolean"), f("value", "text"), f("label", "text"), f("color", "text"), f("key", "text"), f("name", "text"), f("id", "number"), f("mode", "text")],
     output: "{ ok, message }",
     writes: true,
     run: async (i) => {
@@ -342,7 +342,7 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     label: "Edit an entry, its group or a day's break",
     summary:
       "One edit, as the weekly report's own actions do it. op: update (id, date, bookOn, hours, description, ticket, type, tags, comment, start, isGroup), copy (id, date), link (id, spanId), unlink (id), collect (id of a collecting entry), start (id, start), span-mode (spanId, mode), ungroup (spanId), parallel (ids, mode combine|divide|sequential) or pauses (dates comma separated, text: the break, \"none\" for no break, empty to remove). Output { ok, message }; a refusal is an error.",
-    input: [f("op", "text", { required: true }), f("id", "number"), f("date", "text"), f("bookOn", "text"), f("hours", "text"), f("description", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("spanId", "text"), f("mode", "text"), f("ids", "text"), f("dates", "text"), f("text", "text"), f("state", "text"), f("contextId", "number"), f("ctxKind", "text"), f("ctxTitle", "text"), f("ctxAuthor", "text"), f("ctxBody", "text"), f("ctxLink", "text"), f("ctxDate", "text"), f("ctxTicket", "text")],
+    input: [f("op", "text", { required: true }), f("id", "number"), f("date", "text"), f("bookOn", "text"), f("hours", "text"), f("description", "text"), f("ticket", "text"), f("type", "text"), f("tags", "text"), f("comment", "text"), f("start", "text"), f("isGroup", "text"), f("spanId", "text"), f("mode", "text"), f("ids", "text"), f("dates", "text"), f("text", "text"), f("state", "text"), f("contextId", "number"), f("ctxKind", "text"), f("ctxTitle", "text"), f("ctxAuthor", "text"), f("ctxBody", "text"), f("ctxLink", "text"), f("ctxLinks", "text"), f("ctxDate", "text"), f("ctxTicket", "text"), f("token", "text"), f("name", "text"), f("mime", "text"), f("fileId", "number"), f("dir", "text"), f("url", "text"), f("ticket", "text")],
     output: "{ ok, message }",
     writes: true,
     run: async (i) => {
@@ -450,6 +450,18 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     run: async (i) => {
       const { entryDetail } = await import("./entry-context");
       return entryDetail({ id: i.id });
+    },
+  },
+  {
+    name: "time.source-search",
+    group: "time",
+    label: "Search the messages and items that can be added to an entry as a source",
+    summary: "Teams messages, GitLab items, todos and mails by words — or what a pasted link points at — each with the link that adds it (input q): { hits: [{ url, section, meta, text }] }.",
+    input: [f("q", "text", { required: true })],
+    output: "{ hits }",
+    run: async (i) => {
+      const { sourceSearch } = await import("./entry-context");
+      return sourceSearch({ q: i.q });
     },
   },
   {

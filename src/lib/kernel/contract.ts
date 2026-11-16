@@ -48,6 +48,8 @@ export const KERNEL_CONTRACT = {
     // A plugin asks for your word through the review queue (reviewSources); proposals are how built-ins fill it.
     "proposals.sources": { form: "covered", by: "reviewSources" },
     "questions.views": { form: "owner", owner: "questions" },
+    // The places of the time report other plugins fill (cards, marks, approvals, a jobs column, closing steps) — as data: plugins/zeiterfassung/time-slots.ts.
+    "zeiterfassung.slots": { form: "owner", owner: "zeiterfassung" },
     "review.links": { form: "stored", manifest: "reviewLinks" },
     "review.sources": { form: "stored", manifest: "reviewSources" },
     "shell.tabMenus": { form: "stored", manifest: "tabMenus" },
