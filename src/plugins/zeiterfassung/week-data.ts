@@ -178,7 +178,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   const flex = getFlexTime();
   const flexJob = flex.jobNumber ? getJobByNumber(flex.jobNumber) : undefined;
   // The absences' shadow rows (Settings → absence jobs): per kind of absence in this week that has a job, its hours on each of its days — booked
-  // there already (then the entry is a row of its own) or offered to book with a click, as the flex row offers the missing hours.
+  // not yet booked there, offered with a click (booked, it is a row of its own and the cell stays empty), as the flex row offers the missing hours.
   const absenceJobs = getAbsenceJobs();
   const absenceRows = (Object.keys(absenceJobs) as AbsenceType[]).flatMap((type) => {
     const job = getJobByNumber(absenceJobs[type]!);
@@ -191,6 +191,8 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       return { iso: isoDays[i], label: formatDay(d, "EEE d MMM"), hours: hours ? h(hours) : "", open: open ? h(open) : "", openN: open, note: a && a.type === type ? (a.note ?? "") : "", tone: dayTone(i), dim: i >= 5 };
     });
     const openTotal = round2(cells.reduce((s, c) => s + c.openN, 0));
+    // (all of it booked: no shadow row — the job shows once, as its own row)
+    if (!openTotal) return [];
     return [{ type, job: `${job.number} ${job.name}`, label: t("Absence · {kind}", { kind: labels[type] }), cells, openDates: cells.filter((c) => c.open).map((c) => c.iso).join(","), openTotal: openTotal ? h(openTotal) : "" }];
   });
   const table = {
