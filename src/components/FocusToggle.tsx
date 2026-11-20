@@ -4,8 +4,8 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useT } from "@/components/I18nProvider";
 
 /**
- * Full screen for an app (a database, a board): the app's header and the page's sidebar go, the page has the whole
- * window. Kept in this browser; Escape (or the button again) brings them back. The CSS is html[data-focus] in globals.css.
+ * Full screen for an app (a database, a board): the page's sidebar goes, the page has the whole width under Zeff's
+ * header (which stays, as on the apps' old pages). Kept in this browser; Escape (or the button again) brings them back. The CSS is html[data-focus] in globals.css.
  * A link opens a page so too: ?focus=1 (an app from the header menu) — for that visit, not kept.
  */
 

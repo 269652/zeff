@@ -73,8 +73,7 @@ body {
       margin-top: 0;
     }
   }
-  /* Full screen (FocusToggle): no app header, no page sidebar — the page has the whole window. */
-  html[data-focus] .site-header,
+  /* Full screen (FocusToggle): no page sidebar — the page has the whole width; Zeff's header stays (as on the apps' old pages). */
   html[data-focus] .page > .page-aside {
     display: none;
   }
