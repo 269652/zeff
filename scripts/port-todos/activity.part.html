@@ -5,7 +5,7 @@
 <pill look=filter on="{{ state.feedfilter == 'created' }}" action="state" state="feedfilter" value="created">{{ data.feed.labels.created }}</pill>
 {{#if data.feed.unseenText}}<ink tone="amber">{{ data.feed.unseenText }}</ink>{{/if}}
 </line>
-{{#if data.feed}}{{#if not data.feed.days}}<empty text="{{ data.feed.empty }}"/>{{/if}}{{/if}}
+{{#if data.feed}}{{#if not data.feed.days}}<line look=empty>{{ data.feed.empty }}</line>{{/if}}{{/if}}
 {{#each data.feed.days}}
 <line look=section>
 <line look=caption>{{ label }}</line>
