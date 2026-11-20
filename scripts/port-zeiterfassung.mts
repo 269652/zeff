@@ -47,7 +47,7 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
 const TABS = ["month", "analysis", "day", "jobs", "settings"];
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
-  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
+  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/><state name="jpart" value="jobs" keep=url/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
   // one branch per tab, the week the one left over
   ...TABS.flatMap((tab) => [`{{#if state.view == '${tab}'}}`, part(`${tab}.html`) + (tab === "settings" ? part("rules.html") : ""), "{{#else}}"]),

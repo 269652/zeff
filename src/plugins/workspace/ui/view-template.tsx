@@ -532,7 +532,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         );
       case "mono":
         return (
-          <span key={key} className="font-mono text-xs" title={a.tip || undefined}>
+          <span key={key} className={`font-mono ${a.size === "sm" ? "text-sm" : "text-xs"}`} title={a.tip || undefined}>
             {kids(n.c)}
           </span>
         );
