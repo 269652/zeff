@@ -191,8 +191,8 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     name: "time.schedule-save",
     group: "time",
     label: "Save the schedule, the default break or the flex-time job",
-    summary: "Input what: \"hours\" (mon … sun: hours per weekday), \"pauses\" (text: the default break, empty = none) or \"flex\" (jobNumber, empty = off; comment). Output { ok, message }; a refusal is an error.",
-    input: [f("what", "text", { required: true }), f("mon", "text"), f("tue", "text"), f("wed", "text"), f("thu", "text"), f("fri", "text"), f("sat", "text"), f("sun", "text"), f("text", "text"), f("jobNumber", "text"), f("comment", "text"), f("punch", "text")],
+    summary: "Input what: \"hours\" (mon … sun: hours per weekday), \"pauses\" (text: the default break, empty = none), \"flex\" (jobNumber, empty = off; comment) or \"absence-jobs\" (vacation, sick, holiday, other: the job number each kind of absence is booked on, empty = not booked). Output { ok, message }; a refusal is an error.",
+    input: [f("what", "text", { required: true }), f("mon", "text"), f("tue", "text"), f("wed", "text"), f("thu", "text"), f("fri", "text"), f("sat", "text"), f("sun", "text"), f("text", "text"), f("jobNumber", "text"), f("comment", "text"), f("punch", "text"), f("vacation", "text"), f("sick", "text"), f("holiday", "text"), f("other", "text")],
     output: "{ ok, message }",
     writes: true,
     run: async (i) => {
@@ -216,7 +216,18 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
         const flex = sch.getFlexTime(sch.updateFlexTime({ jobNumber: job?.number ?? null, comment: text(i.comment).trim() }));
         return { ok: true, message: job ? t("Flex time goes to {job} as “{comment}”.", { job: job.number, comment: flex.comment }) : t("Flex time is off.") };
       }
-      throw new Error("what: hours, pauses or flex");
+      if (what === "absence-jobs") {
+        const { getJobByNumber } = await import("@/lib/jobs");
+        const next: Record<string, string> = {};
+        for (const k of ["vacation", "sick", "holiday", "other"]) {
+          const n = text(i[k]).trim().replace(/^~$/, ""); // ("~": picked "Not booked")
+          if (n && !getJobByNumber(n)) throw new Error(t("There's no job {job}.", { job: n }));
+          if (n) next[k] = n;
+        }
+        sch.setAbsenceJobs(next);
+        return { ok: true, message: Object.keys(next).length ? t("Absences are booked on their jobs.") : t("Absences only lower the target.") };
+      }
+      throw new Error("what: hours, pauses, flex or absence-jobs");
     },
   },
   {
@@ -238,6 +249,24 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
       }
       const hours = r.booked.reduce((a, b) => a + b.hours, 0);
       return { ok: true, message: t("Booked {hours} h “{comment}” on {job}: {days}.", { hours: formatHours(hours), comment: r.comment, job: r.jobNumber, days: r.booked.map((b) => `${b.label} ${t("{hours} h", { hours: formatHours(b.hours) })}`).join(", ") }) };
+    },
+  },
+  {
+    name: "time.absence-book",
+    group: "time",
+    label: "Book absences on their jobs",
+    summary: "The absence hours of the given days (input dates: comma separated YYYY-MM-DD) booked on the job of their kind of absence (Settings → absence jobs), as the weekly table's absence row does. Output { ok, message }; nothing to book is an error.",
+    input: [f("dates", "text", { required: true })],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i) => {
+      const { t } = await import("@/lib/i18n/server");
+      const { formatHours } = await import("@/lib/format");
+      const { bookAbsences } = await import("@/lib/flex-time");
+      const r = await bookAbsences(text(i.dates).split(",").map((x) => x.trim()).filter(Boolean));
+      if (!r.booked.length) throw new Error(t("Nothing to book."));
+      const hours = r.booked.reduce((a, b) => a + b.hours, 0);
+      return { ok: true, message: t("Booked {hours} h of absence: {days}.", { hours: formatHours(hours), days: r.booked.map((b) => `${b.date} ${formatHours(b.hours)} h → ${b.job}`).join(", ") }) };
     },
   },
   {

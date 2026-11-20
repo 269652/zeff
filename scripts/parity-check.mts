@@ -8,7 +8,7 @@ const get = async (name: string, input: Record<string, string>) => {
   return ((await r.json()) as { output: unknown }).output;
 };
 const tabs: [string, string, string, Record<string, string>][] = [
-  ["week", "w", "zeiterfassung.week", { week: "", by: "" }],
+  ["week", "w", "zeiterfassung.week", { week: process.env.WEEK ?? "", by: "" }],
   ["month", "m", "zeiterfassung.month", { month: "", by: "" }],
   ["analysis", "a", "zeiterfassung.analysis", { weeks: "8", tickets: "", split: "" }],
   ["day", "day", "zeiterfassung.day", {}],

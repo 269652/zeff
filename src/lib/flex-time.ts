@@ -44,3 +44,33 @@ export function bookFlexTime(dates: string[], today = todayIso()): FlexTimeBooki
   }
   return res;
 }
+
+/**
+ * Book absences on their jobs (Settings → absence jobs), as the weekly table's absence rows offer: each day's absence hours not booked there yet,
+ * on the job of its absence's type, typed "absence", described by its note or its kind. Days without an absence, or whose type has no job, are left alone.
+ */
+export async function bookAbsences(dates: string[]): Promise<{ booked: { date: string; hours: number; job: string }[]; skipped: string[] }> {
+  const { absenceHoursOn, bookedOnJob, getAbsenceJobs } = await import("./schedule");
+  const { absenceLabels } = await import("./schedule-shared");
+  const jobs = getAbsenceJobs();
+  const days = [...new Set(dates)].filter(isValidIsoDate).sort();
+  const res = { booked: [] as { date: string; hours: number; job: string }[], skipped: [] as string[] };
+  if (!days.length) return res;
+  const labels = absenceLabels(t);
+  for (const d of getDayTargets(days.map((x) => parseISO(x)))) {
+    const a = d.absence;
+    const job = a ? jobs[a.type as keyof typeof jobs] : undefined;
+    if (!a || !job || !getJobByNumber(job)) {
+      res.skipped.push(d.date);
+      continue;
+    }
+    const open = round2(absenceHoursOn(a, d.base) - (bookedOnJob(job, d.date, d.date).get(d.date) ?? 0));
+    if (open < 0.01) {
+      res.skipped.push(d.date);
+      continue;
+    }
+    createEntry({ jobNumber: job, date: d.date, hours: open, description: a.note?.trim() || labels[a.type as keyof typeof labels], type: "absence" }, "web", { defaultTags: false });
+    res.booked.push({ date: d.date, hours: open, job });
+  }
+  return res;
+}
