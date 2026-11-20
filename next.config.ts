@@ -36,6 +36,10 @@ const hookRule = {
           path: /\/src\/(lib\/mods\/|proxy\.ts$|middleware\.ts$|instrumentation)/,
         },
       },
+      // (Only files the loader would hook — an exported function or const, not "use server" / "use cache", which analyze.cjs leaves
+      // out: the others aren't handed to it at all, a loader call less each, in every layer.)
+      { content: /\bexport\s+(default\s+)?(async\s+)?function\b|\bexport\s+const\b/ },
+      { not: { content: /^\s*(\/\/[^\n]*\n\s*|\/\*[\s\S]*?\*\/\s*)*["']use (server|cache)["']/ } },
     ],
   },
   loaders: [{ loader: path.resolve("scripts/mods/hook-loader.cjs"), options: {} }],

@@ -51,7 +51,7 @@ function unwrap(e) {
 function analyze(rel, code) {
   const file = rel.replace(/\\/g, "/");
   if (SKIP_FILES.test(file)) return { skip: "not hooked", client: false, points: [], prologueEnd: 0 };
-  const sf = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  const sf = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, false, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
   const dirs = directives(sf);
   if (dirs.includes("use server") || dirs.includes("use cache")) return { skip: dirs.join(", "), client: false, points: [], prologueEnd: 0 };
   const base = file.replace(/\.(tsx?|jsx?)$/, "");
