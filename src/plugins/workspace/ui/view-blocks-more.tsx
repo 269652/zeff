@@ -196,7 +196,7 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     ) : (
       <input type={type} className={`input ${a.size === "sm" ? "h-8 min-w-0 py-1 text-xs" : "py-1 text-sm"} ${type === "color" ? "h-8 w-12 p-0.5" : stack ? "w-full" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     );
-  if (!a.label) return <span className={`print:hidden ${type === "textarea" || stack ? "block w-full" : "inline-flex"}`}>{field}</span>;
+  if (!a.label) return <span className={`print:hidden ${type === "textarea" || stack ? "block w-full" : a.size === "sm" ? "flex min-w-0 flex-1" : "inline-flex"}`}>{field}</span>;
   return (
     <label className={`gap-1 text-sm print:hidden ${type === "textarea" || stack ? "flex w-full flex-col" : "inline-flex items-center gap-1.5"}`}>
       <span className={stack ? "text-xs font-medium text-zinc-500" : "text-xs text-zinc-500"}>{a.label}</span>

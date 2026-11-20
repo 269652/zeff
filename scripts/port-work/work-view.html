@@ -127,7 +127,7 @@
 <scroller>
 <col gap=4>
 <col gap=0>
-<row gap=2 align=baseline><heading level=2><mono>{{ data.x.ticketPage.title }}</mono></heading>{{#if data.x.ticketPage.url}}<a href="{{ data.x.ticketPage.url }}">{{ data.x.ticketPage.openLabel }}</a>{{/if}}</row>
+<row gap=2 align=baseline><heading level=2 mono=true>{{ data.x.ticketPage.title }}</heading>{{#if data.x.ticketPage.url}}<text><a href="{{ data.x.ticketPage.url }}">{{ data.x.ticketPage.openLabel }}</a></text>{{/if}}</row>
 {{#if data.x.ticketPage.summary}}<text tone=muted>{{ data.x.ticketPage.summary }}</text>{{/if}}
 {{#if data.x.ticketPage.facts}}<small><muted>{{ data.x.ticketPage.facts }}</muted></small>{{/if}}
 </col>
@@ -322,7 +322,7 @@
 {{/if}}
 </col>
 {{/if}}
-{{#if t == 'raw'}}<box tone=muted compact=true><small><mono><text pre=true tone=muted>{{ text }}</text></mono></small></box>{{/if}}
+{{#if t == 'raw'}}<box tone=muted compact=true><text pre=true tone=muted><mono>{{ text }}</mono></text></box>{{/if}}
 {{#if t == 'shell'}}<terminal title="{{ cmd }}" text="{{ text }}" tone="{{ bad ? 'bad' : 'warn' }}"/>{{/if}}
 {{#if t == 'note'}}<row justify=center><text tone=faint><small>{{ text }}</small></text></row>{{/if}}
 {{/each}}
@@ -330,7 +330,7 @@
 {{#if summary}}<markdown value="{{ summary }}"/>{{/if}}
 {{#if draft}}<box compact=true><small><muted><b>{{ draftLabel }}</b></muted></small><markdown value="{{ draft }}"/></box>{{/if}}
 {{#if error}}<box tone=bad compact=true><text tone=bad>{{ error }}</text>{{#if errors}}<small><text pre=true tone=bad>{{ errors }}</text></small>{{/if}}</box>{{/if}}
-{{#if gitSummary}}<section dense=true quiet=true title="Changes" collapsible=true open=false><small><mono><text pre=true tone=muted>{{ gitSummary }}</text></mono></small></section>{{/if}}
+{{#if gitSummary}}<section dense=true quiet=true title="Changes" collapsible=true open=false><text pre=true tone=muted><mono>{{ gitSummary }}</mono></text></section>{{/if}}
 {{#if empty}}<text tone=muted>{{ empty }}</text>{{/if}}
 {{#if meta}}<text tone=faint tip="{{ metaTip }}"><small>{{ meta }}</small></text>{{/if}}
 </col>
@@ -404,7 +404,7 @@
 </row>
 {{#if data.x.session.permission}}
 <box tone=ask compact=true title="Copilot wants to: {{ data.x.session.permission.title }}">
-{{#if data.x.session.permission.detail}}<box compact=true><small><mono><text pre=true>{{ data.x.session.permission.detail }}</text></mono></small></box>{{/if}}
+{{#if data.x.session.permission.detail}}<box compact=true><text pre=true><mono>{{ data.x.session.permission.detail }}</mono></text></box>{{/if}}
 <row gap=2 wrap=true>{{#each data.x.session.permission.options}}<button run="work.live" with="run={{ data.x.session.runId }}, do=answer-option, option={{ id }}" emit="work-changed" label="{{ name }}" variant="{{ kind == 'allow_once' ? 'primary' : 'plain' }}"/>{{/each}}</row>
 </box>
 {{/if}}

@@ -688,7 +688,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return (
           <div
             key={key}
-            className={`${a.line === "true" ? "rounded-md px-1.5 py-0.5" : a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : `space-y-2 rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900 ${a.compact === "true" ? "p-2.5 text-sm shadow-none" : "p-4"}`} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
+            className={`${a.line === "true" ? "rounded-md px-1.5 py-0.5" : a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : `space-y-2 rounded-xl border shadow-xs ${BOX_TONE[a.tone ?? ""] ? "" : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"} ${a.compact === "true" ? "p-2.5 text-sm shadow-none" : "p-4"}`} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
             style={scrolls(a)}
             {...(go ? { role: "button", tabIndex: 0, title: a.tip || undefined, onClick: () => void run(a), onKeyDown: (e: React.KeyboardEvent) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), void run(a)) } : {})}
           >
@@ -702,7 +702,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           </div>
         );
       case "heading": {
-        const cls = a.level === "1" ? "text-2xl font-semibold tracking-tight" : a.level === "3" ? "text-sm font-semibold" : a.level === "4" ? "text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400" : "text-lg font-semibold";
+        const cls = (a.mono === "true" ? "font-mono " : "") + (a.level === "1" ? "text-2xl font-semibold tracking-tight" : a.level === "3" ? "text-sm font-semibold" : a.level === "4" ? "text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400" : "text-lg font-semibold");
         return (
           <div key={key} role="heading" aria-level={Number(a.level) || 2} className={cls}>
             {kids(n.c)}

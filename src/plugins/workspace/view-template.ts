@@ -120,7 +120,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   srow: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, hover: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] } }),
   scell: T({ head: { oneOf: ["true", "false"] }, row: { oneOf: ["true", "false"] }, num: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "today", "off", "muted", "good", "warn", "bad"] }, span: "int", dim: { oneOf: ["true", "false"] }, top: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tip: "text" }),
   box: T({ /** true: a highlighted line (a tinted strip, no border) — with tone. */ line: { oneOf: ["true", "false"] }, /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", /** Beside the title, not bold (what the title is about). */ aside: "text", /** true: less padding, no shadow (a card inside a reply area). */ compact: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "muted", "good", "warn", "bad", "info", "ask", "accent"] }, scroll: "int" }),
-  heading: T({ /** 4: a small grey label in capitals over a list. */ level: { oneOf: ["1", "2", "3", "4"] } }),
+  heading: T({ /** 4: a small grey label in capitals over a list. */ level: { oneOf: ["1", "2", "3", "4"] }, /** true: in a typewriter font (a key, a code). */ mono: { oneOf: ["true", "false"] } }),
   text: T({ tone: { oneOf: ["plain", "muted", "faint", "good", "warn", "bad"] }, tip: "text", pre: { oneOf: ["true", "false"] } }),
   tile: T({ label: "text", value: "text", sub: "text", tint: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "good", "warn", "bad"] }, tip: "text", icon: "text", trend: "text", spark: "text" }),
   bar: T({ value: "num", max: "num", color: "color", fill: "paint" }, true),
@@ -286,7 +286,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
 // when="{{ … }}": done each time what it says turns true (a countdown at 0, a sum over a limit) — not when the view opens with it true.
 VIEW_TAGS.on = T({ ...VIEW_TAGS.button.attrs, event: "text", when: "text" }, true);
 // A box (a card) can be what you click: it does what a button does (<box action="state" state="course" value="…">).
-VIEW_TAGS.box = T({ ...VIEW_TAGS.box.attrs, tone: { oneOf: ["plain", "muted", "good", "warn", "bad", "accent"] }, ...Object.fromEntries(["action", "state", "value", "emit", "run", "with", "into", "done", "then", "confirm", "href", "tip"].map((k) => [k, VIEW_TAGS.button.attrs[k]])) });
+VIEW_TAGS.box = T({ ...VIEW_TAGS.box.attrs, tone: { oneOf: ["plain", "muted", "good", "warn", "bad", "accent", "info", "ask"] }, ...Object.fromEntries(["action", "state", "value", "emit", "run", "with", "into", "done", "then", "confirm", "href", "tip"].map((k) => [k, VIEW_TAGS.button.attrs[k]])) });
 
 /** The tags whose attribute names a state (or a data name): in a block, each use keeps its own. */
 const STATE_KEYS: Record<string, string[]> = {
