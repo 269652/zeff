@@ -26,6 +26,10 @@ export type Live = {
   pending: Map<number, (msg: { result?: unknown; error?: { message?: string } }) => void>;
   /** The JSON-RPC id of the permission request it waits on. */
   permissionRpcId: number | string | null;
+  /** More permissions it asked while one waits (it may ask several at once): shown one after the other, each answered. */
+  /** It is in a stretch of thinking (logged once, not per word). */
+  thinking?: boolean;
+  queued?: { rpcId: number | string; view: NonNullable<LiveView["permission"]> }[];
   view: LiveView;
   /** What it has said in the current turn (its result is parsed from it). */
   turnText: string;

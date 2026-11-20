@@ -8,6 +8,46 @@ import { groupSessions, priorityOf, stamp, tFor } from "./lib.mjs";
  */
 const DOT = { running: "🔵", queued: "⚪", done: "🟢", failed: "🔴", cancelled: "⚪", interrupted: "🟠" };
 
+/**
+ * The log as a conversation (like the Code tab always showed it): the worker's words, its tool calls — and what came of them — grouped between them (more than four:
+ * folded into one line), what you wrote meanwhile, what happened to the session.
+ */
+function blocksOf(lines, t) {
+  const blocks = [];
+  let n = 0;
+  for (const l of lines) {
+    const last = blocks[blocks.length - 1];
+    const id = n++;
+    if (l.k === "say") blocks.push({ id, t: "say", text: l.text ?? "" });
+    else if (l.k === "tool" || l.k === "out" || l.k === "ask" || l.k === "deny") {
+      const step = {
+        kind: l.k,
+        tool: l.k === "tool" ? l.tool : "",
+        text: l.text ?? "",
+        bad: (l.k === "out" && !!l.error) || l.k === "deny" || (l.k === "ask" && l.ok === false),
+        answer: l.k === "ask" && l.answer ? l.answer : "",
+        diff: Array.isArray(l.diff) ? l.diff.map((d) => `- ${d.old}\n+ ${d.new}`).join("\n") : "",
+      };
+      if (last?.t === "steps") last.steps.push(step);
+      else blocks.push({ id, t: "steps", steps: [step] });
+    } else if (l.k === "raw") {
+      if (last?.t === "raw") last.text += `\n${l.text}`;
+      else blocks.push({ id, t: "raw", text: l.text ?? "" });
+    } else if (l.k === "you") blocks.push({ id, t: "you", text: l.text ?? "" });
+    else if (l.k === "shell") blocks.push({ id, t: "shell", text: `! ${l.cmd}${l.text ? `\n${l.text}` : ""}`, bad: !l.ok });
+    else if (l.k === "note") blocks.push({ id, t: "note", text: l.text ?? "" });
+    else if (l.k === "end") blocks.push({ id, t: "end", text: l.text ?? "", bad: !l.ok });
+  }
+  for (const b of blocks) {
+    if (b.t !== "steps") continue;
+    const calls = b.steps.filter((x) => x.kind === "tool");
+    const names = [...new Set(calls.map((x) => x.tool))];
+    b.fold = b.steps.length > 4 && !b.steps.some((x) => x.kind === "ask" && !x.answer);
+    b.title = (calls.length === 1 ? t("1 step") : t("{n} steps", { n: calls.length })) + (names.length ? " · " + names.slice(0, 5).join(", ") + (names.length > 5 ? " …" : "") : "");
+  }
+  return blocks;
+}
+
 export async function handler(event, context) {
   const zeff = context.zeff;
   const t = tFor(context.language);
@@ -54,6 +94,7 @@ export async function handler(event, context) {
       ticket: g.id !== "ticket" ? s.ticket : "",
       ago: ago(s.at),
       dot: s.waiting ? "🟡" : (DOT[s.status] ?? "⚪"),
+      tone: s.waiting ? "warn" : ({ running: "run", queued: "queued", done: "done", failed: "bad", cancelled: "off", interrupted: "warn" })[s.status] ?? "off",
       tip: `${s.ref} · ${statusText(s.status)}${s.ticket ? ` · ${s.ticket}` : ""}${s.branch ? ` · ⎇ ${s.branch}` : ""}`,
       archived: s.archived,
       active: s.status === "running" || s.status === "queued",
@@ -170,14 +211,7 @@ export async function handler(event, context) {
         label: turn.label,
         ask: turn.ask ?? "",
         cut: turn.cut ? t("{n} earlier lines are cut.", { n: turn.cut }) : "",
-        lines: turn.lines.map((l, i) => ({
-          i,
-          k: l.k,
-          text: l.k === "shell" ? `! ${l.cmd}${l.text ? `\n${l.text}` : ""}` : l.k === "tool" ? `${l.tool}  ${l.text}` : (l.text ?? ""),
-          answer: l.k === "ask" && l.answer ? l.answer : "",
-          bad: (l.k === "out" && l.error) || l.k === "deny" || (l.k === "end" && !l.ok) || (l.k === "shell" && !l.ok) || (l.k === "ask" && l.ok === false),
-          diff: Array.isArray(l.diff) ? l.diff.map((d) => `- ${d.old}\n+ ${d.new}`).join("\n") : "",
-        })),
+        blocks: blocksOf(turn.lines, t),
       }));
       const modes = live?.kind === "session" ? live.modes.map((m) => ({ id: m.id, label: t(m.label), hint: t(m.hint), sel: m.id === live.mode })) : [];
       // The questions of an ask: what is picked (qpick: { question: [labels] }) and your own words (qo0 … qo3), as the built-in's card keeps them.
@@ -316,6 +350,7 @@ export async function handler(event, context) {
         paneOptions: (list.panels ?? []).map((x, i) => ",x" + i + ":" + String(x.title).replace(/[,:]/g, " ")).join(""),
         copilot: live?.kind === "live" ? { mode: live.mode, modes: (live.modes ?? []).map((m) => ({ id: m.id, name: m.name, sel: m.id === live.mode, hint: ({ agent: t("Asks you before it does anything that isn't allowed"), plan: t("Plans first, carries it out after your OK"), autopilot: t("Allows itself everything and runs through to the end") })[m.id.replace(/^.*#/, "")] ?? m.name })), waiting: live.waiting ?? "", idle: !live.busy, status: live.busy ? (live.permission ? t("waiting for your permission") : t("working…")) : t("waiting for you") } : null,
         permission: live?.kind === "live" && live.permission ? { title: live.permission.title, detail: live.permission.detail ?? "", options: live.permission.options } : null,
+        lostLive: status === "running" && !live,
         canReplyLive: status === "running" && (live?.kind === "session" || live?.kind === "live"),
         error: status === "failed" ? (s.last.error ?? "") : "",
         placeholder: s.active ? (status === "queued" ? t("Waiting for a free worker … — your reply is sent after it") : t("Working … — your reply is sent as soon as it has answered")) : t("Reply …"),

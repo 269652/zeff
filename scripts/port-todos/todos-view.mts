@@ -87,6 +87,7 @@ export function todosViewTemplate(): string {
 <data name="pick" lambda="documents.attach-list" with="q={{ state.aq }}" debounce=250 when="{{ state.panel }}"/>
 <data name="men" lambda="todos.mention" with="text={{ state.newnote }}" debounce=250 when="{{ state.panel and state.newnote }}"/>
 <data name="p" lambda="todos.panel" with="id={{ state.panel }}" when="{{ state.panel }}"/>
+<data name="asks" lambda="todos.asks" with="id={{ state.panel }}" every="3" when="{{ state.panel }}"/>
 <state name="aq" value=""/><state name="abusy" value=""/>
 <data name="pick" lambda="documents.attach-list" with="q={{ state.aq }}" when="{{ state.panel }}" debounce="250"/>
 <on event="attached" action="reload"/>

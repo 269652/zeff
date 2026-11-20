@@ -1,6 +1,19 @@
 <dialog bind="panel" title="{{ data.p.ref }}" side=right wide=true>
 {{#if data.p.found}}
 <col gap=3>
+{{#each data.asks.asks}}
+<box tone=warn title="{{ ref }} asks: {{ title }}">
+{{#if detail}}<text pre=true>{{ detail }}</text>{{/if}}
+<row gap=2 wrap=true align=center>
+{{#each buttons}}<button run="work.live" with="{{ with }}" emit="work-changed" label="{{ label }}" variant="{{ primary ? 'primary' : 'plain' }}"/>{{/each}}
+{{#if openOnly}}<a href="/workspace/{{ data.asks.codePage }}?s.sel=run:{{ run }}">Answer it on the Code tab ↗</a>{{/if}}
+</row>
+<row gap=2 wrap=true align=center>
+<small><muted>Mode</muted></small>
+{{#each modes}}<button run="work.live" with="{{ with }}" emit="work-changed" label="{{ label }}" variant="{{ sel ? 'primary' : 'quiet' }}" disabled="{{ sel }}"/>{{/each}}
+</row>
+</box>
+{{/each}}
 {{#if state.textedit == data.p.id}}
 <col gap=2>
 <input bind="edittext" rows=3 value="{{ data.p.text }}"/>

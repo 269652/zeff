@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { t } from "@/lib/i18n/server";
 import { redirect } from "@/lib/redirect";
 import { reportLink } from "@/plugins/zeiterfassung/to-plugin";
+import { fullScreen } from "@/lib/full-screen";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: t("Weekly report") };
@@ -20,5 +21,6 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
     return redirect(firstAppTab());
   }
   const sp = await searchParams;
-  return redirect(await reportLink({ view: "week", week: sp.week, by: sp.by }));
+  // (From the header menu: the app full screen — no header, no Workspace sidebar; Esc or ⤡ brings them back.)
+  return redirect(fullScreen(await reportLink({ view: "week", week: sp.week, by: sp.by })));
 }

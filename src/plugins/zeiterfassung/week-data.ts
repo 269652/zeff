@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n/server";
 import { listJobs } from "@/lib/jobs";
 import { lastAndCurrentMonth } from "@/lib/month";
 import { getPastWeeksDue } from "@/lib/monthly";
-import { formatPauses } from "@/lib/pauses-shared";
+import { formatPauses, totalPauseHours } from "@/lib/pauses-shared";
 import { getDefaultPauses, getFlexTime, getWeekTargets } from "@/lib/schedule";
 import { getJobByNumber } from "@/lib/jobs";
 import { latestPausesBefore, listPausesByDate } from "@/lib/pauses";
@@ -127,6 +127,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       date: formatDay(d, "d MMM"),
       note: absence ? labels[absence.type as AbsenceType] : nonWorking(i) ? t("off") : "",
       tone: shortfall[i].state === "missing" ? "bad" : dayTone(i),
+      dim: i >= 5,
     };
   });
   const rows = report.rows.map((row) => ({
@@ -138,7 +139,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     noJob: row.job.number === NO_JOB_NUMBER,
     days: row.hoursByDay.map((x, i) => {
       const cell = x ? joinMarks(report.entries.filter((e) => e.jobId === row.job.id && (e.projectId ?? null) === (row.project?.id ?? null) && e.date === isoDays[i]).flatMap((e) => marksOf(e.id))) : joinMarks([]);
-      return { text: x ? h(x) : "·", tone: cell.approved ? "good" : dayTone(i), mark: cell.mark, markTitle: cell.markTitle };
+      return { text: x ? h(x) : "·", tone: cell.approved ? "good" : dayTone(i), dim: i >= 5, mark: cell.mark, markTitle: cell.markTitle };
     }),
     total: h(row.total),
   }));
@@ -167,17 +168,19 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
         markTitle: slots.map((s) => s.slot.days?.[i]?.title ?? "").filter(Boolean).join(" · "),
         text: x ? h(x) : shortfall[i].state === "ok" ? "" : "0",
         tone: shortfall[i].state === "missing" ? "bad" : shortfall[i].state === "short" ? "warn" : dayTone(i),
+        dim: i >= 5,
         title: shortfall[i].state === "ok" ? "" : shortfall[i].state === "short" ? t("{hours} h below the target (day not over yet)", { hours: h(shortfall[i].gap) }) : t("{hours} h below the target", { hours: h(shortfall[i].gap) }),
       })),
       bookedTotal: h(report.total),
       missing: missingTotal > 0 ? shortfall.map((s) => ({ text: s.state === "missing" ? h(s.gap) : "", tone: s.state === "missing" ? "bad" : "plain" })) : null,
       missingTotal: h(missingTotal),
-      target: targets.targets.map((x, i) => ({ text: x ? h(x) : "", tone: nonWorking(i) ? "muted" : "plain" })),
+      target: targets.targets.map((x, i) => ({ text: x ? h(x) : "", tone: nonWorking(i) ? "muted" : "plain", dim: i >= 5 })),
       targetTotal: h(targets.weekTarget),
-      pause: pauseRow,
+      pause: pauseRow.map((x, i) => ({ ...x, off: nonWorking(i) })),
+      pauseTotal: (() => { const x = round2(isoDays.reduce((a, d) => a + totalPauseHours(pauses[d] ?? []), 0)); return x ? h(x) : ""; })(),
     },
     empty: by ? t("No time booked in this week by {name} yet.", { name: by }) : t("No time booked in this week yet."),
-    flex: flexJob && !filtered ? { job: `${flexJob.number} ${flexJob.name}`, comment: flex.comment, days: week.days.map((d, i) => ({ iso: isoDays[i], label: formatDay(d, "EEE d MMM"), gap: shortfall[i].state === "ok" ? 0 : shortfall[i].gap })).filter((x) => x.gap > 0) } : null,
+    flex: flexJob && !filtered ? { job: `${flexJob.number} ${flexJob.name}`, comment: flex.comment, cells: week.days.map((d, i) => ({ iso: isoDays[i], label: formatDay(d, "EEE d MMM"), gap: shortfall[i].state === "ok" ? 0 : shortfall[i].gap, tone: dayTone(i), dim: i >= 5 })), any: shortfall.some((x) => x.state !== "ok" && x.gap > 0) } : null,
   };
 
   // --- the form to book
@@ -281,6 +284,12 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       bookOptions,
       typeOptions: types.map((x) => [x.key, x.label] as [string, string]),
       tags: listTags().map((x) => x.name),
+      // The week's booked tickets, then the open Jira ones: picking one fills the job it is booked on and the type Ticket.
+      tickets: (await import("@/lib/ticket-suggestions")).getEntryTicketSuggestions(week).slice(0, 400).map((x) => ({
+        v: x.ticket,
+        l: [x.jobName, x.description].filter(Boolean).join(" — "),
+        set: { ...(x.jobNumber && jobs.some((j) => j.number === x.jobNumber) ? { n_bookon: `j:${x.jobNumber}` } : {}), n_type: "ticket" },
+      })),
     },
     closing,
     suggestions: { head: t("Suggested entries"), count: `(${suggestions.length} · ${h(suggestionTotal)} h)`, items: suggestions },

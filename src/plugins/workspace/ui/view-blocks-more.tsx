@@ -168,18 +168,84 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     : undefined;
   // (rows=: a textarea's height in lines — one: a chat's line, no handle)
   const rows = Number(a.rows) > 0 ? Math.min(40, Number(a.rows)) : undefined;
+  // (stack=true: the label above the field and the field as wide as its place — a form.)
+  const stack = a.stack === "true";
+  // (options=: suggestions under a text field while you type; one picked fills it and sets the state keys it names.)
+  const sugg = json<Suggestion[]>(a.options, []);
   const field =
     type === "textarea" ? (
-      <textarea ref={box} className={`input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
+      <textarea ref={box} className={a.bare === "true" ? "block max-h-80 min-h-12 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-zinc-400" : `input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
+    ) : sugg.length && type === "text" ? (
+      <SuggestInput
+        className={`input py-1 text-sm ${stack ? "w-full" : "w-full min-w-40"}`}
+        placeholder={a.placeholder}
+        label={a.label || a.placeholder}
+        value={v}
+        items={sugg}
+        onText={setV}
+        onPick={(it) => (setV(it.v), env.setState(a.bind, it.v), Object.entries(it.set ?? {}).forEach(([k, x]) => env.setState(k, x)))}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
+      />
     ) : (
-      <input type={type} className={`input py-1 text-sm ${type === "color" ? "h-8 w-12 p-0.5" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
+      <input type={type} className={`input py-1 text-sm ${type === "color" ? "h-8 w-12 p-0.5" : stack ? "w-full" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     );
-  if (!a.label) return <span className={`print:hidden ${type === "textarea" ? "block w-full" : "inline-flex"}`}>{field}</span>;
+  if (!a.label) return <span className={`print:hidden ${type === "textarea" || stack ? "block w-full" : "inline-flex"}`}>{field}</span>;
   return (
-    <label className={`gap-1 text-sm print:hidden ${type === "textarea" ? "flex w-full flex-col" : "inline-flex items-center gap-1.5"}`}>
-      <span className="text-xs text-zinc-500">{a.label}</span>
+    <label className={`gap-1 text-sm print:hidden ${type === "textarea" || stack ? "flex w-full flex-col" : "inline-flex items-center gap-1.5"}`}>
+      <span className={stack ? "text-xs font-medium text-zinc-500" : "text-xs text-zinc-500"}>{a.label}</span>
       {field}
     </label>
+  );
+}
+
+type Suggestion = { v: string; l?: string; d?: string; set?: Record<string, string> };
+
+/** A text field with suggestions under it (arrows, Enter, Esc): what is typed stays as it is; one picked fills it. */
+function SuggestInput({ items, value, label, placeholder, className, onText, onPick, onKeyDown, onBlur }: { items: Suggestion[]; value: string; label?: string; placeholder?: string; className: string; onText: (v: string) => void; onPick: (it: Suggestion) => void; onKeyDown?: (e: React.KeyboardEvent) => void; onBlur?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+  const q = value.trim().toLowerCase();
+  const found = (q ? items.filter((i) => i.v.toLowerCase().includes(q) || (i.l ?? "").toLowerCase().includes(q) || (i.d ?? "").toLowerCase().includes(q)) : items).slice(0, 25);
+  const pick = (it: Suggestion) => (onPick(it), setOpen(false), setHi(0));
+  return (
+    <div className="relative w-full">
+      <input
+        type="text"
+        role="combobox"
+        aria-expanded={open && found.length > 0}
+        aria-autocomplete="list"
+        aria-label={label}
+        placeholder={placeholder}
+        autoComplete="off"
+        className={className}
+        value={value}
+        onChange={(e) => (onText(e.target.value), setOpen(true), setHi(0))}
+        onFocus={() => setOpen(true)}
+        onBlur={() => (setTimeout(() => setOpen(false), 150), onBlur?.())}
+        onKeyDown={(e) => {
+          if (open && found.length) {
+            if (e.key === "ArrowDown") return void (e.preventDefault(), setHi((h) => Math.min(h + 1, found.length - 1)));
+            if (e.key === "ArrowUp") return void (e.preventDefault(), setHi((h) => Math.max(h - 1, 0)));
+            if (e.key === "Enter") return void (e.preventDefault(), pick(found[Math.min(hi, found.length - 1)]));
+          }
+          if (e.key === "Escape") setOpen(false);
+          onKeyDown?.(e);
+        }}
+      />
+      {open && found.length > 0 && (
+        <ul role="listbox" className="absolute top-full right-0 left-0 z-30 mt-1 max-h-64 min-w-64 overflow-auto rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          {found.map((it, i) => (
+            <li key={it.v} role="option" aria-selected={i === hi}>
+              <button type="button" className={`block w-full px-3 py-1.5 text-left ${i === hi ? "bg-indigo-50 dark:bg-indigo-950/60" : "hover:bg-zinc-50 dark:hover:bg-zinc-800"}`} onMouseDown={(e) => (e.preventDefault(), pick(it))} onMouseEnter={() => setHi(i)}>
+                <span className="font-mono">{it.v}</span>
+                {it.l && <span className="block truncate text-xs text-zinc-500">{it.l}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -4,7 +4,7 @@
 <col gap=3>
   {{#if data.rsaved.rsaved.message}}<callout tone=good>{{ data.rsaved.rsaved.message }}</callout>{{/if}}
 
-  <section title="Entry type rules">
+  <section card=true title="Entry type rules">
     <col gap=2>
       <text tone=muted>Infer an entry's type (Ticket, Meeting, Internal, Other, Absence) from its job and description — e.g. job Abwesenheit + “Urlaub” → Absence. The first rule that matches wins.</text>
       {{#each data.r.typeRules}}
@@ -28,7 +28,7 @@
     </col>
   </section>
 
-  <section title="Report rewriting">
+  <section card=true title="Report rewriting">
     <col gap=2>
       <text tone=muted>Rules that rewrite and group the “Report” view on the weekly page — a condition on each entry maps to an output label, and optionally to tags for those entries. The first rule that matches wins.</text>
       {{#each data.r.reportRules}}
@@ -55,7 +55,7 @@
   </section>
 
   {{#if data.r.meetings}}
-  <section title="Meeting → job rules">
+  <section card=true title="Meeting → job rules">
     <col gap=2>
       <text tone=muted>Auto-pick a job when importing meetings, by matching the meeting title — e.g. book every “Mob Programming” meeting on your Relaunch job.</text>
       {{#each data.r.meetingRules}}
@@ -83,7 +83,7 @@
     </col>
   </section>
 
-  <section title="Meeting exclude rules">
+  <section card=true title="Meeting exclude rules">
     <col gap=2>
       <text tone=muted>Imported meetings whose title contains one of these start unticked — for placeholders and reminders like “Zeiten in Chrono Erfassen”.</text>
       {{#each data.r.excludeRules}}
@@ -97,7 +97,7 @@
   </section>
   {{/if}}
 
-  <section title="Parallel work">
+  <section card=true title="Parallel work">
     <col gap=2>
       <text tone=muted>Two tasks of one job done at the same time (by their start and hours) are not booked on top of each other. Choose how they are booked when Zeff notices — you can change each case afterwards.</text>
       <row gap=2 align=end wrap=true>
@@ -108,7 +108,7 @@
     </col>
   </section>
 
-  <section title="Tags" aside="{{ data.r.tagsHead }}">
+  <section card=true title="Tags" aside="{{ data.r.tagsHead }}">
     <col gap=2>
       <text tone=muted>Tags label entries (typically tickets). Add them here, or just type #tag in an entry description — the hashtag becomes a tag.</text>
       <row gap=2 align=end wrap=true>
@@ -133,7 +133,7 @@
     {{/each}}
   </dialog>
 
-  <section title="Entry types">
+  <section card=true title="Entry types">
     <col gap=2>
       {{#each data.r.entryTypes}}
       <row gap=2 align=center wrap=true>

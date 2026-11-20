@@ -2,6 +2,7 @@ import Link from "next/link";
 import { t } from "@/lib/i18n/server";
 import { redirect } from "@/lib/redirect";
 import { onlyThroughPort } from "@/plugins/state";
+import { fullScreen } from "@/lib/full-screen";
 
 /**
  * The Code screens (the sessions, the repos, the settings, Admin sessions) are the plugin's now (zeff-plugins: work-ext, pages of the Workspace); the old addresses
@@ -10,9 +11,10 @@ import { onlyThroughPort } from "@/plugins/state";
  */
 export async function CodeMoved({ to, pick }: { to: "code" | "settings"; pick?: string }) {
   if (onlyThroughPort("work")) {
-    const { workCodePage, workSettingsPage } = await import("@/plugins/work/to-plugin");
-    const page = to === "code" ? workCodePage() : workSettingsPage();
-    if (page) return redirect(`/workspace/${page}${pick ? `?s.sel=${encodeURIComponent(pick)}` : ""}`);
+    const { workCodeHome, workSettingsPage } = await import("@/plugins/work/to-plugin");
+    const page = to === "code" ? await workCodeHome() : workSettingsPage();
+    // (The Code app from the header menu: full screen — no header, no Workspace sidebar; Esc or ⤡ brings them back. Its settings: as a page.)
+    if (page) return redirect((to === "code" ? fullScreen : (u: string) => u)(`/workspace/${page}${pick ? `?s.sel=${encodeURIComponent(pick)}` : ""}`));
   }
   return (
     <div className="mx-auto max-w-xl space-y-2 p-6 text-sm">

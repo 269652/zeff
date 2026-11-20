@@ -62,6 +62,14 @@ type Props = AppViewProps & {
 
 const TONE: Record<string, string> = { good: "text-emerald-700 dark:text-emerald-400", warn: "text-amber-700 dark:text-amber-400", bad: "text-red-600 dark:text-red-400", muted: "text-zinc-500" };
 const BOX_TONE: Record<string, string> = { accent: "border-transparent bg-indigo-50 shadow-none dark:bg-indigo-950/40", muted: "bg-zinc-50 dark:bg-zinc-900/40", good: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20", warn: "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20", bad: "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20" };
+const CELL_TONE: Record<string, string> = {
+  today: "bg-indigo-50 dark:bg-indigo-950/40",
+  off: "bg-zinc-50 dark:bg-zinc-900/60",
+  muted: "text-zinc-400 dark:text-zinc-500",
+  good: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
+  warn: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
+  bad: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
+};
 const json = <T,>(s: string | undefined, fallback: T): T => {
   try {
     return s ? (JSON.parse(s) as T) : fallback;
@@ -454,6 +462,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     const n = Math.max(1, Math.min(8, Number(a.cols) || 3));
     const gap = (Number(a.gap) || 3) * 4;
     const min = Number(a.min) || 180;
+    // (Fixed columns: only the characters of a track list — numbers, units, repeat(), minmax(), fr, auto, max-content.)
+    if (a.tracks && /^[a-z0-9 .,()%-]{1,120}$/i.test(a.tracks)) return { gap, gridTemplateColumns: a.tracks, ...(Number(a.minw) > 0 ? { minWidth: Math.min(2000, Number(a.minw)) } : {}) };
     return { gap, gridTemplateColumns: `repeat(auto-fit, minmax(max(min(100%, ${min}px), calc((100% - ${(n - 1) * gap}px) / ${n})), 1fr))` };
   };
 
@@ -547,7 +557,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             </div>
           );
         }
-        return (
+        const table = (
           <div key={key} className="grid" style={cols(a)}>
             {n.c.map((c, i) => (
               <div key={i} className="min-w-0">
@@ -556,18 +566,22 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             ))}
           </div>
         );
-      case "section":
-        return a.collapsible === "true" ? (
-          <Fold key={key} title={a.title} open={a.open === "wide" ? "wide" : a.open !== "false"}>
-            <div className="space-y-3 pt-2" style={scrolls(a)}>
+        return a.tracks && Number(a.minw) > 0 ? <div key={key} className="overflow-x-auto">{table}</div> : table;
+      case "section": {
+        // (card=true: the section as a bordered card with a small grey heading — how a report's parts stand on a page.)
+        const card = a.card === "true";
+        const fold = a.collapsible === "true";
+        const inner = fold ? (
+          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} dense={a.dense === "true"} quiet={a.quiet === "true"} open={a.open === "wide" ? "wide" : a.open !== "false"}>
+            <div className={a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
               {kids(n.c)}
             </div>
           </Fold>
         ) : (
-          <section key={key} className="space-y-2 break-inside-avoid">
+          <section key={card ? undefined : key} className="space-y-2 break-inside-avoid">
             {(a.title || a.aside) && (
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-sm font-semibold">{a.title}</h2>
+                <h2 className={card ? "text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400" : "text-sm font-semibold"}>{a.title}</h2>
                 {a.aside && <span className="text-xs text-zinc-500">{a.aside}</span>}
               </div>
             )}
@@ -576,6 +590,88 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             </div>
           </section>
         );
+        return card ? (
+          <div key={key} className="card min-w-0 p-4">
+            {inner}
+          </div>
+        ) : (
+          inner
+        );
+      }
+      case "item": {
+        const DOTS: Record<string, string> = { run: "bg-indigo-500 animate-pulse", queued: "bg-zinc-400", done: "bg-emerald-500", bad: "bg-red-500", off: "bg-zinc-300", warn: "bg-amber-500" };
+        const menu = n.c.length > 0;
+        return (
+          <div key={key} className="group relative print:hidden">
+            <button
+              type="button"
+              title={a.tip || undefined}
+              onClick={(e) => (e.stopPropagation(), void run({ ...a, action: "state" }))}
+              className={`flex w-full min-w-0 items-center gap-2 rounded px-1.5 py-[5px] text-left text-[13px] leading-tight hover:bg-zinc-100 dark:hover:bg-zinc-800 ${a.selected === "true" ? "bg-indigo-50 font-medium dark:bg-indigo-950/50" : ""} ${a.dim === "true" ? "opacity-60" : ""}`}
+            >
+              {a.tone !== "none" && <span className={`size-1.5 shrink-0 rounded-full ${DOTS[a.tone ?? "off"] ?? DOTS.off}`} aria-hidden />}
+              <span className="min-w-0 flex-1 truncate">{a.label}</span>
+              {a.sub && <span className="shrink-0 font-mono text-xs text-zinc-400">{a.sub}</span>}
+              {a.meta && <span className={`w-7 shrink-0 text-right text-xs whitespace-nowrap text-zinc-400 ${menu ? "group-focus-within:invisible group-hover:invisible [@media(hover:none)]:invisible" : ""}`}>{a.meta}</span>}
+            </button>
+            {menu && <div className="absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">{kids(n.c)}</div>}
+          </div>
+        );
+      }
+      case "scroller":
+        return (
+          <Scroller key={key} end={a.end === "true"} pad={a.pad === "true"} center={a.center === "true"}>
+            {kids(n.c)}
+          </Scroller>
+        );
+      case "dock":
+        return (
+          <div key={key} className={a.plain === "true" ? (a.edge === "top" ? "shrink-0 border-b border-zinc-200 pb-2.5 dark:border-zinc-800" : "max-h-[55%] shrink-0 overflow-y-auto overscroll-contain pt-2") : `shrink-0 bg-white px-4 py-3 dark:bg-zinc-900 ${a.edge === "top" ? "border-b" : "max-h-[55%] overflow-y-auto overscroll-contain border-t"} border-zinc-200 dark:border-zinc-800`}>
+            {a.center === "true" ? <div className="mx-auto w-full max-w-3xl">{kids(n.c)}</div> : kids(n.c)}
+          </div>
+        );
+      case "bubble":
+        return <Bubble key={key} text={a.text ?? ""} note={a.note} end={a.end !== "false"} />;
+      case "sheet":
+        return (
+          <div key={key} className="overflow-x-auto">
+            <table className={`table ${a.compact === "true" ? "table-compact" : ""}`}>
+              {a.caption && <caption className="sr-only">{a.caption}</caption>}
+              {kids(n.c)}
+            </table>
+          </div>
+        );
+      case "shead":
+        return <thead key={key}>{kids(n.c)}</thead>;
+      case "sbody":
+        return <tbody key={key}>{kids(n.c)}</tbody>;
+      case "sfoot":
+        return <tfoot key={key}>{kids(n.c)}</tfoot>;
+      case "srow":
+        return (
+          <tr key={key} className={`${a.bold === "true" ? "font-semibold" : ""} ${a.tone === "bad" ? "text-red-600 dark:text-red-400" : a.tone === "good" ? "text-emerald-600 dark:text-emerald-400" : a.tone === "warn" ? "text-amber-600 dark:text-amber-400" : a.tone === "muted" ? "text-zinc-500" : ""} ${a.hover === "true" ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/40" : ""}`}>{kids(n.c)}</tr>
+        );
+      case "scell": {
+        const cls = [
+          a.num === "true" ? "num" : "",
+          a.top === "true" ? "align-top" : "",
+          a.dim === "true" ? "text-zinc-400 dark:text-zinc-500" : "",
+          a.bold === "true" ? "font-semibold" : "",
+          // (A row's head looks like the plain cell it stands for: the table style gives th a column-head look.)
+          a.row === "true" ? "border-b border-zinc-100 px-3 py-2 text-left align-top text-sm font-[weight:inherit] tracking-normal text-inherit normal-case dark:border-zinc-800/60" : "",
+          CELL_TONE[a.tone ?? ""] ?? "",
+        ].join(" ");
+        const span = Number(a.span) > 1 ? Math.min(12, Number(a.span)) : undefined;
+        return a.head === "true" || a.row === "true" ? (
+          <th key={key} scope={a.row === "true" ? "row" : "col"} colSpan={span} className={cls} title={a.tip || undefined}>
+            {kids(n.c)}
+          </th>
+        ) : (
+          <td key={key} colSpan={span} className={cls} title={a.tip || undefined}>
+            {kids(n.c)}
+          </td>
+        );
+      }
       case "subview":
         return (
           <div key={key} className="space-y-3" data-subview={a.title || undefined}>
@@ -588,7 +684,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return (
           <div
             key={key}
-            className={`space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900 ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
+            className={`${a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : "space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
             style={scrolls(a)}
             {...(go ? { role: "button", tabIndex: 0, title: a.tip || undefined, onClick: () => void run(a), onKeyDown: (e: React.KeyboardEvent) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), void run(a)) } : {})}
           >
@@ -729,8 +825,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       }
       case "tile":
         return (
-          <div key={key} className="h-full rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-xs dark:border-zinc-800 dark:bg-zinc-900" title={a.tip || undefined}>
-            <div className="flex items-center justify-between gap-2 text-xs font-medium text-zinc-500">
+          <div key={key} className={`h-full rounded-xl border px-4 py-3 shadow-xs ${a.tint === "true" && BOX_TONE[a.tone ?? ""] && a.tone !== "plain" ? BOX_TONE[a.tone ?? ""] : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}`} title={a.tip || undefined}>
+            <div className={`flex items-center justify-between gap-2 text-xs font-medium text-zinc-500 ${a.tint === "true" ? "uppercase" : ""}`}>
               <span className="truncate">{a.label}</span>
               {a.icon && <span aria-hidden>{a.icon}</span>}
             </div>
@@ -831,12 +927,12 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "tabs": {
         const opts = json<[string, string, string?][]>(a.options, []);
         return (
-          <div key={key} className="inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 print:hidden dark:bg-zinc-800/70" role="tablist">
+          <div key={key} className={a.look === "line" ? "flex flex-wrap gap-1 border-b border-zinc-200 print:hidden dark:border-zinc-800" : "inline-flex flex-wrap items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 print:hidden dark:bg-zinc-800/70"} role="tablist">
             {opts.map(([v, label, count]) => {
               // A label "logo-<channel> Name": the channel's mark alone, its name the tab's tooltip and accessible name.
               const logo = /^logo-(\S+)\s+(.*)$/.exec(label);
               return (
-              <button key={v} type="button" role="tab" aria-selected={a.current === v} aria-label={logo ? `${logo[2]}${count ? ` (${count})` : ""}` : undefined} title={logo?.[2]} className={`inline-flex items-center rounded-md px-3 py-1 text-sm font-medium transition ${a.current === v ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`} onClick={() => setState(a.bind, v)}>
+              <button key={v} type="button" role="tab" aria-selected={a.current === v} aria-label={logo ? `${logo[2]}${count ? ` (${count})` : ""}` : undefined} title={logo?.[2]} className={a.look === "line" ? `-mb-px inline-flex items-center border-b-2 px-3 py-1.5 text-sm ${a.current === v ? "border-indigo-600 font-medium text-indigo-700 dark:text-indigo-300" : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"}` : `inline-flex items-center rounded-md px-3 py-1 text-sm font-medium transition ${a.current === v ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200"}`} onClick={() => setState(a.bind, v)}>
                 {logo ? <ChannelLogo name={logo[1]} className="size-[18px]" /> : label}
                 {count !== undefined && <span className="ml-1 text-xs font-normal text-zinc-400 tabular-nums">{count}</span>}
               </button>
@@ -849,11 +945,22 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const opts = json<[string, string, string?][]>(a.options, []);
         // (emit=: what the view does with the value picked, at once — a status saved)
         const picked = (v: string) => (setState(a.bind, v), a.emit && setPending({ event: a.emit, id: ++pendingSeq.current }));
-        if (a.search === "true") return <SearchSelect key={key} options={opts} value={a.current ?? ""} label={a.label} onPick={picked} />;
+        const stack = a.stack === "true";
+        if (a.search === "true") {
+          const box = <SearchSelect key={key} options={opts} value={a.current ?? ""} label={a.label} onPick={picked} />;
+          return stack && a.label ? (
+            <label key={key} className="flex w-full flex-col gap-1 text-sm print:hidden">
+              <span className="text-xs font-medium text-zinc-500">{a.label}</span>
+              {box}
+            </label>
+          ) : (
+            box
+          );
+        }
         return (
-          <label key={key} className="inline-flex items-center gap-1.5 text-sm print:hidden">
-            {a.label && <span className="text-xs text-zinc-500">{a.label}</span>}
-            <select className="input w-auto py-1 text-sm" value={a.current} onChange={(e) => picked(e.target.value)}>
+          <label key={key} className={stack ? "flex w-full flex-col gap-1 text-sm print:hidden" : "inline-flex items-center gap-1.5 text-sm print:hidden"}>
+            {a.label && <span className={stack ? "text-xs font-medium text-zinc-500" : "text-xs text-zinc-500"}>{a.label}</span>}
+            <select className={`input py-1 text-sm ${stack ? "w-full" : "w-auto"}`} value={a.current} onChange={(e) => picked(e.target.value)}>
               {opts.map(([v, label, count]) => (
                 <option key={v} value={v}>
                   {label}
@@ -948,7 +1055,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "button": {
         // A label that is only a sign (‹ ›): its tip is the button's name, and it is wide enough to hit (24 px).
         const sign = !!a.label && !/\p{L}/u.test(a.label);
-        const variant = a.variant === "link" ? "truncate text-left font-medium hover:underline" : a.variant === "primary" ? "btn btn-primary btn-sm" : a.variant === "danger" ? "btn btn-sm btn-danger" : a.variant === "quiet" ? "rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800" : "btn btn-sm";
+        const variant = a.variant === "send" ? "ml-auto grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-700 disabled:bg-zinc-200 disabled:text-zinc-400 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600" : a.variant === "link" ? "truncate text-left font-medium hover:underline" : a.variant === "primary" ? "btn btn-primary btn-sm" : a.variant === "danger" ? "btn btn-sm btn-danger" : a.variant === "quiet" ? "rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800" : "btn btn-sm";
         return (
           <button
             key={key}
@@ -1256,16 +1363,71 @@ function SearchSelect({ options, value, label, onPick }: { options: [string, str
   );
 }
 
+/** A pane's part that scrolls by itself (min-h-0, the room left); end=true: kept at its end as more comes — unless you scrolled up. */
+function Scroller({ end, pad, center, children }: { end: boolean; pad: boolean; center: boolean; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || !end) return;
+    el.scrollTop = el.scrollHeight;
+    const follow = new MutationObserver(() => {
+      if (stick.current) el.scrollTop = el.scrollHeight;
+    });
+    follow.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => follow.disconnect();
+  }, [end]);
+  return (
+    <div
+      ref={box}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      }}
+      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${pad ? "px-4 py-4" : ""}`}
+    >
+      {center ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}
+    </div>
+  );
+}
+
+/** Your message in a conversation: a rounded grey bubble (right-aligned), a long one cut — 'Show all'. */
+function Bubble({ text, note, end }: { text: string; note?: string; end: boolean }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const long = text.length > 1500;
+  return (
+    <div className={`flex ${end ? "justify-end" : ""}`}>
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-zinc-100 px-4 py-2.5 text-sm whitespace-pre-wrap text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
+        {long && !open ? `${text.slice(0, 600)} …` : text}
+        {long && (
+          <button type="button" onClick={() => setOpen(!open)} className="mt-1 block text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">
+            {open ? t("Show less") : t("Show all")}
+          </button>
+        )}
+        {note ? <span className="mt-1 block text-xs text-zinc-500">{note}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 /** A section that folds: open or not — or "wide": open on a wide screen, folded on a phone (decided once it is shown). */
-function Fold({ title, open, children }: { title: string; open: boolean | "wide"; children: React.ReactNode }) {
+function Fold({ title, aside, dense, quiet, open, children }: { title: string; aside?: string; dense?: boolean; quiet?: boolean; open: boolean | "wide"; children: React.ReactNode }) {
   const [isOpen, setOpen] = useState(open !== false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the window's width is known only in the browser
     if (open === "wide" && window.matchMedia("(max-width: 639px)").matches) setOpen(false);
   }, [open]);
   return (
-    <details open={isOpen} onToggle={(e) => setOpen(e.currentTarget.open)} className="group space-y-2">
-      <summary className="cursor-pointer text-sm font-semibold select-none">{title}</summary>
+    <details open={isOpen} onToggle={(e) => setOpen(e.currentTarget.open)} className={dense ? "group space-y-0.5" : "group space-y-2"}>
+      {dense ? (
+        <summary className="flex cursor-pointer items-center gap-1 px-0.5 pt-2 pb-0.5 text-xs text-zinc-500 select-none">
+          <span className={quiet ? "" : "font-medium tracking-wide uppercase"}>{title}</span>
+          {aside && <span className="ml-auto shrink-0 text-zinc-400 tabular-nums">{aside}</span>}
+        </summary>
+      ) : (
+        <summary className="cursor-pointer text-sm font-semibold select-none">{title}</summary>
+      )}
       {children}
     </details>
   );

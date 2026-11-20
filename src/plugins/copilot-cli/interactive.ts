@@ -55,6 +55,15 @@ function onUpdate(live: Live, u: Record<string, unknown>) {
     }
     return;
   }
+  // What it does besides talking: thinking and tool results show as a line, so a long silence is not a mystery.
+  if (kind === "agent_thought_chunk") {
+    if (!live.thinking) log(live.runId, `
+[Zeff] thinking …
+`);
+    live.thinking = true;
+    return;
+  }
+  live.thinking = false;
   if (kind === "tool_call") {
     log(live.runId, `\n▸ ${String(u.title ?? u.kind ?? "Tool")}\n`);
     return;
@@ -87,9 +96,19 @@ function onPermission(live: Live, rpcId: number | string, p: Record<string, unkn
   }
   const raw = tool.rawInput && typeof tool.rawInput === "object" ? (tool.rawInput as Record<string, unknown>) : null;
   const detail = raw ? String(raw.command ?? raw.path ?? raw.url ?? JSON.stringify(raw)).slice(0, 600) : null;
+  const view = { title: tool.title ?? tool.kind ?? "an action", detail, options };
+  // It can ask several things at once: the others wait their turn (each gets its answer — else it waits for one for good).
+  if (live.view.permission) {
+    (live.queued ??= []).push({ rpcId, view });
+    return;
+  }
+  showPermission(live, rpcId, view);
+}
+
+function showPermission(live: Live, rpcId: number | string, view: NonNullable<Live["view"]["permission"]>) {
   live.permissionRpcId = rpcId;
-  live.view.permission = { title: tool.title ?? tool.kind ?? "an action", detail, options };
-  log(live.runId, `\n[Zeff] Copilot asks for permission: ${live.view.permission.title}${detail ? ` — ${detail}` : ""}\n`);
+  live.view.permission = view;
+  log(live.runId, `\n[Zeff] Copilot asks for permission: ${view.title}${view.detail ? ` — ${view.detail}` : ""}\n`);
   emitChange("work");
   emitChange("attention");
 }
@@ -210,6 +229,8 @@ export function answerPermission(runId: number, optionId: string) {
   log(runId, `[Du] ${option.name}\n`);
   live.permissionRpcId = null;
   live.view.permission = null;
+  const next = live.queued?.shift();
+  if (next) showPermission(live, next.rpcId, next.view);
   emitChange("work");
   emitChange("attention");
 }
@@ -228,9 +249,11 @@ export async function setMode(runId: number, modeId: string) {
   await call(live, "session/set_mode", { sessionId: live.sessionId, modeId });
   live.view.mode = modeId;
   log(runId, `[Zeff] Mode: ${live.view.modes.find((m) => m.id === modeId)?.name ?? shortMode(modeId)}\n`);
-  if (shortMode(modeId) === "autopilot" && live.view.permission) {
+  // (every one waiting, the queued too)
+  while (shortMode(modeId) === "autopilot" && live.view.permission) {
     const allow = live.view.permission.options.find((o) => o.kind === "allow_once") ?? live.view.permission.options.find((o) => o.kind.startsWith("allow"));
-    if (allow) answerPermission(runId, allow.id);
+    if (!allow) break;
+    answerPermission(runId, allow.id);
   }
   emitChange("work");
 }

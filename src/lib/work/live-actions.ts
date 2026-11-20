@@ -3,6 +3,7 @@
  * The phone's server (which only watches) hands it over (host op "work.liveDo"). Server only.
  */
 import { answerPermission, sendToLive, setMode, wrapUp } from "@/plugins/copilot-cli/interactive";
+import { liveView } from "@/plugins/copilot-cli/live-state";
 import { liveDriverOf, type LiveDriver } from "@/lib/work/live-driver";
 import { EFFORTS, type AskAnswer, type Effort } from "@/lib/work/shared";
 import { t } from "@/lib/i18n/server";
@@ -33,6 +34,8 @@ export async function liveDo(runId: number, body: LiveBody): Promise<Record<stri
     const out = await session(driver, runId, body);
     return out;
   }
+  // A Copilot session Zeff's own server holds (this one only watches): done there.
+  if (!liveView(runId) && (await import("@/lib/host/role")).delegates()) return await (await import("@/lib/host/client")).callHost<Record<string, unknown>>("work.liveDo", { runId, body }, 120000);
   if (body.do === "answer") answerPermission(runId, String(body.option ?? ""));
   else if (body.do === "send") {
     const text = String(body.text ?? "").trim();

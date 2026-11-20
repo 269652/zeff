@@ -89,6 +89,56 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "work.asks",
+    group: "work",
+    label: "What the workers on a todo ask of you",
+    summary:
+      "What the live sessions on a todo (input todo) wait on you for — a permission to allow, a question, a plan — each with the answers that can be given (buttons with the flow input work.live takes: run, do, requestId, behavior, option …) and the modes the session can be switched to (Agent, Plan, Autopilot / Auto …). Nothing waiting: an empty list.",
+    input: [f("todo", "number", { required: true })],
+    output: "{ codePage, asks: [{ run, ref, provider, title, detail, openOnly, buttons: [{ label, primary, with }], modes: [{ label, sel, with }] }] }",
+    run: async (i) => {
+      need();
+      const { runsForTodos } = await import("@/lib/work/store");
+      const { workRef } = await import("@/lib/work/shared");
+      const { askTitle } = await import("@/lib/work/live-driver");
+      const todo = int(i.todo);
+      const asks = (runsForTodos([todo]).get(todo) ?? [])
+        .filter((r) => r.status === "running")
+        .flatMap((r) => {
+          const modes = (r.live?.modes ?? []).map((m) => ({ label: m.name || m.id, sel: m.id === r.live?.mode, with: `run=${r.id}, do=mode, mode=${m.id}` }));
+          const base = { run: r.id, ref: workRef(r.id), provider: r.provider, modes };
+          const s = r.session;
+          if (s?.asks.length) {
+            const a = s.asks[0];
+            const open = a.tool === "ExitPlanMode" || a.tool === "AskUserQuestion";
+            const answer = `run=${r.id}, do=answer, requestId=${a.requestId}`;
+            const detail = clip(String(a.input.command ?? a.input.file_path ?? a.input.path ?? a.input.url ?? a.input.pattern ?? a.description ?? ""), 600);
+            return [
+              {
+                ...base,
+                title: askTitle(a, t),
+                detail,
+                openOnly: open,
+                buttons: open
+                  ? []
+                  : [
+                      { label: t("Allow"), primary: true, with: `${answer}, behavior=allow` },
+                      ...(a.suggestions.length > 0 ? [{ label: alwaysLabel(a.suggestions) ? t("Always: {rule}", { rule: alwaysLabel(a.suggestions) ?? "" }) : t("Always"), primary: false, with: `${answer}, behavior=allow, always=true` }] : []),
+                      { label: t("Deny"), primary: false, with: `${answer}, behavior=deny` },
+                    ],
+              },
+            ];
+          }
+          const p = r.live?.permission;
+          if (p) {
+            return [{ ...base, title: p.title, detail: p.detail ?? "", openOnly: false, buttons: p.options.map((o) => ({ label: o.name, primary: o.kind === "allow_once", with: `run=${r.id}, do=answer-option, option=${o.id}` })) }];
+          }
+          return [];
+        });
+      return { asks, codePage: (await import("./to-plugin")).workCodePage() ?? 0 };
+    },
+  },
+  {
     name: "work.session-open",
     group: "work",
     label: "A session: its conversation",

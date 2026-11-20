@@ -93,6 +93,32 @@ export function updateClaudeSessionSettings(patch: Partial<ClaudeSessionSettings
 
 const STATUSES: WorkStatus[] = ["queued", "running", "done", "failed", "cancelled", "interrupted"];
 
+/**
+ * A Copilot session this (web) server doesn't follow — Zeff's own server holds it: its state as that server tells (host op "work.copilotView"), kept a moment
+ * and asked again in the background, so the page shows what it asks (the permission) and the answer you give goes there (live-actions.ts).
+ */
+const remote = new Map<number, { at: number; asking: boolean; view: ReturnType<typeof liveView> | null }>();
+function remoteCopilotView(runId: number): ReturnType<typeof liveView> {
+  const e = remote.get(runId) ?? { at: 0, asking: false, view: null };
+  remote.set(runId, e);
+  if (!e.asking && Date.now() - e.at > 1500) {
+    e.asking = true;
+    void import("@/lib/host/client")
+      .then(({ callHost }) => callHost<ReturnType<typeof liveView> | null>("work.copilotView", { runId }, 4000))
+      .then((v) => {
+        const before = JSON.stringify(e.view);
+        e.view = v ?? null;
+        if (JSON.stringify(e.view) !== before) emitChange("work");
+      })
+      .catch(() => {})
+      .finally(() => {
+        e.at = Date.now();
+        e.asking = false;
+      });
+  }
+  return e.view ?? undefined;
+}
+
 export function toRunView(r: WorkRun): WorkRunView {
   // The phone's server: a running session Zeff's own follows is watched here too — so its page shows it (what it asks,
   // whether it works); what you do there goes to Zeff's own (lib/work/live-actions.ts).
@@ -106,7 +132,7 @@ export function toRunView(r: WorkRun): WorkRunView {
     ticket: r.ticket,
     todoId: r.todoId,
     mode: (["code", "draft", "send", "mr", "ops", "instruct"].includes(r.mode) ? r.mode : "code") as WorkMode,
-    live: liveView(r.id) ?? liveSessionView(r.id)?.live ?? null,
+    live: liveView(r.id) ?? liveSessionView(r.id)?.live ?? (r.status === "running" && r.provider === "copilot" && delegates() ? (remoteCopilotView(r.id) ?? null) : null),
     session: liveSessionView(r.id)?.session ?? null,
     provider: r.provider === "copilot" || r.provider === "codex" || r.provider === "zeff" || r.provider === "agent" ? r.provider : "claude",
     model: r.model,

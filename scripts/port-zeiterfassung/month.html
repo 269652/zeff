@@ -17,29 +17,29 @@
   </row>
 
   <grid cols=3 gap=3 min=220>
-    <tile label="{{ data.m.booked.label }}" value="{{ data.m.booked.value }}" sub="{{ data.m.booked.sub }}" tone="{{ data.m.booked.tone }}"/>
+    <tile tint=true label="{{ data.m.booked.label }}" value="{{ data.m.booked.value }}" sub="{{ data.m.booked.sub }}" tone="{{ data.m.booked.tone }}"/>
     <col gap=1>
-      <tile label="{{ data.m.past.label }}" value="{{ data.m.past.value }}" sub="{{ data.m.past.sub }}" tone="{{ data.m.past.tone }}"/>
+      <tile tint=true label="{{ data.m.past.label }}" value="{{ data.m.past.value }}" sub="{{ data.m.past.sub }}" tone="{{ data.m.past.tone }}"/>
       <row gap=1 wrap=true>
         {{#each data.m.past.weeks}}<button action="state" state="week" value="{{ key }}" emit="openweek" label="{{ label }}" tip="{{ title }}" variant="{{ missing ? 'danger' : 'plain' }}"/>{{/each}}
       </row>
     </col>
-    <tile label="{{ data.m.entries.label }}" value="{{ data.m.entries.value }}" sub="{{ data.m.entries.sub }}" tone="{{ data.m.entries.tone }}"/>
+    <tile tint=true label="{{ data.m.entries.label }}" value="{{ data.m.entries.value }}" sub="{{ data.m.entries.sub }}" tone="{{ data.m.entries.tone }}"/>
   </grid>
 
-  <section title="Days" aside="{{ data.m.calendarHint }}">
+  <section card=true title="Days" aside="{{ data.m.calendarHint }}">
     {{#if data.m.slotActions}}<row gap=2 wrap=true justify=end align=center>{{#if data.m.oldestPull}}<small><muted>{{ data.m.oldestPull }}</muted></small>{{/if}}{{#each data.m.slotActions}}<button run="{{ flow }}" with="{{ with }}" emit="time-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
-    <grid cols=9 gap=1 min=60>
+    <grid tracks="3rem repeat(7,minmax(0,1fr)) 4.5rem" gap=1 minw=576>
       <text></text>
       {{#each data.m.weekdays}}<small><muted>{{ this }}</muted></small>{{/each}}
-      <small><muted>Week</muted></small>
+      <col align=end><small><muted>Week</muted></small></col>
       {{#each data.m.calendar}}
       <button action="state" state="week" value="{{ key }}" emit="openweek" label="{{ label }}" tip="{{ title }}" variant=quiet/>
       {{#each cells}}
       {{#if in}}
-      <box tone="{{ tone }}" action="state" state="week" value="{{ week }}" emit="openweek" tip="{{ title }}">
-        <row justify=between><small>{{ day }}</small><small><muted>{{ note }}</muted></small></row>
-        <b>{{ hours }}</b>
+      <box dense=true tone="{{ tone }}" action="state" state="week" value="{{ week }}" emit="openweek" tip="{{ title }}">
+        <row justify=between><small>{{#if today}}<b>{{ day }}</b>{{#else}}{{ day }}{{/if}}</small><small><muted>{{ note }}</muted></small></row>
+        <col align=end><b>{{ hours }}</b></col>
       </box>
       {{#else}}<text></text>{{/if}}
       {{/each}}
@@ -50,53 +50,48 @@
     {{#if data.m.approvals}}<row gap=3 wrap=true><small><muted>green: {{ data.m.approvals.legendAll }}</muted></small><small><muted>8 / 12 {{ data.m.approvals.legendPartly }}</muted></small><small><muted>{{ data.m.approvals.legendNone }}</muted></small>{{#if data.m.approvals.unpulled}}<small><muted>{{ data.m.approvals.unpulled }}</muted></small>{{/if}}</row>{{/if}}
   </section>
 
-  <section title="Hours per job and week">
+  <section card=true title="Hours per job and week">
     {{#if data.m.jobRows}}
-    <grid cols="{{ data.m.jobCols }}" gap=2 min=50>
-      <small><muted>Job</muted></small>
-      {{#each data.m.weekHeads}}<col align=end><button action="state" state="week" value="{{ key }}" emit="openweek" label="{{ label }}" variant=link/><small><muted>{{ range }}</muted></small></col>{{/each}}
-      <small><muted>Total</muted></small>
-      <small><muted>Share</muted></small>
-      {{#each data.m.jobRows}}
-      <col>
-        {{#if project}}<b>{{ project }}</b><small><muted>{{ number }} {{ name }}</muted></small>{{#else}}<b>{{ number }} {{ name }}</b>{{#if customer}}<small><muted>{{ customer }}</muted></small>{{/if}}{{/if}}
-      </col>
-      {{#each weeks}}<text>{{ this }}</text>{{/each}}
-      <b>{{ total }}</b>
-      <small><muted>{{ share }}</muted></small>
-      {{/each}}
-      <b>Booked</b>
-      {{#each data.m.foot.booked}}<b>{{ this }}</b>{{/each}}
-      <b>{{ data.m.foot.bookedTotal }}</b>
-      <text></text>
-      {{#if data.m.foot.missing}}
-      <b>Missing</b>
-      {{#each data.m.foot.missing}}<text tone=bad>{{ this }}</text>{{/each}}
-      <text tone=bad>{{ data.m.foot.missingTotal }}</text>
-      <text></text>
-      {{/if}}
-      <small><muted>Target</muted></small>
-      {{#each data.m.foot.target}}<small><muted>{{ this }}</muted></small>{{/each}}
-      <small><muted>{{ data.m.foot.targetTotal }}</muted></small>
-      <text></text>
-    </grid>
+    <sheet compact=true caption="Hours per job and week">
+      <shead><srow>
+        <scell head=true>Job</scell>
+        {{#each data.m.weekHeads}}<scell head=true num=true><col align=end><button action="state" state="week" value="{{ key }}" emit="openweek" label="{{ label }}" variant=link/><small>{{ range }}</small></col></scell>{{/each}}
+        <scell head=true num=true>Total</scell>
+        <scell head=true num=true>Share</scell>
+      </srow></shead>
+      <sbody>
+        {{#each data.m.jobRows}}
+        <srow hover=true>
+          <scell row=true><col>{{#if project}}<b>{{ project }}</b><small><muted>{{ number }} {{ name }}</muted></small>{{#else}}<b>{{ number }} {{ name }}</b>{{#if customer}}<small><muted>{{ customer }}</muted></small>{{/if}}{{/if}}</col></scell>
+          {{#each weeks}}<scell num=true>{{ this }}</scell>{{/each}}
+          <scell num=true bold=true>{{ total }}</scell>
+          <scell num=true tone=muted>{{ share }}</scell>
+        </srow>
+        {{/each}}
+      </sbody>
+      <sfoot>
+        <srow bold=true><scell row=true>Booked</scell>{{#each data.m.foot.booked}}<scell num=true>{{ this }}</scell>{{/each}}<scell num=true>{{ data.m.foot.bookedTotal }}</scell><scell num=true></scell></srow>
+        {{#if data.m.foot.missing}}<srow bold=true tone=bad><scell row=true>Missing</scell>{{#each data.m.foot.missing}}<scell num=true>{{ this }}</scell>{{/each}}<scell num=true>{{ data.m.foot.missingTotal }}</scell><scell num=true></scell></srow>{{/if}}
+        <srow tone=muted><scell row=true>Target</scell>{{#each data.m.foot.target}}<scell num=true>{{ this }}</scell>{{/each}}<scell num=true>{{ data.m.foot.targetTotal }}</scell><scell num=true></scell></srow>
+      </sfoot>
+    </sheet>
     {{#else}}<text tone=muted>{{ data.m.emptyJobs }}</text>{{/if}}
   </section>
 
   <grid cols=2 gap=3 min=300>
-    <section title="Hours by type">
+    <section card=true title="Hours by type">
       {{#if data.m.typeItems}}{{#each data.m.typeItems}}
       <row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.m.typeItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>
       {{/each}}{{#else}}<text tone=muted>No entries.</text>{{/if}}
     </section>
-    <section title="Hours by tag">
+    <section card=true title="Hours by tag">
       {{#if data.m.tagItems}}{{#each data.m.tagItems}}
       <row gap=2 align=center><text>{{ label }}</text><bar value="{{ value }}" max="{{ data.m.tagItems | max('value') }}" color="{{ color }}"/><b>{{ valueLabel }}</b></row>
       {{/each}}{{#else}}<text tone=muted>No entries.</text>{{/if}}
     </section>
   </grid>
 
-  <section title="{{ data.m.reportHead }}" aside="{{ data.m.reportMeta }}">
+  <section card=true title="{{ data.m.reportHead }}" aside="{{ data.m.reportMeta }}">
     {{#if data.m.summaries}}
     <row justify=end><copy text="{{ data.m.summaryText }}" label="Copy report"/></row>
     {{#each data.m.summaries}}
@@ -109,7 +104,7 @@
     {{#else}}<text tone=muted>No time booked in this month.</text>{{/if}}
   </section>
 
-  <section title="{{ data.m.entriesHead }}" aside="{{ data.m.entryList | count }}" collapsible=true open=false>
+  <section card=true title="{{ data.m.entriesHead }}" aside="{{ data.m.entryList | count }}" collapsible=true open=false>
     <datatable source="data.m.entryList" empty="No entries.">
       <column label="Date">{{ dateText }}</column>
       <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>

@@ -3,6 +3,7 @@ import { connection } from "next/server";
 import { t } from "@/lib/i18n/server";
 import { redirect } from "@/lib/redirect";
 import { reportLink } from "@/plugins/zeiterfassung/to-plugin";
+import { fullScreen } from "@/lib/full-screen";
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: t("Monthly report") };
@@ -12,5 +13,5 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function MonthPage({ searchParams }: { searchParams: Promise<{ month?: string; by?: string }> }) {
   await connection();
   const sp = await searchParams;
-  return redirect(await reportLink({ view: "month", month: sp.month, by: sp.by }));
+  return redirect(fullScreen(await reportLink({ view: "month", month: sp.month, by: sp.by })));
 }

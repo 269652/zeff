@@ -6,18 +6,26 @@ import { useT } from "@/components/I18nProvider";
 /**
  * Full screen for an app (a database, a board): the app's header and the page's sidebar go, the page has the whole
  * window. Kept in this browser; Escape (or the button again) brings them back. The CSS is html[data-focus] in globals.css.
+ * A link opens a page so too: ?focus=1 (an app from the header menu) — for that visit, not kept.
  */
 
 const KEY = "zeff-focus";
 const listeners = new Set<() => void>();
+const byLink = (): boolean => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("focus") === "1";
 const read = (): boolean => {
   try {
-    return localStorage.getItem(KEY) === "1";
+    return byLink() || localStorage.getItem(KEY) === "1";
   } catch {
-    return false;
+    return byLink();
   }
 };
 const set = (on: boolean) => {
+  // (Leaving a page opened full screen by its link: the link's ?focus=1 goes, so it stays left.)
+  if (!on && byLink()) {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("focus");
+    window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+  }
   try {
     if (on) localStorage.setItem(KEY, "1");
     else localStorage.removeItem(KEY);

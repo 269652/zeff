@@ -4,7 +4,7 @@
 <data name="d" lambda="zeiterfassung.job-detail" with="ref={{ state.jd }}" when="{{ state.jd }}"/>
 <col gap=3>
   {{#if state.jd}}{{#if data.d.found}}
-  <section title="{{ data.d.title }}" aside="{{ data.d.sub }}">
+  <section card=true title="{{ data.d.title }}" aside="{{ data.d.sub }}">
     <col gap=2>
       <row gap=2 align=center wrap=true>
         <button action="state" state="jd" value="" label="← All jobs" variant=plain/>
@@ -39,7 +39,7 @@
   {{/if}}{{/if}}
   {{#if data.jsaved.jsaved.message}}<callout tone=good>{{ data.jsaved.jsaved.message }}</callout>{{/if}}
   <text tone=muted>Job numbers that time can be booked on — from the web UI or via the MCP report_time tool.</text>
-  <section title="New job">
+  <section card=true title="New job">
     <col gap=2>
       <grid cols=4 gap=2 min=150>
         <input bind="nj_number" label="Number"/>
@@ -51,7 +51,7 @@
       <row gap=2><button run="zeiterfassung.job-save" with="number={{ state.nj_number }}, name={{ state.nj_name }}, customer={{ state.nj_customer }}, description={{ state.nj_description }}, defaultTags={{ state.nj_tags }}" into="jsaved" then="nj_number=" emit="jobs-changed" label="Create job" variant=primary/></row>
     </col>
   </section>
-  <section title="{{ data.j.jobsHead }}">
+  <section card=true title="{{ data.j.jobsHead }}">
     {{#if data.j.toolbar}}<row gap=2 wrap=true justify=end>{{#each data.j.toolbar}}<button run="{{ flow }}" with="{{ with }}" emit="jobs-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
     <datatable source="data.j.jobs" empty="No jobs yet.">
       <column label="Number"><mono>{{ number }}</mono></column>
@@ -88,7 +88,7 @@
   </dialog>
 
   <text tone=muted>Book time on a project instead of a job — e.g. a training. The hours land on the project's job, and setting or changing that job later moves all its entries.</text>
-  <section title="New project">
+  <section card=true title="New project">
     <col gap=2>
       <grid cols=4 gap=2 min=150>
         <input bind="np_title" label="Title"/>
@@ -104,7 +104,7 @@
       <row gap=2><button run="zeiterfassung.project-save" with="title={{ state.np_title }}, jobNumber={{ state.np_job }}, customer={{ state.np_customer }}, description={{ state.np_description }}, startDate={{ state.np_start }}, endDate={{ state.np_end }}, defaultTags={{ state.np_tags }}" into="jsaved" then="np_title=" emit="jobs-changed" label="Create project" variant=primary/></row>
     </col>
   </section>
-  <section title="{{ data.j.projectsHead }}">
+  <section card=true title="{{ data.j.projectsHead }}">
     <datatable source="data.j.projects" empty="No projects yet.">
       <column label="Title"><b>{{ title }}</b>{{#if description}}<small><muted>{{ description }}</muted></small>{{/if}} <small>{{ tags }}</small></column>
       <column label="Job">{{ job }}</column>

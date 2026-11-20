@@ -4,6 +4,12 @@ const PORT = "work-ext";
 
 /** The Workspace pages of the port: the Code screen and its settings (set when it is switched to), as page ids. */
 export const workCodePage = (): number | null => getPref<number | null>("work.codePage", null);
+/** The Code app's page, at the top of the Workspace (moved there once: the flows behind its buttons stay in System). */
+export async function workCodeHome(): Promise<number | null> {
+  const page = workCodePage();
+  if (page) (await import("@/plugins/workspace/package-home")).surfaceApp(page, { name: "Code", holder: "Code — the actions behind its buttons", done: "work.codeHome" });
+  return page;
+}
 export const workSettingsPage = (): number | null => getPref<number | null>("work.settingsPage", null);
 
 /**
@@ -36,7 +42,10 @@ export async function switchWorkToPlugin(): Promise<{ page: number | null }> {
       }) ?? null;
     page = find("Sessions");
     const settings = find("Code settings");
-    if (page) setPref("work.codePage", page);
+    if (page) {
+      setPref("work.codePage", page);
+      (await import("@/plugins/workspace/package-home")).surfaceApp(page, { name: "Code", holder: "Code — the actions behind its buttons", done: "work.codeHome" });
+    }
     if (settings) setPref("work.settingsPage", settings);
   }
   (await import("@/plugins/state")).setInstalled("work", false);

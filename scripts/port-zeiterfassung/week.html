@@ -20,75 +20,95 @@
 
   <grid cols=2 gap=3 min=240>
     <col gap=1>
-      <tile label="{{ data.w.booked.label }}" value="{{ data.w.booked.value }}" sub="{{ data.w.booked.sub }}" tone="{{ data.w.booked.tone }}"/>
+      <tile tint=true label="{{ data.w.booked.label }}" value="{{ data.w.booked.value }}" sub="{{ data.w.booked.sub }}" tone="{{ data.w.booked.tone }}"/>
       {{#if data.w.booked.today}}<small>{{ data.w.booked.today }}</small>{{/if}}
     </col>
     <col gap=1>
-      <tile label="{{ data.w.past.label }}" value="{{ data.w.past.value }}" sub="{{ data.w.past.sub }}" tone="{{ data.w.past.tone }}"/>
+      <tile tint=true label="{{ data.w.past.label }}" value="{{ data.w.past.value }}" sub="{{ data.w.past.sub }}" tone="{{ data.w.past.tone }}"/>
       <row gap=1 wrap=true>
         {{#each data.w.past.weeks}}<button action="state" state="week" value="{{ key }}" label="{{ label }}" tip="{{ title }}" variant="{{ missing ? 'danger' : 'plain' }}"/>{{/each}}
       </row>
     </col>
-    {{#each data.w.slots.cards}}<tile label="{{ label }}" value="{{ value }}" sub="{{ sub }}" tone="{{ tone }}"/>{{/each}}
+    {{#each data.w.slots.cards}}<tile tint=true label="{{ label }}" value="{{ value }}" sub="{{ sub }}" tone="{{ tone }}"/>{{/each}}
   </grid>
 
-  <section title="Hours per job and day">
+  <section card=true title="Hours per job and day">
     {{#if data.w.slots.actions}}<row gap=2 wrap=true justify=end>{{#each data.w.slots.actions}}<button run="{{ flow }}" with="{{ with }}" emit="time-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
-    {{#if data.w.table.rows}}
-    <grid cols=9 gap=2 min=50>
-      <small><muted>Job</muted></small>
-      {{#each data.w.table.heads}}<col align=end><text tone="{{ tone == 'bad' ? 'bad' : 'plain' }}"><b>{{ name }}</b></text><small><muted>{{ date }}</muted></small><small><muted>{{ note }}</muted></small></col>{{/each}}
-      <small><muted>Total</muted></small>
-      {{#each data.w.table.rows}}
-      <col>
-        {{#if project}}<b>{{ project }}</b><small><muted>{{ number }} {{ name }}</muted></small>{{#else}}<b>{{ number }} {{ name }}</b>{{#if customer}}<small><muted>{{ customer }}</muted></small>{{/if}}{{/if}}
-      </col>
-      {{#each days}}<text tone="{{ tone == 'muted' ? 'muted' : tone == 'good' ? 'good' : 'plain' }}">{{ text }}{{#if mark}} <small tip="{{ markTitle }}">{{ mark }}</small>{{/if}}</text>{{/each}}
-      <b>{{ total }}</b>
-      {{/each}}
-      <b>Booked</b>
-      {{#each data.w.table.foot.booked}}<text tone="{{ tone == 'bad' ? 'bad' : tone == 'warn' ? 'warn' : 'plain' }}" tip="{{ title }}"><b>{{ text }}</b>{{#if mark}} <small tip="{{ markTitle }}">{{ mark }}</small>{{/if}}</text>{{/each}}
-      <b>{{ data.w.table.foot.bookedTotal }}</b>
-      {{#if data.w.table.foot.missing}}
-      <b>Missing</b>
-      {{#each data.w.table.foot.missing}}<text tone=bad>{{ text }}</text>{{/each}}
-      <text tone=bad>{{ data.w.table.foot.missingTotal }}</text>
-      {{/if}}
-      <small><muted>Target</muted></small>
-      {{#each data.w.table.foot.target}}<small><muted>{{ text }}</muted></small>{{/each}}
-      <small><muted>{{ data.w.table.foot.targetTotal }}</muted></small>
-      <small><muted>Pause</muted></small>
-      {{#each data.w.table.foot.pause}}<button action="state" state="pauseday" value="{{ iso }}" label="{{ text }}" tip="{{ label }}" variant=quiet/>{{/each}}
-      <text></text>
-    </grid>
-    {{#else}}<text tone=muted>{{ data.w.table.empty }}</text>{{/if}}
-    {{#if data.w.table.flex}}
-    <row gap=2 wrap=true align=center>
-      <small><muted>{{ data.w.table.flex.job }} · {{ data.w.table.flex.comment }}</muted></small>
-      {{#each data.w.table.flex.days}}<button run="zeiterfassung.flex-book" with="dates={{ iso }}" emit="time-changed" done="Booked." label="{{ label }} −{{ gap }}" variant=plain/>{{/each}}
-    </row>
-    {{/if}}
+    <sheet caption="Entries of the week">
+      <shead><srow>
+        <scell head=true>Job</scell>
+        {{#each data.w.table.heads}}<scell head=true num=true tone="{{ tone == 'accent' ? 'today' : tone == 'muted' ? 'off' : 'plain' }}" dim="{{ dim }}"><col align=end><text tone="{{ tone == 'bad' ? 'bad' : 'plain' }}">{{ name }}</text><text>{{ date }}</text>{{#if note}}<small>{{ note }}</small>{{/if}}</col></scell>{{/each}}
+        <scell head=true num=true>Total</scell>
+      </srow></shead>
+      <sbody>
+        {{#if data.w.table.rows}}
+        {{#each data.w.table.rows}}
+        <srow hover=true>
+          <scell row=true>
+            <col>{{#if project}}<b>{{ project }}</b><small><muted>{{ number }} {{ name }}</muted></small>{{#else}}<b>{{ number }} {{ name }}</b>{{#if customer}}<small><muted>{{ customer }}</muted></small>{{/if}}{{/if}}</col>
+          </scell>
+          {{#each days}}<scell num=true tone="{{ tone == 'good' ? 'good' : tone == 'accent' ? 'today' : tone == 'muted' ? 'off' : 'plain' }}" dim="{{ dim }}">{{ text }}{{#if mark}} <small tip="{{ markTitle }}">{{ mark }}</small>{{/if}}</scell>{{/each}}
+          <scell num=true bold=true>{{ total }}</scell>
+        </srow>
+        {{/each}}
+        {{#else}}
+        <srow><scell span=9><text tone=muted>{{ data.w.table.empty }}</text></scell></srow>
+        {{/if}}
+        {{#if data.w.table.flex.any}}
+        <srow tone=muted>
+          <scell row=true><col><small>{{ data.w.table.flex.job }}</small><small><muted>{{ data.w.table.flex.comment }}</muted></small></col></scell>
+          {{#each data.w.table.flex.cells}}<scell num=true tone="{{ tone == 'accent' ? 'today' : tone == 'muted' ? 'off' : 'plain' }}" dim="{{ dim }}">{{#if gap}}<button run="zeiterfassung.flex-book" with="dates={{ iso }}" emit="time-changed" done="Booked." label="+ {{ gap }}" tip="{{ label }}" variant=quiet/>{{/if}}</scell>{{/each}}
+          <scell num=true></scell>
+        </srow>
+        {{/if}}
+      </sbody>
+      <sfoot>
+        <srow bold=true>
+          <scell row=true>Booked</scell>
+          {{#each data.w.table.foot.booked}}<scell num=true tone="{{ tone == 'bad' ? 'bad' : tone == 'warn' ? 'warn' : tone == 'accent' ? 'today' : tone == 'muted' ? 'off' : 'plain' }}" dim="{{ dim }}" tip="{{ title }}">{{ text }}{{#if mark}} <small tip="{{ markTitle }}">{{ mark }}</small>{{/if}}</scell>{{/each}}
+          <scell num=true>{{ data.w.table.foot.bookedTotal }}</scell>
+        </srow>
+        {{#if data.w.table.foot.missing}}
+        <srow bold=true tone=bad>
+          <scell row=true>Missing</scell>
+          {{#each data.w.table.foot.missing}}<scell num=true tone="{{ tone == 'bad' ? 'bad' : 'plain' }}">{{ text }}</scell>{{/each}}
+          <scell num=true>{{ data.w.table.foot.missingTotal }}</scell>
+        </srow>
+        {{/if}}
+        <srow tone=muted>
+          <scell row=true>Target</scell>
+          {{#each data.w.table.foot.target}}<scell num=true tone="{{ tone == 'muted' ? 'off' : 'plain' }}">{{ text }}</scell>{{/each}}
+          <scell num=true>{{ data.w.table.foot.targetTotal }}</scell>
+        </srow>
+        <srow>
+          <scell row=true>Pause</scell>
+          {{#each data.w.table.foot.pause}}<scell num=true top=true tone="{{ off ? 'off' : 'plain' }}"><button action="state" state="pauseday" value="{{ iso }}" label="{{ text }}" tip="{{ label }}" variant=quiet/></scell>{{/each}}
+          <scell num=true top=true>{{ data.w.table.foot.pauseTotal }}</scell>
+        </srow>
+      </sfoot>
+    </sheet>
   </section>
 
-  <section title="Add entry">
+  <section card=true title="Add entry">
     <col gap=2>
-      <grid cols=4 gap=2 min=160>
-        <input bind="n_date" type=date label="Date" value="{{ data.w.form.defaultDate }}"/>
-        {{#if data.w.form.bookOptions}}<select bind="n_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
-        <input bind="n_hours" type=number label="Hours" placeholder="1.5"/>
-        {{#if data.w.form.typeOptions}}<select bind="n_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>{{#else}}<text tone=warn>…</text>{{/if}}
+      <grid tracks="minmax(0,2.2fr) repeat(4,minmax(0,1fr))" gap=3>
+        {{#if data.w.form.bookOptions}}<select stack=true bind="n_bookon" options="{{ data.w.form.bookOptions | tojson }}" search=true label="Book on"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
+        {{#if data.w.form.typeOptions}}<select stack=true bind="n_type" options="{{ data.w.form.typeOptions | tojson }}" label="Type"/>{{#else}}<text tone=warn>…</text>{{/if}}
+        <input stack=true bind="n_date" type=date label="Date" value="{{ data.w.form.defaultDate }}"/>
+        <input stack=true bind="n_hours" label="Hours" placeholder="1.5"/>
+        <input stack=true bind="n_start" type=time label="Start"/>
       </grid>
-      <input bind="n_description" label="Description" placeholder="What did you do?"/>
-      <grid cols=3 gap=2 min=160>
-        <input bind="n_ticket" label="Ticket" placeholder="PROJ-337"/>
-        <input bind="n_tags" label="Tags" placeholder="tag1, tag2"/>
-        <input bind="n_comment" label="Comment"/>
-        <input bind="n_start" label="Start" placeholder="09:30"/>
-        <input bind="n_by" label="Reported by"/>
+      <grid tracks="repeat(3,minmax(0,1fr))" gap=3>
+        <input stack=true bind="n_ticket" label="Ticket" placeholder="PROJ-337" options="{{ data.w.form.tickets | tojson }}"/>
+        <input stack=true bind="n_tags" label="Tags" placeholder="tag1, tag2"/>
+        <input stack=true bind="n_by" label="Reported by"/>
       </grid>
+      <input stack=true bind="n_description" type=textarea rows=2 label="Report" placeholder="What did you do?"/>
+      {{#if state.n_cm == 'true'}}<input stack=true bind="n_comment" type=textarea rows=2 label="Comment" placeholder="Your own note on this entry — it isn't part of the booking's report text"/>{{/if}}
       <row gap=3 wrap=true>
         <button action="state" state="n_group" value="{{ state.n_group == 'true' ? 'false' : 'true' }}" label="{{ state.n_group == 'true' ? '☑' : '☐' }} Group entry" variant=quiet/>
         <button action="state" state="n_sep" value="{{ state.n_sep == 'true' ? 'false' : 'true' }}" label="{{ state.n_sep == 'true' ? '☑' : '☐' }} Separate entry" tip="Do not group it with work that runs parallel to it" variant=quiet/>
+        <button action="state" state="n_cm" value="{{ state.n_cm == 'true' ? 'false' : 'true' }}" label="{{ state.n_cm == 'true' ? '−' : '+' }} Comment" variant=quiet/>
         <button action="state" state="n_ctx" value="{{ state.n_ctx == 'true' ? 'false' : 'true' }}" label="{{ state.n_ctx == 'true' ? '−' : '+' }} Add context" variant=quiet/>
       </row>
       {{#if state.n_ctx == 'true'}}
@@ -109,15 +129,17 @@
   </section>
 
   {{#if not data.w.closing.hidden}}
-  <section title="{{ data.w.closing.head }}" aside="{{ data.w.closing.summary }}">
+  <section card=true title="{{ data.w.closing.head }}" aside="{{ data.w.closing.summary }}">
+    <grid cols=2 gap=1 min=340>
     {{#each data.w.closing.items}}
-    <row gap=2 align=baseline><text tone="{{ tone }}" tip="{{ title }}">{{ icon }}</text><b>{{ label }}</b><small><muted>{{ detail }}</muted></small></row>
+    <row gap=2 align=baseline><text tone="{{ tone }}" tip="{{ title }}"><b>{{ icon }}</b></text><text>{{ label }}</text><truncate tip="{{ detail }}"><small><muted>{{ detail }}</muted></small></truncate></row>
     {{/each}}
+    </grid>
   </section>
   {{/if}}
 
   {{#if data.w.suggestions.items}}
-  <section title="{{ data.w.suggestions.head }}" aside="{{ data.w.suggestions.count }}">
+  <section card=true title="{{ data.w.suggestions.head }}" aside="{{ data.w.suggestions.count }}">
     <small><muted>Reported by agents, not booked yet — check the hours and the line, then accept.</muted></small>
     {{#each data.w.suggestions.items}}
     <box>
@@ -148,7 +170,7 @@
   {{/if}}
 
   {{#if data.w.done}}
-  <section title="Done today">
+  <section card=true title="Done today">
     <small><muted>Todos ticked off today and time tracked on todos today, by ticket — adjust the hours and the words, then add them as entries.</muted></small>
     {{#each data.w.done}}
     <box>
@@ -182,7 +204,7 @@
   </dialog>
 
   {{#if data.w.parallel.sets}}
-  <section title="{{ data.w.parallel.head }}" aside="{{ data.w.parallel.sets | count }}">
+  <section card=true title="{{ data.w.parallel.head }}" aside="{{ data.w.parallel.sets | count }}">
     <small><muted>{{ data.w.parallel.hint }}</muted></small>
     {{#each data.w.parallel.sets}}
     <box tone=warn>
@@ -198,7 +220,7 @@
   </section>
   {{/if}}
 
-  <section title="{{ data.w.report.head }}" aside="grouped per day · configure on Schedule">
+  <section card=true title="{{ data.w.report.head }}" aside="grouped per day · configure on Schedule">
     {{#if data.w.slots.exports}}<row gap=2 wrap=true justify=end>{{#each data.w.slots.exports}}{{#if href}}<button action="url" href="{{ href }}" label="{{ label }}" tip="{{ tip }}" variant=link/>{{#else}}<button run="{{ flow }}" with="{{ with }}" label="{{ label }}" tip="{{ tip }}" variant=link/>{{/if}}{{/each}}</row>{{/if}}
     {{#if data.w.report.days}}
     <row justify=end><copy text="{{ data.w.report.text }}" label="Copy"/></row>
@@ -218,7 +240,7 @@
     {{#else}}<text tone=muted>{{ data.w.report.empty }}</text>{{/if}}
   </section>
 
-  <section title="{{ data.w.entriesHead }}" aside="{{ data.w.entryList | count }}" collapsible=true open=false>
+  <section card=true title="{{ data.w.entriesHead }}" aside="{{ data.w.entryList | count }}" collapsible=true open=false>
     <datatable source="data.w.entryList" empty="No entries.">
       <column label="Date">{{ dateText }}</column>
       <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>

@@ -5,7 +5,7 @@
   {{#if data.ssaved.ssaved.message}}<callout tone=good>{{ data.ssaved.ssaved.message }}</callout>{{/if}}
   <text tone=muted>Set your weekly working pattern (part-time) and record time off. The weekly report uses this to show booked hours against your target.</text>
 
-  <section title="{{ data.s.hoursHead }}">
+  <section card=true title="{{ data.s.hoursHead }}">
     <col gap=2>
       <grid cols=7 gap=2 min=70>
         {{#each data.s.days}}<input bind="sh_{{ key }}" type=number label="{{ label }}" value="{{ hours }}"/>{{/each}}
@@ -14,7 +14,7 @@
     </col>
   </section>
 
-  <section title="Default break">
+  <section card=true title="Default break">
     <col gap=2>
       <text tone=muted>Your usual break window on workdays, e.g. 12:00-13:00 (several with “;”). The weekly table shows it greyed out on days without an entered break.</text>
       <input bind="sp_text" label="Default break" value="{{ data.s.defaultPauses }}" placeholder="12:00-13:00"/>
@@ -23,7 +23,7 @@
     </col>
   </section>
 
-  <section title="Flex time">
+  <section card=true title="Flex time">
     <col gap=2>
       <text tone=muted>The job for hours you take off your overtime. In the weekly table, days that aren't fully booked get a greyed-out row for it under the booked jobs.</text>
       <grid cols=2 gap=2 min=200>
@@ -34,7 +34,7 @@
     </col>
   </section>
 
-  <section title="Absences & time off">
+  <section card=true title="Absences & time off">
     <col gap=2>
       <grid cols=5 gap=2 min=130>
         <input bind="na_start" type=date label="From" value="{{ data.s.today }}"/>

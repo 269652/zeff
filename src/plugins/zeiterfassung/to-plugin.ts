@@ -2,6 +2,12 @@ import { getPref, setPref } from "@/lib/prefs";
 
 const PORT = "zeiterfassung-ext";
 const PREF = "time.reportPage";
+const HOME_PREF = "time.reportHome";
+
+async function ensureHome(dbId: number): Promise<void> {
+  const { surfaceApp } = await import("@/plugins/workspace/package-home");
+  surfaceApp(dbId, { name: "Time tracking", holder: "Time tracking — the actions behind its buttons", done: HOME_PREF });
+}
 
 /**
  * The time report's page in the Workspace — the database "Report" of the plugin's package, shown by its template (zeff-plugins/plugins/zeiterfassung-ext). Its id;
@@ -13,7 +19,10 @@ export async function reportPage(): Promise<number | null> {
   const { getDatabase } = await import("@/plugins/workspace/store");
   const known = getPref<number | null>(PREF, null);
   const db = known ? getDatabase(known) : null;
-  if (known && db && !db.page.archivedAt) return known;
+  if (known && db && !db.page.archivedAt) {
+    await ensureHome(known);
+    return known;
+  }
   const inst = (await import("@/plugins/workspace/package-life")).getInstalled(PORT);
   if (!inst) return null;
   const found = Object.values(inst.map)
@@ -21,6 +30,7 @@ export async function reportPage(): Promise<number | null> {
     .find((d) => d && !d.page.archivedAt && d.schema.views.some((v) => v.type === "app" && v.app === "template" && !!v.template));
   if (!found) return null;
   setPref(PREF, found.page.id);
+  await ensureHome(found.page.id);
   return found.page.id;
 }
 

@@ -325,16 +325,16 @@ export function viewBlock(n: Node, key: string | number, kids: Kids, env: BlockE
       const list = items(n);
       const columns = list.map((p) => (Number(p.a.width) > 0 ? `${Math.min(640, Number(p.a.width))}px` : "minmax(0,1fr)")).join(" ");
       return (
-        <FillHeight key={key} className="ws-panes grid gap-3" style={{ "--panes": columns } as CSSProperties}>
+        <FillHeight key={key} className={a.plain === "true" ? "ws-panes grid gap-6" : "ws-panes grid gap-3"} style={{ "--panes": columns } as CSSProperties}>
           {list.map((p, i) => (
-            <section key={i} aria-label={p.a.title || undefined} className="flex min-h-0 min-w-0 flex-col rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            <section key={i} aria-label={p.a.title || undefined} className={a.plain === "true" ? "flex min-h-0 min-w-0 flex-col" : "flex min-h-0 min-w-0 flex-col rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}>
               {(p.a.title || p.a.aside) && (
                 <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
                   <h2 className="truncate text-sm font-semibold">{p.a.title}</h2>
                   {p.a.aside && <span className="text-xs text-zinc-500 tabular-nums">{p.a.aside}</span>}
                 </header>
               )}
-              <div className={p.a.flush === "true" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 space-y-3 overflow-y-auto p-3"}>{kids(p.c)}</div>
+              <div className={p.a.flush === "true" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3"}>{kids(p.c)}</div>
             </section>
           ))}
         </FillHeight>
@@ -477,7 +477,11 @@ function FillHeight({ className, style, children }: { className: string; style: 
         // What lies below the panes in their page — in a page the rest of the editor, on a database's own page its row count —, not
         // the sidebar beside it. (Phones, print: the CSS's height.)
         const page = el.closest(".ws-editor") ?? el.closest(".page > :not(.page-aside)");
-        if (!page || !window.matchMedia("(min-width: 768px)").matches) return void el.style.removeProperty("height");
+        if (!page || !window.matchMedia("(min-width: 768px)").matches) {
+          // (a phone: the page scrolls as ever)
+          if (locked) (locked.el.style.overflowY = locked.was), (locked = null);
+          return void el.style.removeProperty("height");
+        }
         const box = el.getBoundingClientRect();
         // (Its bottom with the panes as they are — and the window's own margin.)
         const end = page.getBoundingClientRect().bottom;
@@ -487,13 +491,26 @@ function FillHeight({ className, style, children }: { className: string; style: 
         const frame = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
         const top = box.top - frame.top + (scroller?.scrollTop ?? window.scrollY);
         el.style.height = `${Math.max(240, Math.min(window.innerHeight, frame.bottom) - frame.top - top - below)}px`;
+        // A database's own page that is panes (an app: Code, a mailbox): the panes are the screen — the page around them doesn't scroll
+        // (its bottom padding and a long sidebar beside it would let it move, and the wheel at a pane's end would carry it along).
+        if (scroller && !el.closest(".ws-editor")) {
+          if (!locked) locked = { el: scroller, was: scroller.style.overflowY };
+          scroller.scrollTop = 0;
+          scroller.style.overflowY = "hidden";
+        }
       });
     };
+    let locked: { el: HTMLElement; was: string } | null = null;
     fit();
     window.addEventListener("resize", fit);
     const ro = new ResizeObserver(fit);
     if (el.parentElement) ro.observe(el.parentElement);
-    return () => (cancelAnimationFrame(frame), window.removeEventListener("resize", fit), ro.disconnect());
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", fit);
+      ro.disconnect();
+      if (locked) locked.el.style.overflowY = locked.was;
+    };
   }, []);
   return (
     <div ref={ref} className={className} style={style}>

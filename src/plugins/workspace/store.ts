@@ -126,6 +126,20 @@ export function getPage(id: number): Page | null {
 
 export type TreeItem = { id: number; parentId: number | null; kind: PageKind; title: string; icon: string; favorite: boolean; position: number; /** A system page: stays (not to the trash, not moved away). */ system?: boolean; /** Marked a template (your own; what is below it belongs to it). */ template?: boolean; /** A day list (day-log.ts): ticked through every day. */ dayList?: boolean; /** A day list's log: shown in its list's "History" tab, not in the tree (its list's id). */ dayLogOf?: number; /** The People database (a view of the people app): its badges fold behind a dot. */ people?: boolean };
 
+/** The pages that are the flows of an installed package (the actions behind an app's buttons) — not the flows you made yourself. */
+function packageFlowPages(): Set<number> {
+  const out = new Set<number>();
+  try {
+    const flows = new Set((db().prepare("select page_id from ws_flows").all() as { page_id: number }[]).map((r) => r.page_id));
+    if (!flows.size) return out;
+    const installed = getPref<Record<string, { map?: Record<string, number> }>>("workspace.packages.life", {});
+    for (const p of Object.values(installed ?? {})) for (const id of Object.values(p?.map ?? {})) if (typeof id === "number" && flows.has(id)) out.add(id);
+  } catch {
+    // (no flows yet: nothing is hidden)
+  }
+  return out;
+}
+
 /** The pages of the tree (not the rows of databases, not the trash), split: the page tree, and your templates (a page marked one and what is below it — its top at the top). */
 function splitTree(): { pages: TreeItem[]; templates: TreeItem[] } {
   const system = new Set(systemPageIds());
@@ -142,7 +156,10 @@ function splitTree(): { pages: TreeItem[]; templates: TreeItem[] } {
     return v;
   };
   const out = { pages: [] as TreeItem[], templates: [] as TreeItem[] };
+  const behind = packageFlowPages();
   for (const r of rows) {
+    // (The flows behind an installed app's buttons are not pages to browse: Studio and their address still open them.)
+    if (behind.has(r.id)) continue;
     const tpl = isTpl(r.id);
     const item: TreeItem = { id: r.id, parentId: r.parent_id, kind: pageKind(r.kind), title: r.title, icon: r.icon, favorite: !!r.favorite, position: r.position, ...(system.has(r.id) ? { system: true } : {}), ...(r.template ? { template: true } : {}), ...(r.day ? { dayList: true } : {}), ...(r.people ? { people: true } : {}), ...(logs.has(r.id) && byId.get(logs.get(r.id)!)?.day ? { dayLogOf: logs.get(r.id)! } : {}) };
     if (tpl && r.parent_id !== null && !isTpl(r.parent_id)) item.parentId = null;
