@@ -602,8 +602,12 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           <section key={card ? undefined : key} className="space-y-2 break-inside-avoid">
             {(a.title || a.aside) && (
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className={card ? `text-sm font-semibold tracking-wide uppercase ${a.tone === "warn" ? "text-amber-900 dark:text-amber-200" : "text-zinc-500 dark:text-zinc-400"}` : "text-sm font-semibold"}>{a.title}</h2>
-                {a.aside && <span className="text-xs text-zinc-500">{a.aside}</span>}
+                <div>
+                  <h2 className={card ? `text-sm font-semibold tracking-wide uppercase ${a.tone === "warn" ? "text-amber-900 dark:text-amber-200" : "text-zinc-500 dark:text-zinc-400"}` : "text-sm font-semibold"}>{a.title}</h2>
+                  {/* (sub: a line under the title — what the part shows) */}
+                  {a.sub && <p className="text-xs font-normal text-zinc-400">{a.sub}</p>}
+                </div>
+                {a.aside && <span className={`text-xs ${TONE[a.asidetone ?? ""] ?? "text-zinc-500"}`}>{a.aside}</span>}
               </div>
             )}
             <div className="space-y-3" style={scrolls(a)}>
@@ -705,7 +709,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return (
           <div
             key={key}
-            className={`${a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dashed === "true" ? "space-y-3 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : "space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
+            className={`${a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dashed === "true" ? "space-y-3 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : "space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} ${BOX_TONE[a.tone ?? ""] ?? ""} ${a.ring === "true" ? "ring-2 ring-indigo-400 dark:ring-indigo-500" : ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
             style={scrolls(a)}
             {...(go ? { role: "button", tabIndex: 0, title: a.tip || undefined, onClick: () => void run(a), onKeyDown: (e: React.KeyboardEvent) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), void run(a)) } : {})}
           >
@@ -1082,8 +1086,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return <RowsTable key={key} columns={json<string[]>(a.columns, [])} rows={json<number[]>(a.rows, []).map((id) => byId.get(id)).filter((x): x is Row => !!x)} sum={a.sum} empty={a.empty} props={props} />;
       case "chart":
         // (series=: a part per value of a second field — stacked, or a line each)
-        if (a.series) return <SeriesChart key={key} kind={a.kind} data={json<SeriesPoint[]>(a.data, [])} series={json<{ name: string; color?: string }[]>(a.series, [])} />;
-        return <MiniChart key={key} kind={a.kind} data={json<{ label: string; value: number; color?: string }[]>(a.data, [])} />;
+        if (a.series) return <SeriesChart key={key} kind={a.kind} look={a.look} data={json<SeriesPoint[]>(a.data, [])} series={json<{ name: string; color?: string }[]>(a.series, [])} />;
+        return <MiniChart key={key} kind={a.kind} look={a.look} empty={a.empty} center={a.center} centersub={a.centersub} legend={a.legend !== "false"} data={json<{ label: string; value: number; color?: string; text?: string; url?: string }[]>(a.data, [])} />;
       case "selected":
         return (
           <div key={key} className="space-y-2">
@@ -1297,8 +1301,8 @@ const CHART_COLORS: Record<string, string> = { gray: "#a1a1aa", brown: "#a16207"
 const PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#0ea5e9", "#a855f7", "#ec4899", "#84cc16"];
 
 /** A small chart of a template's data: bars, columns, a line or a pie. */
-function MiniChart({ kind = "bar", data }: { kind?: string; data: { label: string; value: number; color?: string }[] }) {
-  if (!data.length) return null;
+function MiniChart({ kind = "bar", look, empty, center, centersub, legend = true, data }: { kind?: string; look?: string; empty?: string; center?: string; centersub?: string; legend?: boolean; data: { label: string; value: number; color?: string; text?: string; url?: string }[] }) {
+  if (!data.length) return empty ? <p className="py-3 text-center text-sm text-zinc-500">{empty}</p> : null;
   const colorOf = (d: { color?: string }, i: number) => (d.color ? (d.color.startsWith("#") ? d.color : (CHART_COLORS[d.color] ?? PALETTE[i % PALETTE.length])) : PALETTE[i % PALETTE.length]);
   const max = Math.max(...data.map((d) => d.value), 1);
   const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -1308,15 +1312,26 @@ function MiniChart({ kind = "bar", data }: { kind?: string; data: { label: strin
     const stops = data.map((d, i) => `${colorOf(d, i)} ${(upTo(i) / total) * 360}deg ${(upTo(i + 1) / total) * 360}deg`);
     return (
       <div className="flex flex-wrap items-center gap-4">
-        <div className="size-32 shrink-0 rounded-full" style={{ background: `conic-gradient(${stops.join(", ")})` }} aria-hidden />
-        <ul className="space-y-1 text-xs">
+        {center !== undefined ? (
+          // (a ring with its figure in the middle)
+          <div className="relative size-[120px] shrink-0">
+            <div className="absolute inset-0 rounded-full" style={{ background: `conic-gradient(${stops.join(", ")})`, mask: "radial-gradient(circle, transparent 52%, #000 53%)", WebkitMask: "radial-gradient(circle, transparent 52%, #000 53%)" }} aria-hidden />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-2xl font-semibold tabular-nums">{center}</span>
+              {centersub && <span className="text-xs text-zinc-500 uppercase">{centersub}</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="size-32 shrink-0 rounded-full" style={{ background: `conic-gradient(${stops.join(", ")})` }} aria-hidden />
+        )}
+        {legend && <ul className="space-y-1 text-xs">
           {data.map((d, i) => (
             <li key={d.label} className="flex items-center gap-1.5">
               <span className="size-2.5 rounded-full" style={{ background: colorOf(d, i) }} />
               {d.label} <span className="text-zinc-500 tabular-nums">{fmt(d.value)}</span>
             </li>
           ))}
-        </ul>
+        </ul>}
       </div>
     );
   }
@@ -1337,6 +1352,29 @@ function MiniChart({ kind = "bar", data }: { kind?: string; data: { label: strin
       </div>
     );
   }
+  // (look=track: a report's bar list — the label, the bar on a grey track, the value at the end)
+  if (look === "track")
+    return (
+      <div className="space-y-1.5">
+        {data.map((d, i) => (
+          <div key={d.label} className="flex items-center gap-3 text-sm">
+            <div className="w-40 shrink-0 truncate" title={d.label}>
+              {d.url ? (
+                <a href={d.url} target="_blank" rel="noreferrer" className="hover:underline">
+                  {d.label}
+                </a>
+              ) : (
+                d.label
+              )}
+            </div>
+            <div className="h-4 flex-1 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
+              <div className="h-full rounded" style={{ width: `${Math.max(2, (d.value / max) * 100)}%`, backgroundColor: d.color ? colorOf(d, i) : "#14b8a6" }} />
+            </div>
+            <div className="w-16 shrink-0 text-right font-medium tabular-nums">{d.text ?? fmt(d.value)}</div>
+          </div>
+        ))}
+      </div>
+    );
   return (
     <ul className="space-y-1.5 text-xs">
       {data.map((d, i) => (

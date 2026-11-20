@@ -26,6 +26,11 @@ const TONE: Record<string, Tone> = { red: "bad", orange: "warn", amber: "warn", 
 const h = (n: number) => formatHours(n);
 
 /** The booked card's status, as StatCard's bookedView says it. */
+/** A status card's sign by its tone (cross: hours missing, info: a heads-up, check: all booked). */
+function statusMark(tone: string): string {
+  return ({ bad: "cross", warn: "info", good: "check" } as Record<string, string>)[tone] ?? "";
+}
+
 function bookedStatus(booked: number, target: number, days: { gap: number; state: string; label: string }[], started: boolean): { tone: Tone; caption: string } | null {
   const missing = days.filter((d) => d.state === "missing");
   if (missing.length) {
@@ -79,6 +84,10 @@ export async function monthScreen(input: { month?: string; by?: string } = {}) {
   const booked = {
     label: t("Booked this month"),
     value: `${h(report.total)} / ${h(target)} h`,
+    // (the card draws the booked hours big and "/ target h" after them; its sign says what the tone means)
+    num: h(report.total),
+    of: `/ ${h(target)} h`,
+    mark: status ? statusMark(status.tone) : "",
     sub: status
       ? status.caption
       : `${workdays === 1 ? t("1 workday") : t("{n} workdays", { n: workdays })}${absentDays ? ` · ${absentDays === 1 ? t("1 day absent") : t("{n} days absent", { n: absentDays })}` : ""}`,
@@ -99,6 +108,7 @@ export async function monthScreen(input: { month?: string; by?: string } = {}) {
     value: noPast ? "–" : `${h(due.missing)} h`,
     sub: pastStatus ? pastStatus.caption : due.filtered ? t("Not shown while filtered") : t("No past weeks yet"),
     tone: pastStatus?.tone ?? "plain",
+    mark: pastStatus ? statusMark(pastStatus.tone) : "",
     weeks: noPast
       ? []
       : due.weeks.map((w) => ({
@@ -120,6 +130,7 @@ export async function monthScreen(input: { month?: string; by?: string } = {}) {
     value: String(report.entries.length),
     sub: report.entries.length === 0 ? "" : noJob.length === 0 ? t("All entries have a job") : noJob.length === 1 ? t("1 entry without a job") : t("{n} entries without a job", { n: noJob.length }),
     tone: (report.entries.length === 0 ? "plain" : noJob.length === 0 ? "good" : monthOver ? "bad" : "warn") as Tone,
+    mark: report.entries.length === 0 ? "" : noJob.length === 0 ? "check" : monthOver ? "cross" : "info",
     project: noJob.length ? (projectIds.length === 1 ? projectIds[0] : 0) : null,
   };
 
@@ -174,6 +185,9 @@ export async function monthScreen(input: { month?: string; by?: string } = {}) {
           day: String(d.getDate()),
           note,
           hours: `${partly ? `${h(approved)} / ${h(hours)}` : shown}${sf.state !== "ok" ? ` −${h(sf.gap)}` : ""}`.trim(),
+          // (the cell: the hours in bold, what is missing small after them)
+          main: (partly ? `${h(approved)} / ${h(hours)}` : String(shown)).trim(),
+          gap: sf.state !== "ok" ? `−${h(sf.gap)}` : "",
           tone: sf.state === "missing" ? "bad" : sf.state === "short" ? "warn" : allApproved ? "good" : off ? "muted" : "plain",
           title: [title, approvalTitle].filter(Boolean).join(" · "),
           pending: none || partly,

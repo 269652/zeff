@@ -101,7 +101,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   small: T({ tip: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, /** true: a line of its own in normal case and weight (a date under a column's head) */ normal: { oneOf: ["true", "false"] } }),
   muted: T({ tip: "text" }),
   // open=wide: open on a wide screen, folded on a phone.
-  section: T({ title: "text", aside: "text", card: { oneOf: ["true", "false"] }, /** with card: warn — an amber card (something to sort out) */ tone: { oneOf: ["plain", "warn"] }, collapsible: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false", "wide"] }, scroll: "int", /** true: a small grey fold heading with its count (a list's groups). */ dense: { oneOf: ["true", "false"] }, /** with dense: not capitals, no count — a fold line in a conversation ('5 steps · Read, Edit'); else a fold's head in normal weight. */ quiet: { oneOf: ["true", "false"] }, /** with collapsible: in a frame of its own, its head a grey bar with the aside on the right, its parts lines with a rule between them (a day of a report) */ framed: { oneOf: ["true", "false"] }, /** with framed: what the head says while it is closed ('7 lines') */ note: "text" }),
+  section: T({ title: "text", aside: "text", card: { oneOf: ["true", "false"] }, /** with card: warn — an amber card (something to sort out) */ tone: { oneOf: ["plain", "warn"] }, /** a line under the title (what the part shows) */ sub: "text", /** the aside's colour (a summary that is done or not) */ asidetone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, collapsible: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false", "wide"] }, scroll: "int", /** true: a small grey fold heading with its count (a list's groups). */ dense: { oneOf: ["true", "false"] }, /** with dense: not capitals, no count — a fold line in a conversation ('5 steps · Read, Edit'); else a fold's head in normal weight. */ quiet: { oneOf: ["true", "false"] }, /** with collapsible: in a frame of its own, its head a grey bar with the aside on the right, its parts lines with a rule between them (a day of a report) */ framed: { oneOf: ["true", "false"] }, /** with framed: what the head says while it is closed ('7 lines') */ note: "text" }),
   /** A row of a list you pick from: a dot for how it stands, its label (cut to one line), a small mono note, the time at the end; what is inside is its '⋯' menu, shown on hover. */
   item: T({ state: "text", value: "text", label: "text", sub: "text", meta: "text", tone: { oneOf: ["run", "queued", "done", "bad", "off", "warn", "none"] }, selected: { oneOf: ["true", "false"] }, dim: { oneOf: ["true", "false"] }, tip: "text" }),
   /** In a pane (flush=true): the part that scrolls by itself and takes the room left — a conversation (end=true: opened at its end and kept there as more comes, unless you scrolled up; center=true: in a column in the middle). */
@@ -120,7 +120,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   sfoot: T({}),
   srow: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, hover: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] } }),
   scell: T({ head: { oneOf: ["true", "false"] }, row: { oneOf: ["true", "false"] }, num: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "today", "off", "muted", "good", "warn", "bad"] }, span: "int", dim: { oneOf: ["true", "false"] }, top: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tip: "text" }),
-  box: T({ /** dashed=true: a dashed outline, no fill — room for what may be added (a form's optional part) */ dashed: { oneOf: ["true", "false"] }, /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, scroll: "int" }),
+  box: T({ /** ring=true: picked out with a coloured ring (today in a calendar) */ ring: { oneOf: ["true", "false"] }, /** dashed=true: a dashed outline, no fill — room for what may be added (a form's optional part) */ dashed: { oneOf: ["true", "false"] }, /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, scroll: "int" }),
   heading: T({ level: { oneOf: ["1", "2", "3"] } }),
   text: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, tip: "text", pre: { oneOf: ["true", "false"] } }),
   tile: T({ label: "text", value: "text", sub: "text", tint: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "good", "warn", "bad"] }, tip: "text", icon: "text", trend: "text", spark: "text", /** with tint=true: a status sign in a circle at the top right */ mark: { oneOf: ["cross", "info", "check"] }, /** after the value, in normal weight ("/ 38 h") */ suffix: "text" }),
@@ -190,7 +190,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   table: T({ source: "list", columns: "text", sum: "text", empty: "text" }, true),
   // by: a date field's values gathered by day / week / month / year (in time's order); series: a second field — a part per value (stacked
   // columns and bars, a line each), its legend under it.
-  chart: T({ source: "list", kind: { oneOf: ["bar", "column", "line", "pie"] }, group: "text", value: "text", calc: { oneOf: ["count", "sum", "avg"] }, by: { oneOf: ["day", "week", "month", "year"] }, series: "text" }, true),
+  chart: T({ source: "list", kind: { oneOf: ["bar", "column", "line", "pie"] }, group: "text", value: "text", calc: { oneOf: ["count", "sum", "avg"] }, by: { oneOf: ["day", "week", "month", "year"] }, series: "text", /** kind=bar: track — a report's bar list (the label, a bar on a grey track, the value at the end); text: the field shown as the value ("3.5 h") */ look: { oneOf: ["plain", "track"] }, text: "text", /** look=track: the field holding where a label leads (a ticket's page) */ link: "text", /** look=track: what it says when there is nothing */ empty: "text", /** kind=pie: a ring with this in its middle (big) and centersub under it (small capitals); legend=false: without its own legend */ center: "text", centersub: "text", legend: { oneOf: ["true", "false"] } }, true),
   // A tick box of a list's item for doing something with many at once: the ids ticked are a list in state.<bind> (JSON); all="rows | …"
   // ticks or unticks all of them at once (a box in the list's head).
   check: T({ bind: "text", value: "text", all: "list", label: "text" }, true),
@@ -1365,7 +1365,7 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
               part.n++;
               if (x !== null) part.values.push(x);
               b.parts.set(name, part);
-              if (!seriesColors.has(name)) seriesColors.set(name, seriesProp?.options?.find((o) => o.name === name)?.color);
+              if (!seriesColors.has(name)) seriesColors.set(name, seriesProp?.options?.find((o) => o.name === name)?.color ?? own);
             }
           }
           buckets.set(key, b);
@@ -1374,14 +1374,20 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
       const measure = (n: number, values: number[]) => (calc === "count" ? n : calc === "avg" ? (values.length ? values.reduce((p, q) => p + q, 0) / values.length : 0) : values.reduce((p, q) => p + q, 0));
       const ordered = a.by ? [...buckets.values()].sort((p, q) => p.key.localeCompare(q.key)) : [...buckets.values()];
       const series = [...seriesColors.keys()];
+      // (text=: the field an item shows as its value — the first of its bucket)
+      const shown = new Map<string, string>();
+      const links = new Map<string, string>();
+      if (a.text || a.link) for (const it of itemsOf(src)) { const g = textOf((it as Record<string, unknown>)?.[a.group ?? ""]) || "—"; if (a.text && !shown.has(g)) shown.set(g, textOf((it as Record<string, unknown>)?.[a.text])); if (a.link && !links.has(g)) links.set(g, textOf((it as Record<string, unknown>)?.[a.link])); }
       const data = ordered.map((b) => ({
         label: b.label,
         value: measure(b.n, b.values),
+        ...(shown.has(b.key) ? { text: shown.get(b.key) } : {}),
+        ...(links.get(b.key) && /^(https?:)?\/\//.test(links.get(b.key)!) ? { url: links.get(b.key) } : {}),
         ...(b.color ? { color: b.color } : {}),
         ...(a.series ? { parts: series.map((name) => { const part = b.parts.get(name); return part ? measure(part.n, part.values) : 0; }) } : {}),
       }));
       const legend = series.map((name) => ({ name, ...(seriesColors.get(name) ? { color: seriesColors.get(name) } : {}) }));
-      return [{ t: "chart", a: { kind: a.kind ?? "bar", data: JSON.stringify(data), ...(a.series ? { series: JSON.stringify(legend) } : {}) }, c: [] }];
+      return [{ t: "chart", a: { kind: a.kind ?? "bar", data: JSON.stringify(data), ...(a.series ? { series: JSON.stringify(legend) } : {}), ...(a.look ? { look: a.look } : {}), ...(a.empty ? { empty: a.empty } : {}), ...(a.center ? { center: a.center, centersub: a.centersub ?? "" } : {}), ...(a.legend ? { legend: a.legend } : {}) }, c: [] }];
     }
     case "check": {
       if (!a.bind) return (err('<check> needs bind="…" (the state the ids ticked go into).'), []);
