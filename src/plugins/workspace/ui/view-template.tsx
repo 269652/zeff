@@ -729,10 +729,16 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return <tbody key={key}>{kids(n.c)}</tbody>;
       case "sfoot":
         return <tfoot key={key}>{kids(n.c)}</tfoot>;
-      case "srow":
-        return (
-          <tr key={key} className={`${a.bold === "true" ? "font-semibold" : ""} ${a.tone === "bad" ? "text-red-600 dark:text-red-400" : a.tone === "good" ? "text-emerald-600 dark:text-emerald-400" : a.tone === "warn" ? "text-amber-600 dark:text-amber-400" : a.tone === "muted" ? "text-zinc-500" : ""} ${a.hover === "true" ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/40" : ""}`}>{kids(n.c)}</tr>
-        );
+      case "srow": {
+        const cls = `${a.bold === "true" ? "font-semibold" : ""} ${a.tone === "bad" ? "text-red-600 dark:text-red-400" : a.tone === "good" ? "text-emerald-600 dark:text-emerald-400" : a.tone === "warn" ? "text-amber-600 dark:text-amber-400" : a.tone === "muted" ? "text-zinc-500" : ""} ${a.hover === "true" ? "hover:bg-zinc-50 dark:hover:bg-zinc-800/40" : ""}`;
+        if (a.drag || a.drop)
+          return (
+            <MovableRow key={key} className={cls} drag={a.drag} tip={a.tip} onDropped={a.drop ? (v) => (setState(a.drop, v), a.emit && setPending({ event: a.emit, id: ++pendingSeq.current })) : undefined}>
+              {kids(n.c)}
+            </MovableRow>
+          );
+        return <tr key={key} className={cls}>{kids(n.c)}</tr>;
+      }
       case "scell": {
         const cls = [
           a.num === "true" ? "num" : "",
@@ -944,7 +950,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         );
       }
       case "edit":
-        return <InlineEdit key={key} a={a} save={(v) => run({ ...a, value: a.action === "state" ? v : a.value, with: (a.with ?? "").split("$value").join(v) })} />;
+        return <InlineEdit key={key} a={a} save={(v) => run({ ...a, action: a.action || (a.run ? "run" : a.do ? "do" : a.emit ? "emit" : ""), value: a.action === "state" ? v : a.value, with: (a.with ?? "").split("$value").join(v) })} />;
       case "badge":
         if (!a.tint) return undefined;
         return (
@@ -1711,6 +1717,33 @@ function findTheme(nodes: VNode[]): { accent?: string; radius?: string; font?: s
 }
 
 /** What <drop> draws: a box that takes what <drag> picked up (nothing else), lit while something is over it. */
+/** A sheet's row that is dragged (drag=) or takes a drop (drop=): the whole row, as the entries of a week are moved under their day's group. */
+function MovableRow({ className, drag, tip, onDropped, children }: { className: string; drag?: string; tip?: string; onDropped?: (value: string) => void; children: ReactNode }) {
+  const [over, setOver] = useState(false);
+  return (
+    <tr
+      title={tip || undefined}
+      className={`${className} ${drag ? "cursor-grab active:cursor-grabbing" : ""} ${over ? "bg-indigo-100/70 outline-2 -outline-offset-2 outline-indigo-500 outline-dashed dark:bg-indigo-950/50" : ""}`}
+      draggable={!!drag || undefined}
+      onDragStart={drag ? (e) => (e.dataTransfer.setData("text/plain", `zeff-drag:${drag}`), (e.dataTransfer.effectAllowed = "move")) : undefined}
+      onDragOver={onDropped ? (e) => (e.preventDefault(), (e.dataTransfer.dropEffect = "move"), setOver(true)) : undefined}
+      onDragLeave={onDropped ? () => setOver(false) : undefined}
+      onDrop={
+        onDropped
+          ? (e) => {
+              e.preventDefault();
+              setOver(false);
+              const text = e.dataTransfer.getData("text/plain");
+              if (text.startsWith("zeff-drag:")) onDropped(text.slice("zeff-drag:".length));
+            }
+          : undefined
+      }
+    >
+      {children}
+    </tr>
+  );
+}
+
 function DropTarget({ a, onDropped, children }: { a: Record<string, string>; onDropped: (value: string) => void; children: ReactNode }) {
   const [over, setOver] = useState(false);
   return (
