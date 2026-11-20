@@ -62,6 +62,25 @@ type Props = AppViewProps & {
 
 const TONE: Record<string, string> = { good: "text-emerald-700 dark:text-emerald-400", warn: "text-amber-700 dark:text-amber-400", bad: "text-red-600 dark:text-red-400", muted: "text-zinc-500" };
 const BOX_TONE: Record<string, string> = { accent: "border-transparent bg-indigo-50 shadow-none dark:bg-indigo-950/40", muted: "bg-zinc-50 dark:bg-zinc-900/40", good: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20", warn: "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20", bad: "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20" };
+/** A button variant=chip by its tone. */
+const CHIP_TONE: Record<string, string> = { plain: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200", good: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-200", warn: "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-200", bad: "bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200" };
+/** A tinted tile (tint=true): the colours of a report's status cards. */
+const STAT_TONE: Record<string, { box: string; text: string }> = {
+  bad: { box: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/40", text: "text-red-700 dark:text-red-300" },
+  warn: { box: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300" },
+  good: { box: "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300" },
+};
+/** A status sign in a circle (a tile's mark): cross — a problem, info — a heads-up, check — all good; in the text's colour. */
+function StatusMark({ kind, className = "" }: { kind: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={`size-5 shrink-0 ${className}`} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      {kind === "cross" && <path d="M9 9l6 6M15 9l-6 6" />}
+      {kind === "info" && <path d="M12 11v5M12 8h.01" />}
+      {kind === "check" && <path d="M8.5 12.5l2.5 2.5 4.5-5" />}
+    </svg>
+  );
+}
 const CELL_TONE: Record<string, string> = {
   today: "bg-indigo-50 dark:bg-indigo-950/40",
   off: "bg-zinc-50 dark:bg-zinc-900/60",
@@ -464,7 +483,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     const min = Number(a.min) || 180;
     // (Fixed columns: only the characters of a track list — numbers, units, repeat(), minmax(), fr, auto, max-content.)
     if (a.tracks && /^[a-z0-9 .,()%-]{1,120}$/i.test(a.tracks)) return { gap, gridTemplateColumns: a.tracks, ...(Number(a.minw) > 0 ? { minWidth: Math.min(2000, Number(a.minw)) } : {}) };
-    return { gap, gridTemplateColumns: `repeat(auto-fit, minmax(max(min(100%, ${min}px), calc((100% - ${(n - 1) * gap}px) / ${n})), 1fr))` };
+    return { gap, gridTemplateColumns: `repeat(${a.keep === "true" ? "auto-fill" : "auto-fit"}, minmax(max(min(100%, ${min}px), calc((100% - ${(n - 1) * gap}px) / ${n})), 1fr))` };
   };
 
   const ext: DrawExt = (n, key, kids) => {
@@ -520,10 +539,10 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "b":
       case "small":
       case "muted":
-        if (!a.tip) return undefined;
+        if (!a.tip && !TONE[a.tone ?? ""] && a.normal !== "true") return undefined;
         return (
-          <span key={key} title={a.tip}>
-            {draw({ ...n, a: { ...a, tip: "" } }, key, ext)}
+          <span key={key} title={a.tip || undefined} className={`${TONE[a.tone ?? ""] ?? ""} ${a.normal === "true" ? "block font-normal tracking-normal normal-case" : ""}`}>
+            {draw({ ...n, a: { ...a, tip: "", tone: "", normal: "" } }, key, ext)}
           </span>
         );
       case "split": {
@@ -532,11 +551,12 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const fr: Record<string, string> = { "1:1": "1fr 1fr", "1:2": "1fr 2fr", "2:1": "2fr 1fr", "2:3": "2fr 3fr", "3:2": "3fr 2fr", "1:3": "1fr 3fr", "3:1": "3fr 1fr" };
         const columns = w ? (a.side === "left" ? `${w}px minmax(0,1fr)` : `minmax(0,1fr) ${w}px`) : (fr[a.ratio ?? ""] ?? "1fr 2fr").replace(/(\d)fr/g, "minmax(0,$1fr)");
         return (
-          <div key={key} className="ws-split" style={{ "--split": columns } as CSSProperties}>
+          <div key={key} className="ws-split" style={{ "--split": columns, ...(Number(a.gap) > 0 ? { columnGap: Math.min(16, Number(a.gap)) * 4 } : {}) } as CSSProperties}>
             {n.c
               .filter((c) => typeof c !== "string" || c.trim())
               .map((c, i) => (
-                <div key={i} className="min-w-0">
+                // (sticky=true: the side column stays in view while the other one scrolls — a page's controls beside its content.)
+                <div key={i} className={`min-w-0 ${a.sticky === "true" && i === (a.side === "left" ? 0 : 1) ? "self-start lg:sticky lg:top-0" : ""}`}>
                   {draw(c, i, ext)}
                 </div>
               ))}
@@ -572,8 +592,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const card = a.card === "true";
         const fold = a.collapsible === "true";
         const inner = fold ? (
-          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} dense={a.dense === "true"} quiet={a.quiet === "true"} open={a.open === "wide" ? "wide" : a.open !== "false"}>
-            <div className={a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
+          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} note={a.note} dense={a.dense === "true"} quiet={a.quiet === "true"} framed={a.framed === "true"} open={a.open === "wide" ? "wide" : a.open !== "false"}>
+            {/* (framed: its parts are lines, one under the other with a rule between them) */}
+            <div className={a.framed === "true" ? "divide-y divide-zinc-100 text-sm dark:divide-zinc-800/60 [&>*]:px-3 [&>*]:py-1.5" : a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
               {kids(n.c)}
             </div>
           </Fold>
@@ -581,7 +602,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           <section key={card ? undefined : key} className="space-y-2 break-inside-avoid">
             {(a.title || a.aside) && (
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className={card ? "text-sm font-semibold tracking-wide text-zinc-500 uppercase dark:text-zinc-400" : "text-sm font-semibold"}>{a.title}</h2>
+                <h2 className={card ? `text-sm font-semibold tracking-wide uppercase ${a.tone === "warn" ? "text-amber-900 dark:text-amber-200" : "text-zinc-500 dark:text-zinc-400"}` : "text-sm font-semibold"}>{a.title}</h2>
                 {a.aside && <span className="text-xs text-zinc-500">{a.aside}</span>}
               </div>
             )}
@@ -591,7 +612,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           </section>
         );
         return card ? (
-          <div key={key} className="card min-w-0 p-4">
+          <div key={key} className={`card min-w-0 p-4 ${a.tone === "warn" ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30" : ""}`}>
             {inner}
           </div>
         ) : (
@@ -684,7 +705,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return (
           <div
             key={key}
-            className={`${a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : "space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
+            className={`${a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dashed === "true" ? "space-y-3 rounded-lg border border-dashed border-zinc-300 p-3 dark:border-zinc-700" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : "space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
             style={scrolls(a)}
             {...(go ? { role: "button", tabIndex: 0, title: a.tip || undefined, onClick: () => void run(a), onKeyDown: (e: React.KeyboardEvent) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), void run(a)) } : {})}
           >
@@ -823,28 +844,45 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const index = (previews?.[rowId] ?? []).filter((l) => l.kind === "task")[Number(a.n)]?.index;
         return <TaskBox key={key} rowId={rowId} index={index} checked={a.checked === "true"} label={a.label ?? ""} editable={!!props.ctx?.editable} done={() => props.reload()} />;
       }
-      case "tile":
+      case "tile": {
+        // (tint=true: a report's status card — tinted by its tone, the value and the caption in the tone's colour, mark=cross|info|check its sign
+        // in a circle at the top right; suffix: what follows the value in normal weight ("/ 38 h"); what is inside stands between value and caption.)
+        const tint = a.tint === "true";
+        const stat = tint ? STAT_TONE[a.tone ?? ""] : undefined;
         return (
-          <div key={key} className={`h-full rounded-xl border px-4 py-3 shadow-xs ${a.tint === "true" && BOX_TONE[a.tone ?? ""] && a.tone !== "plain" ? BOX_TONE[a.tone ?? ""] : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}`} title={a.tip || undefined}>
-            <div className={`flex items-center justify-between gap-2 text-xs font-medium text-zinc-500 ${a.tint === "true" ? "uppercase" : ""}`}>
+          <div key={key} className={tint ? `card h-full px-4 py-3 ${stat ? stat.box : ""}` : "h-full rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} title={a.tip || undefined}>
+            <div className={`flex ${tint ? "items-start" : "items-center"} justify-between gap-2 text-xs font-medium text-zinc-500 ${tint ? "uppercase" : ""}`}>
               <span className="truncate">{a.label}</span>
+              {a.mark && <StatusMark kind={a.mark} className={stat?.text} />}
               {a.icon && <span aria-hidden>{a.icon}</span>}
             </div>
             {/* (A tile of content alone — a ring, a part — has no value line.) */}
             {(a.value !== undefined || a.spark || !n.c.length) && (
-              <div className="mt-1 flex items-end justify-between gap-2">
-                <div className={`text-2xl leading-7 font-semibold tracking-tight tabular-nums ${TONE[a.tone ?? ""] ?? ""}`}>{a.value || "—"}</div>
+              <div className={tint ? "" : "mt-1 flex items-end justify-between gap-2"}>
+                <div className={tint ? `text-2xl font-semibold tabular-nums ${stat?.text ?? TONE[a.tone ?? ""] ?? ""}` : `text-2xl leading-7 font-semibold tracking-tight tabular-nums ${TONE[a.tone ?? ""] ?? ""}`}>
+                  {a.value || "—"}
+                  {a.suffix && <span className={`font-normal ${stat ? "opacity-70" : "text-zinc-400"}`}> {a.suffix}</span>}
+                </div>
                 {a.spark && <Sparkline values={json<number[]>(a.spark, [])} />}
               </div>
             )}
             {a.trend && <div className={`mt-0.5 text-xs font-medium tabular-nums ${a.trend.startsWith("-") || a.trend.startsWith("−") ? TONE.bad : TONE.good}`}>{a.trend}</div>}
-            {(a.sub || n.c.length > 0) && (
-              <div className="mt-0.5 text-xs text-zinc-500">
+            {tint && n.c.length > 0 && <div>{n.c.map((c, i) => draw(c, i, ext))}</div>}
+            {(a.sub || (!tint && n.c.length > 0)) && (
+              <div className={tint ? `text-xs ${stat?.text ?? "text-zinc-500"}` : "mt-0.5 text-xs text-zinc-500"}>
                 {a.sub}
-                {n.c.length > 0 && <span className="inline">{n.c.map((c, i) => draw(c, i, ext))}</span>}
+                {!tint && n.c.length > 0 && <span className="inline">{n.c.map((c, i) => draw(c, i, ext))}</span>}
               </div>
             )}
           </div>
+        );
+      }
+      case "badge":
+        if (!a.tint) return undefined;
+        return (
+          <span key={key} className="badge badge-type" style={{ "--type-color": paint(a.tint) } as CSSProperties}>
+            {kids(n.c)}
+          </span>
         );
       case "dot":
         return <span key={key} className="inline-block size-2.5 shrink-0 rounded-full" style={{ background: paint(a.color) }} aria-hidden />;
@@ -950,7 +988,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           const box = <SearchSelect key={key} options={opts} value={a.current ?? ""} label={a.label} onPick={picked} />;
           return stack && a.label ? (
             <label key={key} className="flex w-full flex-col gap-1 text-sm print:hidden">
-              <span className="text-xs font-medium text-zinc-500">{a.label}</span>
+              <span className="label mb-0">{a.label}</span>
               {box}
             </label>
           ) : (
@@ -959,8 +997,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         }
         return (
           <label key={key} className={stack ? "flex w-full flex-col gap-1 text-sm print:hidden" : "inline-flex items-center gap-1.5 text-sm print:hidden"}>
-            {a.label && <span className={stack ? "text-xs font-medium text-zinc-500" : "text-xs text-zinc-500"}>{a.label}</span>}
-            <select className={`input py-1 text-sm ${stack ? "w-full" : "w-auto"}`} value={a.current} onChange={(e) => picked(e.target.value)}>
+            {a.label && <span className={stack ? "label mb-0" : "text-xs text-zinc-500"}>{a.label}</span>}
+            <select className={`input text-sm ${stack ? "w-full" : "w-auto py-1"}`} value={a.current} onChange={(e) => picked(e.target.value)}>
               {opts.map(([v, label, count]) => (
                 <option key={v} value={v}>
                   {label}
@@ -1055,7 +1093,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "button": {
         // A label that is only a sign (‹ ›): its tip is the button's name, and it is wide enough to hit (24 px).
         const sign = !!a.label && !/\p{L}/u.test(a.label);
-        const variant = a.variant === "send" ? "ml-auto grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-700 disabled:bg-zinc-200 disabled:text-zinc-400 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600" : a.variant === "link" ? "truncate text-left font-medium hover:underline" : a.variant === "primary" ? "btn btn-primary btn-sm" : a.variant === "danger" ? "btn btn-sm btn-danger" : a.variant === "quiet" ? "rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800" : "btn btn-sm";
+        const variant = a.variant === "send" ? "ml-auto grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-700 disabled:bg-zinc-200 disabled:text-zinc-400 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600" : a.variant === "link" ? "truncate text-left font-medium hover:underline" : a.variant === "primary" ? "btn btn-primary btn-sm" : a.variant === "danger" ? "btn btn-sm btn-danger" // (chip: a small coloured label that is a button — a week in a card, green when booked, red when hours are missing)
+          : a.variant === "chip" ? `rounded px-1.5 py-0.5 text-xs font-medium tabular-nums hover:brightness-95 dark:hover:brightness-125 ${CHIP_TONE[a.tone ?? ""] ?? CHIP_TONE.plain}`
+          : a.variant === "quiet" ? "rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800" : "btn btn-sm";
         return (
           <button
             key={key}
@@ -1064,7 +1104,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             title={a.tip || (a.keys ? `${a.label ?? a.action} (${a.keys})` : undefined)}
             aria-keyshortcuts={a.keys || undefined}
             aria-label={sign && a.tip ? a.tip : undefined}
-            className={`${variant} ${sign ? "min-w-7 justify-center" : ""} ${a.wide === "true" ? "w-full justify-center" : ""} ${a.print === "true" ? "" : "print:hidden"} ${a.action === "print" ? "max-sm:hidden" : ""}`}
+            className={`${a.size === "md" ? variant.replace(" btn-sm", "").replace("btn-sm ", "") : variant} ${sign ? "min-w-7 justify-center" : ""} ${a.wide === "true" ? "w-full justify-center" : ""} ${a.print === "true" ? "" : "print:hidden"} ${a.action === "print" ? "max-sm:hidden" : ""}`}
             onClick={(e) => (e.stopPropagation(), void run(a))}
           >
             {a.icon && <span aria-hidden>{a.icon}</span>}
@@ -1412,12 +1452,29 @@ function Bubble({ text, note, end }: { text: string; note?: string; end: boolean
 }
 
 /** A section that folds: open or not — or "wide": open on a wide screen, folded on a phone (decided once it is shown). */
-function Fold({ title, aside, dense, quiet, open, children }: { title: string; aside?: string; dense?: boolean; quiet?: boolean; open: boolean | "wide"; children: React.ReactNode }) {
+function Fold({ title, aside, note, dense, quiet, framed, open, children }: { title: string; aside?: string; note?: string; dense?: boolean; quiet?: boolean; framed?: boolean; open: boolean | "wide"; children: React.ReactNode }) {
   const [isOpen, setOpen] = useState(open !== false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the window's width is known only in the browser
     if (open === "wide" && window.matchMedia("(max-width: 639px)").matches) setOpen(false);
   }, [open]);
+  // framed: a fold in a frame of its own — its head a grey bar (the title, while closed its note, on the right the aside), its lines under it (a day of a report).
+  if (framed)
+    return (
+      <details open={isOpen} onToggle={(e) => setOpen(e.currentTarget.open)} className="group overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-zinc-50 px-3 py-1.5 text-sm font-semibold select-none group-open:border-b group-open:border-zinc-100 hover:bg-zinc-100 dark:bg-zinc-900/60 dark:group-open:border-zinc-800 dark:hover:bg-zinc-800/60 [&::-webkit-details-marker]:hidden">
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="w-3 shrink-0 text-zinc-400" aria-hidden>
+              {isOpen ? "▾" : "▸"}
+            </span>
+            {title}
+            {note && !isOpen && <span className="text-xs font-normal text-zinc-400">· {note}</span>}
+          </span>
+          {aside && <span className="shrink-0 tabular-nums">{aside}</span>}
+        </summary>
+        {children}
+      </details>
+    );
   return (
     <details open={isOpen} onToggle={(e) => setOpen(e.currentTarget.open)} className={dense ? "group space-y-0.5" : "group space-y-2"}>
       {dense ? (
@@ -1426,7 +1483,20 @@ function Fold({ title, aside, dense, quiet, open, children }: { title: string; a
           {aside && <span className="ml-auto shrink-0 text-zinc-400 tabular-nums">{aside}</span>}
         </summary>
       ) : (
-        <summary className="cursor-pointer text-sm font-semibold select-none">{title}</summary>
+        quiet ? (
+          // (quiet: a line that opens — its title in normal weight after ▸, the aside on the right)
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-3 text-sm select-none [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0">
+              <span className="mr-1 inline-block w-3 text-zinc-400" aria-hidden>
+                {isOpen ? "▾" : "▸"}
+              </span>
+              {title}
+            </span>
+            {aside && <span className="shrink-0 font-medium tabular-nums">{aside}</span>}
+          </summary>
+        ) : (
+          <summary className="cursor-pointer text-sm font-semibold select-none">{title}</summary>
+        )
       )}
       {children}
     </details>

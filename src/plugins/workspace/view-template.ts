@@ -92,15 +92,16 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   entry: T({ id: "text", label: "text", icon: "text", row: "text", state: "text", value: "text", href: "url", n: "text", group: "text" }, true),
   row: T({ fill: { oneOf: ["true", "false"] }, tip: "text", gap: "int", align: { oneOf: ["start", "center", "end", "baseline"] }, wrap: { oneOf: ["true", "false"] }, justify: { oneOf: ["start", "between", "end"] } }),
   // masonry=true: the cells flow down columns, each in the shortest (cards of different heights).
-  grid: T({ cols: "int", gap: "int", min: "int", /** Fixed columns, e.g. "3rem repeat(7,minmax(0,1fr)) 4.5rem" (a calendar: every row lines up); minw: the least width in px, narrower scrolls sideways. */ tracks: "text", minw: "int", masonry: { oneOf: ["true", "false"] } }),
+  grid: T({ cols: "int", gap: "int", min: "int", /** Fixed columns, e.g. "3rem repeat(7,minmax(0,1fr)) 4.5rem" (a calendar: every row lines up); minw: the least width in px, narrower scrolls sideways. */ tracks: "text", minw: "int", masonry: { oneOf: ["true", "false"] }, /** true: the columns stay as many when there are fewer cells (two cards in a grid of four take two quarters, not the whole width) */ keep: { oneOf: ["true", "false"] } }),
   col: T({ gap: "int", fill: { oneOf: ["true", "false"] }, width: "int", tip: "text", align: { oneOf: ["start", "center", "end"] }, max: "text", /** bottom: stays at the pane's bottom (a reply box). */ dock: { oneOf: ["bottom"] }, /** At most this % of the screen's height, scrolling in itself. */ scroll: "int", /** Opened at its end (a chat). */ end: { oneOf: ["true", "false"] } }),
   truncate: T({ tip: "text" }),
   mono: T({ tip: "text" }),
-  b: T({ tip: "text" }),
-  small: T({ tip: "text" }),
+  // tone=: the words in that colour (a day with hours missing in red, a done one in green).
+  b: T({ tip: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] } }),
+  small: T({ tip: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, /** true: a line of its own in normal case and weight (a date under a column's head) */ normal: { oneOf: ["true", "false"] } }),
   muted: T({ tip: "text" }),
   // open=wide: open on a wide screen, folded on a phone.
-  section: T({ title: "text", aside: "text", card: { oneOf: ["true", "false"] }, collapsible: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false", "wide"] }, scroll: "int", /** true: a small grey fold heading with its count (a list's groups). */ dense: { oneOf: ["true", "false"] }, /** with dense: not capitals, no count — a fold line in a conversation ('5 steps · Read, Edit'). */ quiet: { oneOf: ["true", "false"] } }),
+  section: T({ title: "text", aside: "text", card: { oneOf: ["true", "false"] }, /** with card: warn — an amber card (something to sort out) */ tone: { oneOf: ["plain", "warn"] }, collapsible: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false", "wide"] }, scroll: "int", /** true: a small grey fold heading with its count (a list's groups). */ dense: { oneOf: ["true", "false"] }, /** with dense: not capitals, no count — a fold line in a conversation ('5 steps · Read, Edit'); else a fold's head in normal weight. */ quiet: { oneOf: ["true", "false"] }, /** with collapsible: in a frame of its own, its head a grey bar with the aside on the right, its parts lines with a rule between them (a day of a report) */ framed: { oneOf: ["true", "false"] }, /** with framed: what the head says while it is closed ('7 lines') */ note: "text" }),
   /** A row of a list you pick from: a dot for how it stands, its label (cut to one line), a small mono note, the time at the end; what is inside is its '⋯' menu, shown on hover. */
   item: T({ state: "text", value: "text", label: "text", sub: "text", meta: "text", tone: { oneOf: ["run", "queued", "done", "bad", "off", "warn", "none"] }, selected: { oneOf: ["true", "false"] }, dim: { oneOf: ["true", "false"] }, tip: "text" }),
   /** In a pane (flush=true): the part that scrolls by itself and takes the room left — a conversation (end=true: opened at its end and kept there as more comes, unless you scrolled up; center=true: in a column in the middle). */
@@ -119,12 +120,14 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   sfoot: T({}),
   srow: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, hover: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] } }),
   scell: T({ head: { oneOf: ["true", "false"] }, row: { oneOf: ["true", "false"] }, num: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "today", "off", "muted", "good", "warn", "bad"] }, span: "int", dim: { oneOf: ["true", "false"] }, top: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tip: "text" }),
-  box: T({ /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, scroll: "int" }),
+  box: T({ /** dashed=true: a dashed outline, no fill — room for what may be added (a form's optional part) */ dashed: { oneOf: ["true", "false"] }, /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, scroll: "int" }),
   heading: T({ level: { oneOf: ["1", "2", "3"] } }),
   text: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, tip: "text", pre: { oneOf: ["true", "false"] } }),
-  tile: T({ label: "text", value: "text", sub: "text", tint: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "good", "warn", "bad"] }, tip: "text", icon: "text", trend: "text", spark: "text" }),
+  tile: T({ label: "text", value: "text", sub: "text", tint: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "good", "warn", "bad"] }, tip: "text", icon: "text", trend: "text", spark: "text", /** with tint=true: a status sign in a circle at the top right */ mark: { oneOf: ["cross", "info", "check"] }, /** after the value, in normal weight ("/ 38 h") */ suffix: "text" }),
   bar: T({ value: "num", max: "num", color: "color", fill: "paint" }, true),
   dot: T({ color: "paint" }, true),
+  // tint="#hex": a badge tinted in any colour (an entry type's), its words in a darker shade of it — else color= one of the named ones.
+  badge: T({ color: "color", tint: "paint" }),
   printonly: T({}),
   noprint: T({}),
   // sort=true: a click on a column's head sorts by it (again: the other way); sorted="2:desc" how it starts.
@@ -140,7 +143,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // keep=true: what it is set to is kept in this browser for the view (a filter, a tab) — opened again, it is as you left it.
   state: T({ name: "text", value: "text", keep: { oneOf: ["true", "false", "url"] } }, true),
   tabs: T({ bind: "text", options: "text", /** line: tabs as words with a line under the one picked (a screen's parts) — else a segmented control. */ look: { oneOf: ["pill", "line"] } }, true),
-  split: T({ ratio: { oneOf: ["1:1", "1:2", "2:1", "2:3", "3:2", "1:3", "3:1"] }, side: { oneOf: ["left", "right"] }, width: "int" }),
+  split: T({ ratio: { oneOf: ["1:1", "1:2", "2:1", "2:3", "3:2", "1:3", "3:1"] }, side: { oneOf: ["left", "right"] }, width: "int", /** the room between the two columns (×4 px) */ gap: "int", /** true: the side column stays in view while the other scrolls (a page's controls beside its content) */ sticky: { oneOf: ["true", "false"] } }),
   // grid: the rows share one grid of these columns ("max-content minmax(0,80ch) 1fr max-content") — each as wide as its widest cell.
   list: T({ spacing: { oneOf: ["compact", "roomy"] }, source: "list", select: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false"] }, empty: "text", grid: "text", page: "int", more: "text" }),
   cards: T({ spacing: { oneOf: ["compact", "roomy"] }, source: "list", cols: "int", open: { oneOf: ["true", "false"] }, select: { oneOf: ["true", "false"] }, empty: "text", page: "int", more: "text" }),
@@ -194,7 +197,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // The view drawn again every so many seconds (1 – 3600): now and what is worked out of it go on (a stopwatch, a countdown).
   tick: T({ every: "num" }, true),
   selected: T({ empty: "text" }),
-  button: T({ action: "text", label: "text", icon: "text", request: "text", row: "text", prop: "text", value: "text", values: "text", state: "text", href: "url", confirm: "text", variant: { oneOf: ["primary", "plain", "quiet", "danger", "link", "send"] }, print: { oneOf: ["true", "false"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, wide: { oneOf: ["true", "false"] }, keys: "text", emit: "text", run: "text", do: "text", fill: "text", undo: "text", with: "text", into: "text", done: "text", then: "text", transition: "text", note: { oneOf: ["true", "false"] }, score: "text", correct: "text", total: "text", feedback: "text", finished: { oneOf: ["true", "false"] }, chat: "text", key: "text", text: "text", title: "text" }, true),
+  button: T({ action: "text", label: "text", icon: "text", request: "text", row: "text", prop: "text", value: "text", values: "text", state: "text", href: "url", confirm: "text", variant: { oneOf: ["primary", "plain", "quiet", "danger", "link", "send", "chip"] }, /** variant=chip: its colour (a week booked: good, one with hours missing: bad) */ tone: { oneOf: ["plain", "good", "warn", "bad"] }, print: { oneOf: ["true", "false"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, wide: { oneOf: ["true", "false"] }, /** md: a plain, primary or danger button at the size of a page's controls (else small) */ size: { oneOf: ["sm", "md"] }, keys: "text", emit: "text", run: "text", do: "text", fill: "text", undo: "text", with: "text", into: "text", done: "text", then: "text", transition: "text", note: { oneOf: ["true", "false"] }, score: "text", correct: "text", total: "text", feedback: "text", finished: { oneOf: ["true", "false"] }, chat: "text", key: "text", text: "text", title: "text" }, true),
   // A flow's output loaded into data.<name> — again whenever what it is called with changes (flows/).
   data: T({ name: "text", flow: "text", lambda: "text", compute: "text", do: "text", with: "text", when: "text", /** In ms (up to 3000). */ debounce: "num", /** In s. */ every: "num", reload: { oneOf: ["true", "false"] } }, true),
   // A row's lifecycle: its transitions as buttons (only those it can take now enabled) and its way so far.

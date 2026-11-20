@@ -2,7 +2,7 @@ import { dayShortfalls } from "@/lib/day-status";
 import { getWeeklyReport, listReporters } from "@/lib/entries";
 import { listEntryTypes } from "@/lib/entry-types";
 import { FALLBACK_TYPE_COLOR, typeMapOf } from "@/lib/entry-types-shared";
-import { formatDate, formatHours, round2 } from "@/lib/format";
+import { currentLocale, formatDate, formatHours, round2 } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
 import { listJobs } from "@/lib/jobs";
 import { lastAndCurrentMonth } from "@/lib/month";
@@ -36,6 +36,11 @@ import { formatMinutes } from "@/lib/work/shared";
 
 type Tone = "plain" | "good" | "warn" | "bad";
 const h = (n: number) => formatHours(n);
+
+/** A status card's sign by its tone (cross: hours missing, info: a heads-up, check: all booked). */
+function statusMark(tone: string): string {
+  return ({ bad: "cross", warn: "info", good: "check" } as Record<string, string>)[tone] ?? "";
+}
 
 function bookedStatus(booked: number, target: number, days: { gap: number; state: string; label: string }[], started: boolean): { tone: Tone; caption: string } | null {
   const missing = days.filter((d) => d.state === "missing");
@@ -74,7 +79,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
 
   // --- the cards
   const shortfall = dayShortfalls(week, report.dayTotals, targets.targets, { today, filtered });
-  const dayLabels = week.days.map((d, i) => ({ ...shortfall[i], label: d.toLocaleDateString(undefined, { weekday: "short" }) }));
+  const dayLabels = week.days.map((d, i) => ({ ...shortfall[i], label: d.toLocaleDateString(currentLocale(), { weekday: "short" }) }));
   const workdays = targets.targets.filter((x) => x > 0).length;
   const absentDays = targets.absenceByDay.filter(Boolean).length;
   const status = filtered ? null : bookedStatus(report.total, targets.weekTarget, dayLabels, week.startIso <= today);
@@ -82,6 +87,13 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   const booked = {
     label: t("Booked this week"),
     value: `${h(report.total)} / ${h(targets.weekTarget)} h`,
+    // (the card draws the booked hours big and "/ target h" after them; its sign says what the tone means)
+    num: h(report.total),
+    of: `/ ${h(targets.weekTarget)} h`,
+    mark: status ? statusMark(status.tone) : "",
+    todayHours: todayIndex >= 0 ? h(report.dayTotals[todayIndex]) : "",
+    todayOf: todayIndex >= 0 ? (targets.targets[todayIndex] > 0 ? ` / ${h(targets.targets[todayIndex])} h` : ` h · ${t("day off")}`) : "",
+    todayDone: todayIndex >= 0 && !filtered && targets.targets[todayIndex] > 0 && round2(report.dayTotals[todayIndex]) >= round2(targets.targets[todayIndex]),
     sub: status ? status.caption : `${workdays === 1 ? t("1 workday") : t("{n} workdays", { n: workdays })}${absentDays ? ` · ${absentDays === 1 ? t("1 day absent") : t("{n} days absent", { n: absentDays })}` : ""}`,
     tone: status?.tone ?? "plain",
     today:
@@ -103,6 +115,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     value: noPast ? "–" : `${h(due.missing)} h`,
     sub: pastStatus ? pastStatus.caption : due.filtered ? t("Not shown while filtered") : t("No past weeks yet"),
     tone: pastStatus?.tone ?? "plain",
+    mark: pastStatus ? statusMark(pastStatus.tone) : "",
     weeks: noPast
       ? []
       : due.weeks.map((w) => ({
@@ -128,6 +141,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       note: absence ? labels[absence.type as AbsenceType] : nonWorking(i) ? t("off") : "",
       tone: shortfall[i].state === "missing" ? "bad" : dayTone(i),
       dim: i >= 5,
+      // (the column's tint — today, a day off — apart from the name's colour; an absence's note in amber, "off" grey)
+      bg: dayTone(i),
+      absence: !!absence,
     };
   });
   const rows = report.rows.map((row) => ({
@@ -153,9 +169,11 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     let suggest = before;
     for (let j = i - 1; j >= 0; j--) if (pauses[isoDays[j]]?.length) { suggest = formatPauses(pauses[isoDays[j]]); break; }
     const base = { iso, label: formatDay(week.days[i], "EEE d MMM"), current: pauses[iso]?.length ? formatPauses(pauses[iso]) : "", suggest, none: pauses[iso] !== undefined && !pauses[iso].length };
-    if (pauses[iso]?.length) return { ...base, text: formatPauses(pauses[iso]), tone: "plain" };
-    if (pauses[iso] !== undefined) return { ...base, text: t("none"), tone: "muted" };
-    return { ...base, text: isWorkday(i) || report.dayTotals[i] > 0 ? formatPauses(defaultPauses) || "＋" : "＋", tone: "muted" };
+    // (hours: the break's length over its times — the default break greyed out on a working day without one of its own)
+    if (pauses[iso]?.length) return { ...base, text: formatPauses(pauses[iso]), tone: "plain", hours: h(totalPauseHours(pauses[iso])) };
+    if (pauses[iso] !== undefined) return { ...base, text: t("no break"), tone: "muted", hours: "" };
+    const shadow = isWorkday(i) || report.dayTotals[i] > 0 ? defaultPauses : [];
+    return { ...base, text: shadow.length ? formatPauses(shadow) : "", tone: "muted", hours: shadow.length ? h(totalPauseHours(shadow)) : "" };
   });
   const flex = getFlexTime();
   const flexJob = flex.jobNumber ? getJobByNumber(flex.jobNumber) : undefined;
@@ -248,6 +266,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   const days = rewritten.days.map((d) => ({
     date: d.date,
     dateText: formatDate(d.date),
+    // (the report's day head: "Monday, 16 Nov", what it holds while closed, today's open)
+    dayText: formatDay(new Date(`${d.date}T00:00:00`), "EEEE, d MMM"),
+    linesText: d.lines.length === 1 ? t("1 line") : t("{n} lines", { n: d.lines.length }),
+    open: d.date === today,
     total: `${h(d.total)} h`,
     lines: d.lines.map((l) => ({
       label: l.label,
@@ -294,7 +316,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     closing,
     suggestions: { head: t("Suggested entries"), count: `(${suggestions.length} · ${h(suggestionTotal)} h)`, items: suggestions },
     done,
-    report: { head: t("Report · week {n}", { n: week.week }), days, text: reportText, empty: t("No entries.") },
+    report: { head: t("Report · week {n}", { n: week.week }), days, text: reportText, empty: t("No entries."), total: `${h(rewritten.total)} h` },
     entriesHead: t("Entries in week {n}", { n: week.week }),
     // (what a drop is cleared with: the collecting entries' names in the state)
     dropClear: report.entries.filter((e) => e.isGroup && spanOfHead(e.id)?.mode === "collect").map((e) => `dr${e.id}=`).join("; "),
