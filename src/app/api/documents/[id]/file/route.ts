@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import { documentFile } from "@/plugins/documents/store";
 import { isInstalled } from "@/plugins/state";
 

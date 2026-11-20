@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 
 /**
  * Where the attachments run is (the “Fetch attachments” button polls it): running or not, the mail

@@ -1,4 +1,5 @@
 import { withAccount, accountById } from "@/db/accounts";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import { fromWorkHost } from "@/lib/work/host";
 
 /**

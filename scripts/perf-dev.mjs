@@ -9,6 +9,7 @@
  *   ttfb   the document's first byte (server compile + render)
  *   ready  React has hydrated the page (an element with React's props in the DOM) — what the user waits for
  *   log    Next's own line for it ("GET /todos 200 in 12s (compile: 11s, render: 1s)")
+ * Then the API routes the pages call (--api "POST /api/workspace/data,GET /api/search?q=a"): cold and warm.
  * Then the edit → recompile time: a file is touched (a comment appended, put back afterwards) and the route requested again.
  * And the server's memory (its whole process tree) at the end. Prints a table; --out writes the JSON as well.
  * The server is stopped at the end (--keep: left running, stop it with `node scripts/test-server.mjs --stop <pid>`).
@@ -37,6 +38,8 @@ const val = (f) => {
 };
 const has = (f) => argv.includes(f);
 const ROUTES = (val("--routes") ?? "/,/todos,/work,/month,/workspace,/workspace/:page,/settings,/plugins").split(",").map((s) => s.trim()).filter(Boolean);
+// API routes the pages call (a route handler is a server layer of its own: its first call compiles what it reaches again).
+const APIS = (val("--api") ?? "POST /api/workspace/data,GET /api/search?q=a").split(",").map((s) => s.trim()).filter(Boolean);
 const EDITS = [
   // (a file every Workspace view uses — a shared client component — and a page of its own)
   { file: "src/plugins/workspace/ui/view-template.tsx", route: "/workspace" },
@@ -200,6 +203,20 @@ async function main() {
       console.error(`${route}: cold ttfb ${sec(cold.ttfb)} ready ${sec(cold.ready)} | warm ttfb ${sec(warm.ttfb)} ready ${sec(warm.ready)}${cold.errors.length ? `  ! ${cold.errors.join(" ")}` : ""}`);
       for (const l of cold.log.slice(0, 6)) console.error(`    ${l}`);
     }
+    for (const api of APIS) {
+      const [method, url] = api.split(" ");
+      const call = async () => {
+        const t0 = now();
+        const r = await fetch(base + url, { method, headers: { "content-type": "application/json", origin: base, "sec-fetch-site": "same-origin" }, ...(method === "POST" ? { body: "{}" } : {}), signal: AbortSignal.timeout(NAV_TIMEOUT) });
+        await r.arrayBuffer();
+        return { status: r.status, ms: now() - t0 };
+      };
+      const at = logSize(server?.log);
+      const cold = await call();
+      const warm = await call();
+      result.apis = [...(result.apis ?? []), { api, cold, warm, log: requestLines(logFrom(server?.log, at)) }];
+      console.error(`${api}: cold ${sec(cold.ms)} (${cold.status}) | warm ${sec(warm.ms)}`);
+    }
     if (!has("--no-edit")) {
       for (const { file, route } of EDITS) {
         const abs = path.join(REPO, file);
@@ -236,6 +253,7 @@ async function main() {
   console.log("| route | cold ttfb | cold ready | warm ttfb | warm ready | Next (cold) |");
   console.log("| --- | --- | --- | --- | --- | --- |");
   for (const { route, cold, warm } of result.routes) console.log(`| ${route} | ${sec(cold.ttfb)} | ${sec(cold.ready)} | ${sec(warm.ttfb)} | ${sec(warm.ready)} | ${cold.log.find((l) => l.includes(` ${route.split("?")[0]} `)) ?? cold.log[0] ?? ""} |`);
+  for (const a of result.apis ?? []) console.log(`| ${a.api} | ${sec(a.cold.ms)} (${a.cold.status}) | | ${sec(a.warm.ms)} | | ${a.log[0] ?? ""} |`);
   for (const e of result.edits) console.log(`| edit ${e.file} | recompile ${sec(e.recompileMs)} | then ${sec(e.afterMs)} | | | ${e.log[0] ?? ""} |`);
   const out = val("--out");
   if (out) fs.writeFileSync(out, JSON.stringify(result, null, 2));

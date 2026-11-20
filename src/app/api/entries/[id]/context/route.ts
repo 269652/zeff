@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 
 /**
  * The todos' context behind one entry of a table (what they came from, their notes and reports) — fetched when its toggle is

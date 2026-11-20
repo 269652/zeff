@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import { foreignRequest, refused } from "@/lib/request-guard";
 
 export const dynamic = "force-dynamic";

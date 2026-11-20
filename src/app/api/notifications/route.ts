@@ -1,4 +1,5 @@
 import { isoDay } from "@/lib/text";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import { connection } from "next/server";
 import { t } from "@/lib/i18n/server";
 import { localDay } from "@/lib/dates";

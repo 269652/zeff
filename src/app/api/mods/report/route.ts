@@ -1,4 +1,5 @@
 import { foreignRequest, refused } from "@/lib/request-guard";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 
 export const dynamic = "force-dynamic";
 

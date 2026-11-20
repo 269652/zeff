@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import path from "node:path";
 import { Readable } from "node:stream";
 import { foreignRequest, refused } from "@/lib/request-guard";

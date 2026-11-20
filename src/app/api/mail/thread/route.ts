@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 
 /**
  * One conversation's messages (a mail thread, a chat), oldest first — what a row of the Messages page unfolds into. The

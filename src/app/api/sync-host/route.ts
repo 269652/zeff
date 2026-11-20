@@ -1,4 +1,5 @@
 import { withAccount } from "@/db/accounts";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import { authorized } from "@/lib/host/role";
 import { HOST_OPS } from "@/lib/host/ops";
 import { errorMessage } from "@/lib/errors";

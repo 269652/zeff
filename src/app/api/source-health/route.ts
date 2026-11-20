@@ -1,4 +1,5 @@
 import { connection } from "next/server";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 
 /**
  * Source health, read-only (for agents and scripts — the MCP tool `source_health` says the same): each sync step's state

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import "@/plugins/contributions"; // (static on purpose — what this route loads reaches it anyway: docs/plugins/performance.md, "Compiling")
 import { prefixedUrl } from "@/lib/redirect";
 import { knowledgeBrowserUrl } from "@/plugins/knowledge/client";
 import { isInstalled } from "@/plugins/state";
