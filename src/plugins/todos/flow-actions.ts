@@ -137,6 +137,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           workerDone: t.workerDone ? { by: t.workerDone.by, note: t.workerDone.note ?? "", suggested: !!t.workerDone.suggested } : null,
           needsInput: t.needsInput ?? "",
           lastError: (t as { lastError?: string }).lastError ?? "",
+          lastErrorRun: (t as { lastErrorRun?: number }).lastErrorRun ?? 0,
           opsCount: t.ops.length,
           notesCount: t.userNotes.length,
           byWorker: t.byWorker,

@@ -29,7 +29,7 @@ export async function handler(event, context) {
     running: r.running,
     runningText: r.running ? `${since ? `${Math.floor(since / 60)}:${String(since % 60).padStart(2, "0")}` : ""} · ${r.phase === "ai" ? t("{provider} writing", { provider: r.provider }) : (PHASES[r.phase] ?? t("running"))}` : "",
     again: !!r.shown,
-    facts: r.shown ? [t("As of: {when}", { when: when(r.shown.at) }), r.shown.model, mins(r.shown.durationMs), r.shown.costUsd != null ? `≈ $${r.shown.costUsd.toFixed(2)}` : ""].filter(Boolean).map((text) => ({ text })) : [],
+    facts: r.shown ? [t("As of: {when}", { when: when(r.shown.at) }), r.shown.model, mins(r.shown.durationMs), r.shown.costUsd != null ? `≈ ${r.shown.costUsd.toLocaleString(locale, { style: "currency", currency: "USD" })}` : ""].filter(Boolean).map((text) => ({ text })) : [],
     failed: r.failed ? t("The last run failed: {error}", { error: r.failed.error }) : "",
     summary: r.summary,
     booked: r.booked > 0 ? t("{hours} h booked", { hours: hours(r.booked) }) : "",

@@ -445,7 +445,7 @@ function UploadFiles({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone, a.multiple]);
   return (
-    <label ref={ref} className="btn btn-primary btn-sm cursor-pointer print:hidden">
+    <label ref={ref} className={`${a.variant === "plain" ? "btn btn-sm" : "btn btn-primary btn-sm"} cursor-pointer print:hidden`}>
       {a.label || t("Choose a file")}
       <input type="file" hidden multiple={a.multiple === "true"} accept={a.accept || undefined} onChange={(e) => (void take([...(e.target.files ?? [])]), (e.target.value = ""))} />
     </label>

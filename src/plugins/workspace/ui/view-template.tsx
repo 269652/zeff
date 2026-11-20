@@ -90,7 +90,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   const [own, setOwn] = useState<Record<string, string>>(() => {
     try {
       const saved = typeof window === "undefined" ? null : (JSON.parse(localStorage.getItem(keepKey) ?? "null") as unknown);
-      return saved && typeof saved === "object" && !Array.isArray(saved) ? Object.fromEntries(Object.entries(saved).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
+      // (a value the link sets — ?s.<name>= — wins over the one kept: /todos?todos=done opens on Done)
+      const linked = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
+      return saved && typeof saved === "object" && !Array.isArray(saved) ? Object.fromEntries(Object.entries(saved).filter((e): e is [string, string] => typeof e[1] === "string" && !linked.has(`s.${e[0]}`))) : {};
     } catch {
       return {};
     }

@@ -447,4 +447,20 @@ export const PANEL_ACTIONS: FlowAction[] = [
       return {};
     },
   },
+  {
+    name: "todos.run-error",
+    group: "todos",
+    label: "The failed run on a todo: again, or put away",
+    summary: "A todo's last run failed (the error on its row): again (as it was asked for — an instruction too) or, with hide, the error put away. Input run (the run's number). Needs the flow's todos and api permissions.",
+    input: [f("run", "number", { required: true }), f("hide", "boolean")],
+    output: OUT,
+    writes: true,
+    run: async (i, ctx) => {
+      need(ctx, "todos", "api");
+      if (ctx.dryRun) return done();
+      const a = await import("@/plugins/work/server-actions");
+      const r = i.hide === true || i.hide === "true" ? await a.dismissRunErrorAction(Number(i.run)) : await a.retryRunAction(Number(i.run));
+      return r?.ok ? done((r as { message?: string }).message ?? "") : fail((r as { error?: string } | null)?.error ?? t("Didn't work."));
+    },
+  },
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { VNode } from "../view-template";
 import type { BlockEnv } from "./view-blocks";
 import { SidebarFrame } from "@/components/SidebarFrame";
@@ -74,6 +74,7 @@ const LINE: Record<string, string> = {
   groups: "space-y-5",
   fold: "pt-1",
   block: "",
+  retry: "flex shrink-0 gap-1",
   groups4: "space-y-4",
   facts: "mt-1.5 space-y-1",
   fact: "flex items-baseline gap-2 text-xs text-zinc-600 dark:text-zinc-300",
@@ -91,7 +92,7 @@ const INK: Record<string, string> = {
   code: "font-mono",
   faint: "text-zinc-400",
   muted: "text-zinc-500",
-  strong: "font-semibold",
+  strong: "font-bold",
   medium: "font-medium",
   chip: "rounded-md bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800",
   tag: "rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-zinc-600 uppercase dark:bg-zinc-800 dark:text-zinc-300",
@@ -327,8 +328,10 @@ function SearchField({ a, n, kids, env }: { a: Record<string, string>; n: Node; 
 }
 
 /** A node of these blocks drawn — undefined: not one of them. */
-export function listBlock(n: Node, key: string | number, kids: Kids, env: BlockEnv): ReactNode | undefined {
+export function listBlock(n: Node, key: string | number, kids0: Kids, env: BlockEnv): ReactNode | undefined {
   const a = n.a;
+  // (What is inside these pieces flows as text: words and the pieces themselves side by side, not one line each.)
+  const kids: Kids = (nodes) => nodes.map((c, i) => (typeof c === "string" ? c : <Fragment key={i}>{kids0([c])}</Fragment>));
   const go = (e?: React.SyntheticEvent) => (e?.stopPropagation(), env.run(a));
   switch (n.t) {
     case "sidebarframe": {
@@ -445,6 +448,10 @@ export function listBlock(n: Node, key: string | number, kids: Kids, env: BlockE
       const cls =
         a.look === "primary"
           ? "btn btn-primary"
+          : a.look === "retry"
+            ? "rounded border border-red-300 px-1.5 font-medium hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:hover:bg-red-950"
+            : a.look === "hide"
+              ? "rounded px-1.5 hover:bg-red-50 disabled:opacity-40 dark:hover:bg-red-950"
           : a.look === "filter"
           ? `rounded-full border px-2.5 py-0.5 ${a.on === "true" ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900" : "border-zinc-300 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`
           : a.look === "ghost"
