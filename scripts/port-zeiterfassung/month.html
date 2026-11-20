@@ -103,14 +103,24 @@
   </section>
 
   <section card=true title="{{ data.m.entriesHead }}" aside="{{ data.m.entryList | count }}" collapsible=true open=false>
-    <datatable source="data.m.entryList" empty="No entries.">
-      <column label="Date">{{ dateText }}</column>
-      <column label="Job">{{ job }}{{#if project}} · {{ project }}{{/if}}</column>
-      <column label="Description">{{#if mark}}<small tip="{{ markTitle }}">{{ mark }}</small> {{/if}}{{ description }}{{#if ticket}} {{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<small><muted>{{ ticket }}</muted></small>{{/if}}{{/if}}</column>
-      <column label="Type"><dot color="{{ color }}"/> {{ type }}</column>
-      <column label="Hours" align=right>{{ hours }}</column>
-      <column label=""><button action="state" state="week" value="{{ date }}" emit="openweek" label="→" tip="Open its week to edit it" variant=quiet/></column>
-    </datatable>
+    {{#if data.m.entryList}}
+    <sheet compact=true caption="Entries of the month">
+      <shead><srow><scell head=true>Date</scell><scell head=true>Job</scell><scell head=true num=true>Hours</scell><scell head=true>Report</scell><scell head=true>Ticket</scell><scell head=true>Type · tags</scell><scell head=true></scell></srow></shead>
+      <sbody>
+        {{#each data.m.entryList}}
+        <srow hover=true>
+          <scell><mono size=sm>{{ date }}</mono>{{#if start}}<small tone=muted><mono>{{ start }}</mono></small>{{/if}}</scell>
+          <scell>{{ jobName }}</scell>
+          <scell num=true bold=true>{{ hours }}</scell>
+          <scell>{{#if mark}}<small tip="{{ markTitle }}">{{ mark }}</small> {{/if}}{{ description }}</scell>
+          <scell>{{#if ticket}}{{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<mono size=sm>{{ ticket }}</mono>{{/if}}{{/if}}</scell>
+          <scell><col gap=1 align=start><badge tint="{{ color }}">{{ type }}</badge>{{#each tagNames}}<badge color=teal>{{ this }}</badge>{{/each}}</col></scell>
+          <scell><button action="state" state="week" value="{{ date }}" emit="openweek" label="→" tip="Open its week to edit it" variant=quiet/></scell>
+        </srow>
+        {{/each}}
+      </sbody>
+    </sheet>
+    {{#else}}<empty text="No entries."/>{{/if}}
   </section>
 </col>
 {{#else}}<text tone=muted>…</text>{{/if}}

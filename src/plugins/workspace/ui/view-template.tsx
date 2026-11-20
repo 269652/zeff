@@ -532,7 +532,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         );
       case "mono":
         return (
-          <span key={key} className={`font-mono ${a.size === "sm" ? "text-sm" : "text-xs"}`} title={a.tip || undefined}>
+          <span key={key} className={`font-mono ${a.size === "sm" ? "text-sm whitespace-nowrap" : "text-xs"}`} title={a.tip || undefined}>
             {kids(n.c)}
           </span>
         );
@@ -592,7 +592,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const card = a.card === "true";
         const fold = a.collapsible === "true";
         const inner = fold ? (
-          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} note={a.note} dense={a.dense === "true"} quiet={a.quiet === "true"} framed={a.framed === "true"} open={a.open === "wide" ? "wide" : a.open !== "false"}>
+          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} note={a.note} dense={a.dense === "true"} quiet={a.quiet === "true"} framed={a.framed === "true"} card={card} open={a.open === "wide" ? "wide" : a.open !== "false"}>
             {/* (framed: its parts are lines, one under the other with a rule between them) */}
             <div className={a.framed === "true" ? "divide-y divide-zinc-100 text-sm dark:divide-zinc-800/60 [&>*]:px-3 [&>*]:py-1.5" : a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
               {kids(n.c)}
@@ -1490,7 +1490,7 @@ function Bubble({ text, note, end }: { text: string; note?: string; end: boolean
 }
 
 /** A section that folds: open or not — or "wide": open on a wide screen, folded on a phone (decided once it is shown). */
-function Fold({ title, aside, note, dense, quiet, framed, open, children }: { title: string; aside?: string; note?: string; dense?: boolean; quiet?: boolean; framed?: boolean; open: boolean | "wide"; children: React.ReactNode }) {
+function Fold({ title, aside, note, dense, quiet, framed, card, open, children }: { title: string; aside?: string; note?: string; dense?: boolean; quiet?: boolean; framed?: boolean; card?: boolean; open: boolean | "wide"; children: React.ReactNode }) {
   const [isOpen, setOpen] = useState(open !== false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the window's width is known only in the browser
@@ -1531,6 +1531,15 @@ function Fold({ title, aside, note, dense, quiet, framed, open, children }: { ti
               {title}
             </span>
             {aside && <span className="shrink-0 font-medium tabular-nums">{aside}</span>}
+          </summary>
+        ) : card ? (
+          // (a card that folds: its head as a card's — grey capitals after ▸, the aside in brackets)
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-500 uppercase select-none dark:text-zinc-400 [&::-webkit-details-marker]:hidden">
+            <span className="text-zinc-400" aria-hidden>
+              {isOpen ? "▾" : "▸"}
+            </span>
+            {title}
+            {aside && <span className="font-normal text-zinc-400 normal-case">({aside})</span>}
           </summary>
         ) : (
           <summary className="cursor-pointer text-sm font-semibold select-none">{title}</summary>

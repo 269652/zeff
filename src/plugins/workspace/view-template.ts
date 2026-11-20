@@ -95,7 +95,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   grid: T({ cols: "int", gap: "int", min: "int", /** Fixed columns, e.g. "3rem repeat(7,minmax(0,1fr)) 4.5rem" (a calendar: every row lines up); minw: the least width in px, narrower scrolls sideways. */ tracks: "text", minw: "int", masonry: { oneOf: ["true", "false"] }, /** true: the columns stay as many when there are fewer cells (two cards in a grid of four take two quarters, not the whole width) */ keep: { oneOf: ["true", "false"] } }),
   col: T({ gap: "int", fill: { oneOf: ["true", "false"] }, width: "int", tip: "text", align: { oneOf: ["start", "center", "end"] }, max: "text", /** bottom: stays at the pane's bottom (a reply box). */ dock: { oneOf: ["bottom"] }, /** At most this % of the screen's height, scrolling in itself. */ scroll: "int", /** Opened at its end (a chat). */ end: { oneOf: ["true", "false"] } }),
   truncate: T({ tip: "text" }),
-  // size=sm: at the size of the text around it (a job number in a table), else small
+  // size=sm: at the size of the text around it and in one line (a job number, a date in a table), else small
   mono: T({ tip: "text", size: { oneOf: ["xs", "sm"] } }),
   // tone=: the words in that colour (a day with hours missing in red, a done one in green).
   b: T({ tip: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] } }),

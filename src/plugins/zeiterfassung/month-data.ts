@@ -312,6 +312,10 @@ export async function monthScreen(input: { month?: string; by?: string } = {}) {
       description: e.description,
       ticket: e.ticket ?? "",
       job: `${e.job.number} ${e.job.name}`.trim(),
+      // (the entries' table as the week's: the job or project by name, the start, the tags as badges)
+      jobName: e.project?.title ?? e.job.name,
+      start: e.start ?? "",
+      tagNames: e.tags.map((x) => `#${x.name}`),
       project: e.project?.title ?? "",
       type: typeMap[e.type]?.label ?? e.type,
       color: typeMap[e.type]?.color ?? FALLBACK_TYPE_COLOR,

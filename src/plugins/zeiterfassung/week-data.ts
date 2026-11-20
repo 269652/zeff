@@ -367,6 +367,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       ticketUrl: tk(e.ticket).url,
       ticketTip: tk(e.ticket).tip,
       job: `${e.job.number} ${e.job.name}`.trim(),
+      // (the entries' table names the job or the project the entry is booked on, its tags as badges)
+      jobName: e.project?.title ?? e.job.name,
+      tagNames: e.tags.map((x) => `#${x.name}`),
       project: e.project?.title ?? "",
       type: typeMap[e.type]?.label ?? e.type,
       color: typeMap[e.type]?.color ?? FALLBACK_TYPE_COLOR,
