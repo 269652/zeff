@@ -441,13 +441,22 @@ function UploadFiles({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
       e.preventDefault();
       void take(a.multiple === "true" ? files : files.slice(0, 1));
     };
+    // (and files pasted into the view — a screenshot pasted into the message box: text pastes as ever)
+    const paste = (e: ClipboardEvent) => {
+      const files = [...(e.clipboardData?.files ?? [])];
+      if (!files.length) return;
+      e.preventDefault();
+      void take(a.multiple === "true" ? files : files.slice(0, 1));
+    };
     root.addEventListener("dragover", over);
     root.addEventListener("dragleave", leave);
     root.addEventListener("drop", drop);
+    root.addEventListener("paste", paste);
     return () => {
       root.removeEventListener("dragover", over);
       root.removeEventListener("dragleave", leave);
       root.removeEventListener("drop", drop);
+      root.removeEventListener("paste", paste);
       lit(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

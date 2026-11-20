@@ -113,7 +113,7 @@ write(
     {
       format: 1,
       id: "work-ext",
-      version: "1.2.1",
+      version: "1.3.0",
       name: "Code",
       description: "The Code tab in the Workspace: sessions with workers, their conversations, permission questions, tickets.",
       icon: "🛠️",

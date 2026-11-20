@@ -7,6 +7,7 @@ import { lives, type Live } from "./live-state";
 import { errPath, logPath } from "@/lib/work/log";
 import { currentAccountId } from "@/db/accounts";
 import { fencedJson } from "@/lib/ai/json";
+import { pathToFileURL } from "node:url";
 
 /**
  * Interactive workers: Copilot as an Agent Client Protocol server (`copilot --acp`), driven by
@@ -81,6 +82,39 @@ function onUpdate(live: Live, u: Record<string, unknown>) {
     live.view.mode = u.currentModeId;
     emitChange("work");
   }
+  if (kind === "config_option_update" && Array.isArray(u.configOptions)) {
+    takeConfig(live, u.configOptions);
+    emitChange("work");
+  }
+}
+
+type ConfigOption = { id?: string; category?: string; type?: string; currentValue?: unknown; options?: { value?: unknown; name?: string; options?: { value?: unknown; name?: string }[] }[] };
+
+/**
+ * Its session config options (ACP `configOptions`): the model and the reasoning effort as the pages show them — kept with their ids, which is how
+ * session/set_config_option sets them. (Grouped options are flattened.)
+ */
+function takeConfig(live: Live, list: unknown[]) {
+  live.config = (list as ConfigOption[])
+    .filter((o) => o && typeof o.id === "string" && (o.type ?? "select") === "select")
+    .map((o) => ({
+      id: String(o.id),
+      category: o.category,
+      currentValue: String(o.currentValue ?? ""),
+      options: (o.options ?? []).flatMap((x) => (Array.isArray(x.options) ? x.options : [x])).filter((x) => x.value !== undefined).map((x) => ({ value: String(x.value), name: String(x.name ?? x.value) })),
+    }));
+  const of = (cat: string) => live.config?.find((o) => o.category === cat || o.id === cat);
+  const model = of("model");
+  const effort = of("thought_level") ?? of("reasoning_effort");
+  const seen = new Set<string>();
+  live.view.models = model ? model.options.filter((x) => !seen.has(x.value) && seen.add(x.value)).map((x) => ({ value: x.value, label: x.name })) : undefined;
+  live.view.model = model?.currentValue;
+  live.view.efforts = effort ? effort.options.map((x) => x.value) : undefined;
+  live.view.effort = effort?.currentValue;
+  const features = new Set(live.view.features ?? []);
+  if (model) features.add("model");
+  if (effort) features.add("effort");
+  live.view.features = [...features];
 }
 
 /** It asks to do something: the question waits for you (on autopilot it's allowed at once). */
@@ -132,14 +166,14 @@ function onLine(live: Live, line: string) {
 }
 
 /** One turn: the text sent, then — when it's over — the run ends with its result, or waits for you. */
-async function turn(live: Live, text: string) {
+async function turn(live: Live, text: string, extra: Record<string, unknown>[] = []) {
   live.view.busy = true;
   live.view.waiting = null;
   live.turnText = "";
   emitChange("work");
   emitChange("attention");
   try {
-    const r = await call<{ stopReason?: string }>(live, "session/prompt", { sessionId: live.sessionId, prompt: [{ type: "text", text }] });
+    const r = await call<{ stopReason?: string }>(live, "session/prompt", { sessionId: live.sessionId, prompt: [{ type: "text", text }, ...extra] });
     log(live.runId, `\n[Zeff] Turn ended (${r?.stopReason ?? "?"})\n`);
   } catch (e) {
     log(live.runId, `\n[Zeff] Error: ${e instanceof Error ? e.message : String(e)}\n`);
@@ -201,9 +235,12 @@ export async function startInteractive(v: { runId: number; command: string; args
   });
   child.on("error", (e) => fs.appendFileSync(/*turbopackIgnore: true*/ errPath(v.runId), `${e.message}\n`));
 
-  await call(live, "initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
-  const s = await call<{ sessionId: string; modes?: { currentModeId: string; availableModes: { id: string; name: string }[] } }>(live, "session/new", { cwd: v.cwd, mcpServers: [] });
+  const init = await call<{ agentCapabilities?: { promptCapabilities?: { image?: boolean; embeddedContext?: boolean } } }>(live, "initialize", { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } });
+  // What a message may carry: files always (as links to them — every ACP agent takes those), images where it says so.
+  live.view.features = [...(init?.agentCapabilities?.promptCapabilities?.image ? (["images"] as const) : []), "files"];
+  const s = await call<{ sessionId: string; modes?: { currentModeId: string; availableModes: { id: string; name: string }[] }; configOptions?: unknown[] }>(live, "session/new", { cwd: v.cwd, mcpServers: [] });
   live.sessionId = s.sessionId;
+  if (Array.isArray(s.configOptions)) takeConfig(live, s.configOptions);
   live.view.modes = (s.modes?.availableModes ?? []).map((m) => ({ id: m.id, name: m.name }));
   live.view.mode = s.modes?.currentModeId ?? "";
   if (v.autopilot && live.view.modes.some((m) => m.id === AUTOPILOT)) await setMode(v.runId, AUTOPILOT);
@@ -235,12 +272,46 @@ export function answerPermission(runId: number, optionId: string) {
   emitChange("attention");
 }
 
-/** Your message to it (between turns). */
-export function sendToLive(runId: number, text: string) {
+/**
+ * Your message to it (between turns) — with pictures (as image blocks, where it takes them) and files (as links to them, ACP's resource_link: it
+ * reads them itself).
+ */
+export function sendToLive(runId: number, text: string, attach: { images?: { mediaType: string; data: string }[]; files?: { name: string; path: string }[] } = {}) {
   const live = liveOf(runId);
   if (live.view.busy) throw new Error(t("Copilot is still at it — wait until it's finished (or stop it)."));
-  log(runId, `\n[Du] ${text}\n`);
-  void turn(live, text);
+  const images = attach.images ?? [];
+  if (images.length && !live.view.features?.includes("images")) throw new Error(t("This session doesn't take pictures."));
+  const files = attach.files ?? [];
+  const extra = [
+    ...images.map((i) => ({ type: "image", mimeType: i.mediaType, data: i.data })),
+    ...files.map((f) => ({ type: "resource_link", uri: pathToFileURL(f.path).href, name: f.name })),
+  ];
+  const named = [...files.map((f) => f.name), ...(images.length ? [t("{n} image(s)", { n: images.length })] : [])];
+  log(runId, `\n[Du] ${text}${named.length ? `\n📎 ${named.join(", ")}` : ""}\n`);
+  void turn(live, text || t("(see the attachments)"), extra);
+}
+
+/** One of its session config options set (ACP session/set_config_option): the model, the reasoning effort — at once, for its next turn. */
+export async function setConfig(runId: number, category: "model" | "thought_level", value: string) {
+  const live = liveOf(runId);
+  const opt = live.config?.find((o) => o.category === category || (category === "thought_level" && o.id === "reasoning_effort"));
+  if (!opt) throw new Error(category === "model" ? t("This session's model can't be changed.") : t("This session's effort can't be changed."));
+  if (!opt.options.some((o) => o.value === value)) throw new Error(t("Not one of the options offered."));
+  const r = await call<{ configOptions?: unknown[] }>(live, "session/set_config_option", { sessionId: live.sessionId, configId: opt.id, value });
+  if (Array.isArray(r?.configOptions)) takeConfig(live, r.configOptions);
+  else {
+    opt.currentValue = value;
+    takeConfig(live, live.config ?? []);
+  }
+  log(runId, `[Zeff] ${category === "model" ? "Model" : "Effort"}: ${opt.options.find((o) => o.value === value)?.name ?? value}\n`);
+  emitChange("work");
+}
+
+/** Its current turn stopped (ACP session/cancel): it ends the turn, the session stays. */
+export function interruptLive(runId: number) {
+  const live = liveOf(runId);
+  send(live, { method: "session/cancel", params: { sessionId: live.sessionId } });
+  log(runId, `\n[Zeff] Stopped by you\n`);
 }
 
 /** Its mode: Agent (asks), Plan, Autopilot (allows everything) — a waiting permission allowed at once on autopilot. */
