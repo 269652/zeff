@@ -183,7 +183,7 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
       <textarea ref={box} className={a.bare === "true" ? "block max-h-80 min-h-12 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm outline-none placeholder:text-zinc-400" : `input w-full text-sm ${rows ? (rows <= 2 ? "min-h-10 resize-none" : "") : "min-h-20"}`} rows={rows} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     ) : sugg.length && type === "text" ? (
       <SuggestInput
-        className={`input py-1 text-sm ${stack ? "w-full" : "w-full min-w-40"}`}
+        className={`input text-sm ${stack ? "w-full" : "w-full min-w-40 py-1"}`}
         placeholder={a.placeholder}
         label={a.label || a.placeholder}
         value={v}
@@ -194,12 +194,12 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
         onBlur={onBlur}
       />
     ) : (
-      <input type={type} className={`input ${a.size === "sm" ? "h-8 min-w-0 py-1 text-xs" : "py-1 text-sm"} ${type === "color" ? "h-8 w-12 p-0.5" : stack ? "w-full" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
+      <input type={type} className={`input ${a.size === "sm" ? "h-8 min-w-0 py-1 text-xs" : stack ? "text-sm" : "py-1 text-sm"} ${type === "color" ? "h-8 w-12 p-0.5" : stack ? "w-full" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     );
   if (!a.label) return <span className={`print:hidden ${type === "textarea" || stack ? "block w-full" : a.size === "sm" ? "flex min-w-0 flex-1" : "inline-flex"}`}>{field}</span>;
   return (
     <label className={`gap-1 text-sm print:hidden ${type === "textarea" || stack ? "flex w-full flex-col" : "inline-flex items-center gap-1.5"}`}>
-      <span className={stack ? "text-xs font-medium text-zinc-500" : "text-xs text-zinc-500"}>{a.label}</span>
+      <span className={stack ? "label mb-0" : "text-xs text-zinc-500"}>{a.label}</span>
       {field}
     </label>
   );

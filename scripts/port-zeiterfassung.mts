@@ -15,14 +15,16 @@ const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
 // Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
-const PLUGIN_VERSION = "0.4.1";
-const PACKAGE_VERSION = "1.3.1";
+const PLUGIN_VERSION = "0.5.0";
+const PACKAGE_VERSION = "1.4.0";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, text);
 };
-const part = (name: string) => (fs.existsSync(path.join(SRC, name)) ? fs.readFileSync(path.join(SRC, name), "utf8") : "");
+// The report's tabs stand where a part puts <report-tabs/>: at the top of its side column, as the old pages had the Week | Month switch there.
+const TABS_TAG = '<tabs bind="view" look=line options="week:Week, month:Month, analysis:Analysis, day:End of day, jobs:Jobs, settings:Settings"/>';
+const part = (name: string) => (fs.existsSync(path.join(SRC, name)) ? fs.readFileSync(path.join(SRC, name), "utf8").replaceAll("<report-tabs/>", TABS_TAG) : "");
 fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; timeoutMs: number }> = {
@@ -45,9 +47,8 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
 const TABS = ["month", "analysis", "day", "jobs", "settings"];
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
-  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
+  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/><state name="jpart" value="jobs" keep=url/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
-  '<tabs bind="view" options="week:Week, month:Month, analysis:Analysis, day:End of day, jobs:Jobs, settings:Settings"/>',
   // one branch per tab, the week the one left over
   ...TABS.flatMap((tab) => [`{{#if state.view == '${tab}'}}`, part(`${tab}.html`) + (tab === "settings" ? part("rules.html") : ""), "{{#else}}"]),
   part("week.html"),

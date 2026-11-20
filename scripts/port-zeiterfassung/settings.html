@@ -1,25 +1,30 @@
 <data name="s" lambda="zeiterfassung.schedule" with="n={{ state.sn }}" when="{{ state.view == 'settings' }}"/>
 <on event="settings-changed" action="reload"/>
-{{#if data.s}}
+<split width=288 side=left gap=6 sticky=true>
 <col gap=3>
+  <report-tabs/>
+  <col gap=1><heading level=2>Time-tracking settings</heading><text tone=muted>Set your weekly working pattern (part-time) and record time off. The weekly report uses this to show booked hours against your target.</text></col>
+</col>
+<col gap=6>
+{{#if data.s}}
+<col gap=6>
   {{#if data.ssaved.ssaved.message}}<callout tone=good>{{ data.ssaved.ssaved.message }}</callout>{{/if}}
-  <text tone=muted>Set your weekly working pattern (part-time) and record time off. The weekly report uses this to show booked hours against your target.</text>
 
   <section card=true title="{{ data.s.hoursHead }}">
     <col gap=2>
       <grid cols=7 gap=2 min=70>
-        {{#each data.s.days}}<input bind="sh_{{ key }}" type=number label="{{ label }}" value="{{ hours }}"/>{{/each}}
+        {{#each data.s.days}}<input stack=true bind="sh_{{ key }}" label="{{ label }}" value="{{ hours }}"/>{{/each}}
       </grid>
-      <row gap=2><button run="zeiterfassung.schedule-save" with="what=hours, mon={{ state.sh_mon | default(data.s.h_mon) }}, tue={{ state.sh_tue | default(data.s.h_tue) }}, wed={{ state.sh_wed | default(data.s.h_wed) }}, thu={{ state.sh_thu | default(data.s.h_thu) }}, fri={{ state.sh_fri | default(data.s.h_fri) }}, sat={{ state.sh_sat | default(data.s.h_sat) }}, sun={{ state.sh_sun | default(data.s.h_sun) }}" into="ssaved" emit="settings-changed" label="Save" variant=primary/></row>
+      <row gap=2><button run="zeiterfassung.schedule-save" with="what=hours, mon={{ state.sh_mon | default(data.s.h_mon) }}, tue={{ state.sh_tue | default(data.s.h_tue) }}, wed={{ state.sh_wed | default(data.s.h_wed) }}, thu={{ state.sh_thu | default(data.s.h_thu) }}, fri={{ state.sh_fri | default(data.s.h_fri) }}, sat={{ state.sh_sat | default(data.s.h_sat) }}, sun={{ state.sh_sun | default(data.s.h_sun) }}" into="ssaved" emit="settings-changed" label="Save working hours" variant=primary/><small tone=muted>A day set to 0 counts as non-working (e.g. free Fridays).</small></row>
     </col>
   </section>
 
   <section card=true title="Default break">
     <col gap=2>
       <text tone=muted>Your usual break window on workdays, e.g. 12:00-13:00 (several with “;”). The weekly table shows it greyed out on days without an entered break.</text>
-      <input bind="sp_text" label="Default break" value="{{ data.s.defaultPauses }}" placeholder="12:00-13:00"/>
+      <input stack=true bind="sp_text" label="Default break" value="{{ data.s.defaultPauses }}" placeholder="12:00-13:00"/>
       {{#if data.s.punchOn}}<button action="state" state="sp_punch" value="{{ (state | get('sp_punch') | default(data.s.punchExport)) == '1' ? '0' : '1' }}" label="{{ (state | get('sp_punch') | default(data.s.punchExport)) == '1' ? '☑' : '☐' }} Punch records it too" variant=quiet/>{{/if}}
-      <row gap=2><button run="zeiterfassung.schedule-save" with="what=pauses, punch={{ state | get('sp_punch') | default(data.s.punchExport) }}, text={{ state.sp_text | default(data.s.defaultPauses) }}" into="ssaved" emit="settings-changed" label="Save" variant=primary/></row>
+      <row gap=2><button run="zeiterfassung.schedule-save" with="what=pauses, punch={{ state | get('sp_punch') | default(data.s.punchExport) }}, text={{ state.sp_text | default(data.s.defaultPauses) }}" into="ssaved" emit="settings-changed" label="Save default break" variant=primary/></row>
     </col>
   </section>
 
@@ -27,33 +32,13 @@
     <col gap=2>
       <text tone=muted>The job for hours you take off your overtime. In the weekly table, days that aren't fully booked get a greyed-out row for it under the booked jobs.</text>
       <grid cols=2 gap=2 min=200>
-        <select bind="sf_job" options="{{ data.s.flexJobOptions | tojson }}" search=true label="Job"/>
-        <input bind="sf_comment" label="Comment" value="{{ data.s.flexComment }}"/>
+        <select stack=true bind="sf_job" value="{{ data.s.flexJob }}" options="{{ data.s.flexJobOptions | tojson }}" label="Gleitzeit job"/>
+        <input stack=true bind="sf_comment" label="Comment" value="{{ data.s.flexComment }}"/>
       </grid>
-      <row gap=2><button run="zeiterfassung.schedule-save" with="what=flex, jobNumber={{ state.sf_job | default(data.s.flexJob) }}, comment={{ state.sf_comment | default(data.s.flexComment) }}" into="ssaved" emit="settings-changed" label="Save" variant=primary/></row>
+      <row gap=2><button run="zeiterfassung.schedule-save" with="what=flex, jobNumber={{ state.sf_job | default(data.s.flexJob) }}, comment={{ state.sf_comment | default(data.s.flexComment) }}" into="ssaved" emit="settings-changed" label="Save flex time" variant=primary/></row>
     </col>
   </section>
 
-  <section card=true title="Absences & time off">
-    <col gap=2>
-      <grid cols=5 gap=2 min=130>
-        <input bind="na_start" type=date label="From" value="{{ data.s.today }}"/>
-        <input bind="na_end" type=date label="To"/>
-        <select bind="na_type" options="{{ data.s.absenceTypes | tojson }}" label="Type"/>
-        <input bind="na_hours" type=number label="Hours/day" placeholder="full day"/>
-        <input bind="na_until" type=date label="Repeat weekly until"/>
-      </grid>
-      <input bind="na_note" label="Note"/>
-      <row gap=2><button run="zeiterfassung.absence" with="startDate={{ state.na_start | default(data.s.today) }}, endDate={{ state.na_end }}, type={{ state.na_type }}, hours={{ state.na_hours }}, note={{ state.na_note }}, repeatUntil={{ state.na_until }}" into="ssaved" emit="settings-changed" label="Add absence" variant=primary/></row>
-      <datatable source="data.s.absences" empty="No absences recorded.">
-        <column label="From"><mono>{{ from }}</mono></column>
-        <column label="To"><mono>{{ to }}</mono></column>
-        <column label="Type">{{ type }}</column>
-        <column label="Hours/day" align=right>{{ hours }}</column>
-        <column label="Note">{{ note }}</column>
-        <column label=""><button run="zeiterfassung.absence" with="delete={{ id }}" confirm="{{ confirm }}" emit="settings-changed" label="Delete" variant=danger/></column>
-      </datatable>
-    </col>
-  </section>
 </col>
 {{#else}}<text tone=muted>…</text>{{/if}}
+

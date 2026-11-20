@@ -1,8 +1,18 @@
 <data name="j" lambda="zeiterfassung.jobs" with="n={{ state.jn }}" when="{{ state.view == 'jobs' }}"/>
 <on event="jobs-changed" action="reload"/>
-{{#if data.j}}
 <data name="d" lambda="zeiterfassung.job-detail" with="ref={{ state.jd }}" when="{{ state.jd }}"/>
+<split width=288 side=left gap=6 sticky=true>
 <col gap=3>
+  <report-tabs/>
+  <tabs bind="jpart" options="jobs:Jobs, projects:Projects"/>
+  {{#if state.jpart == 'projects'}}
+  <col gap=1><heading level=2>Projects</heading><text tone=muted>Book time on a project instead of a job — e.g. a training. The hours land on the project's job, and setting or changing that job later moves all its entries along.</text></col>
+  {{#else}}
+  <col gap=1><heading level=2>Jobs</heading><text tone=muted>Job numbers that time can be booked on — from the web UI or via the MCP report_time tool.</text></col>
+  {{/if}}
+</col>
+{{#if data.j}}
+<col gap=6>
   {{#if state.jd}}{{#if data.d.found}}
   <section card=true title="{{ data.d.title }}" aside="{{ data.d.sub }}">
     <col gap=2>
@@ -38,89 +48,50 @@
   </section>
   {{/if}}{{/if}}
   {{#if data.jsaved.jsaved.message}}<callout tone=good>{{ data.jsaved.jsaved.message }}</callout>{{/if}}
-  <text tone=muted>Job numbers that time can be booked on — from the web UI or via the MCP report_time tool.</text>
-  <section card=true title="New job">
-    <col gap=2>
-      <grid cols=4 gap=2 min=150>
-        <input bind="nj_number" label="Number"/>
-        <input bind="nj_name" label="Name"/>
-        <input bind="nj_customer" label="Customer"/>
-        <input bind="nj_tags" label="Default tags" placeholder="tag1, tag2"/>
-      </grid>
-      <input bind="nj_description" label="Description"/>
-      <row gap=2><button run="zeiterfassung.job-save" with="number={{ state.nj_number }}, name={{ state.nj_name }}, customer={{ state.nj_customer }}, description={{ state.nj_description }}, defaultTags={{ state.nj_tags }}" into="jsaved" then="nj_number=" emit="jobs-changed" label="Create job" variant=primary/></row>
-    </col>
-  </section>
-  <section card=true title="{{ data.j.jobsHead }}">
-    {{#if data.j.toolbar}}<row gap=2 wrap=true justify=end>{{#each data.j.toolbar}}<button run="{{ flow }}" with="{{ with }}" emit="jobs-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
-    <datatable source="data.j.jobs" empty="No jobs yet.">
-      <column label="Number"><mono>{{ number }}</mono></column>
-      <column label="Name"><b>{{ name }}</b>{{#if description}}<small><muted>{{ description }}</muted></small>{{/if}} <small>{{ tags }}</small></column>
-      <column label="Customer">{{ customer }}</column>
-      <column label="Hours" align=right>{{ hours }}</column>
-      <column label="Entries" align=right>{{ entries }}</column>
-      <column label="{{ data.j.columnTitle }}"><small tip="{{ markTitle }}">{{ mark }}</small></column>
-      <column label="Status">{{ status }}</column>
-      <column label="">
-        <row gap=1 justify=end>
-          <button action="state" state="jd" value="job:{{ id }}" label="Open" variant=plain/>
-          <button action="state" state="jobedit" value="{{ id }}" label="Edit" variant=plain/>
-          <button run="zeiterfassung.job-save" with="id={{ id }}, active={{ active ? 'false' : 'true' }}" emit="jobs-changed" label="{{ toggle }}" variant=plain/>
-        </row>
-      </column>
-    </datatable>
-  </section>
-  <dialog bind="jobedit" reset="ej_" title="Edit job">
-    {{#each data.j.jobs | where('id', state.jobedit)}}
-    <let name="ecu" value="state | get('ej_customer') | default(customer)"/>
-    <let name="ede" value="state | get('ej_description') | default(description)"/>
-    <col gap=2>
-      <grid cols=2 gap=2 min=150>
-        <input bind="ej_number" label="Number" value="{{ number }}"/>
-        <input bind="ej_name" label="Name" value="{{ name }}"/>
-        <input bind="ej_customer" label="Customer" value="{{ customer }}"/>
-        <input bind="ej_tags" label="Default tags" value="{{ tags }}"/>
-      </grid>
-      <input bind="ej_description" label="Description" value="{{ description }}"/>
-      <row gap=2><button run="zeiterfassung.job-save" with="id={{ id }}, full=true, number={{ state.ej_number | default(number) }}, name={{ state.ej_name | default(name) }}, customer={{ state.ej_customer == '' ? '~' : ecu }}, description={{ state.ej_description == '' ? '~' : ede }}, defaultTags={{ state.ej_tags | default(tags) }}" into="jsaved" then="jobedit=" emit="jobs-changed" label="Save" variant=primary/></row>
-    </col>
-    {{/each}}
-  </dialog>
-
-  <text tone=muted>Book time on a project instead of a job — e.g. a training. The hours land on the project's job, and setting or changing that job later moves all its entries.</text>
+  {{#if state.jpart == 'projects'}}
   <section card=true title="New project">
-    <col gap=2>
-      <grid cols=4 gap=2 min=150>
-        <input bind="np_title" label="Title"/>
-        {{#if data.j.jobOptions}}<select bind="np_job" options="{{ data.j.jobOptions | tojson }}" search=true label="Job"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
-        <input bind="np_customer" label="Customer"/>
-        <input bind="np_tags" label="Default tags" placeholder="tag1, tag2"/>
+    <col gap=3>
+      <grid cols=3 gap=3 min=180>
+        <input stack=true bind="np_title" label="Title" placeholder="TYPO3 Training"/>
+        {{#if data.j.jobOptions}}<select stack=true bind="np_job" options="{{ data.j.jobOptions | tojson }}" label="Job"/>{{#else}}<text tone=warn>No active jobs yet — create one on the Jobs page before booking time.</text>{{/if}}
+        <input stack=true bind="np_customer" label="Customer" placeholder="Optional"/>
       </grid>
-      <grid cols=2 gap=2 min=150>
-        <input bind="np_start" type=date label="Start"/>
-        <input bind="np_end" type=date label="End"/>
+      <grid tracks="minmax(0,2fr) repeat(2,minmax(0,0.5fr))" gap=3>
+        <input stack=true bind="np_description" label="Description" placeholder="Optional notes"/>
+        <input stack=true bind="np_start" type=date label="Start"/>
+        <input stack=true bind="np_end" type=date label="End"/>
       </grid>
-      <input bind="np_description" label="Description"/>
-      <row gap=2><button run="zeiterfassung.project-save" with="title={{ state.np_title }}, jobNumber={{ state.np_job }}, customer={{ state.np_customer }}, description={{ state.np_description }}, startDate={{ state.np_start }}, endDate={{ state.np_end }}, defaultTags={{ state.np_tags }}" into="jsaved" then="np_title=" emit="jobs-changed" label="Create project" variant=primary/></row>
+      <grid tracks="minmax(0,1fr) minmax(0,1fr) minmax(0,0.5fr)" gap=3>
+        <input stack=true bind="np_tags" label="Default tags" placeholder="Add tag…"/>
+        <small tone=muted>Entries booked on the project land on its job. Without a job they wait under “No job yet” (skipped by the Chrono export) until you set one.</small>
+        <col align=end><button run="zeiterfassung.project-save" with="title={{ state.np_title }}, jobNumber={{ state.np_job }}, customer={{ state.np_customer }}, description={{ state.np_description }}, startDate={{ state.np_start }}, endDate={{ state.np_end }}, defaultTags={{ state.np_tags }}" into="jsaved" then="np_title=" emit="jobs-changed" label="Create project" variant=primary size=md wide=true/></col>
+      </grid>
     </col>
   </section>
   <section card=true title="{{ data.j.projectsHead }}">
-    <datatable source="data.j.projects" empty="No projects yet.">
-      <column label="Title"><b>{{ title }}</b>{{#if description}}<small><muted>{{ description }}</muted></small>{{/if}} <small>{{ tags }}</small></column>
-      <column label="Job">{{ job }}</column>
-      <column label="Customer">{{ customer }}</column>
-      <column label="Booked"><small><muted>{{ booked }}</muted></small></column>
-      <column label="Hours" align=right>{{ hours }}</column>
-      <column label="Entries" align=right>{{ entries }}</column>
-      <column label="Status">{{ status }}</column>
-      <column label="">
-        <row gap=1 justify=end>
-          <button action="state" state="jd" value="project:{{ id }}" label="Open" variant=plain/>
-          <button action="state" state="projectedit" value="{{ id }}" label="Edit" variant=plain/>
-          <button run="zeiterfassung.project-save" with="id={{ id }}, active={{ active ? 'false' : 'true' }}" emit="jobs-changed" label="{{ toggle }}" variant=plain/>
-        </row>
-      </column>
-    </datatable>
+    {{#if data.j.projects}}
+    <sheet caption="All projects">
+      <shead><srow><scell head=true>Title</scell><scell head=true>Job</scell><scell head=true>Customer</scell><scell head=true>Booked</scell><scell head=true num=true>Hours</scell><scell head=true num=true>Entries</scell><scell head=true>Status</scell><scell head=true></scell></srow></shead>
+      <sbody>
+        {{#each data.j.projects}}
+        <srow tone="{{ active ? 'plain' : 'muted' }}">
+          <scell><text><b>{{ title }}</b></text>{{#if description}}<small tone=muted>{{ description }}</small>{{/if}}{{#if tags}} <small tone=muted>{{ tags }}</small>{{/if}}</scell>
+          <scell>{{#if jobNumber}}{{ job }}{{#else}}<badge tint="#f59e0b">{{ job }}</badge>{{/if}}</scell>
+          <scell>{{ customer }}</scell>
+          <scell><mono>{{ booked }}</mono></scell>
+          <scell num=true>{{ hours }}</scell>
+          <scell num=true>{{ entries }}</scell>
+          <scell><badge tint="{{ active ? '#7c3aed' : '#a1a1aa' }}">{{ status }}</badge></scell>
+          <scell><row gap=1 justify=end wrap=false>
+            <button action="state" state="jd" value="project:{{ id }}" label="Open" variant=plain/>
+            <button action="state" state="projectedit" value="{{ id }}" label="Edit" variant=plain/>
+            <button run="zeiterfassung.project-save" with="id={{ id }}, active={{ active ? 'false' : 'true' }}" emit="jobs-changed" label="{{ toggle }}" variant=plain/>
+          </row></scell>
+        </srow>
+        {{/each}}
+      </sbody>
+    </sheet>
+    {{#else}}<empty text="No projects yet."/>{{/if}}
   </section>
   <dialog bind="projectedit" reset="ep_" title="Edit project">
     {{#each data.j.projects | where('id', state.projectedit)}}
@@ -138,5 +109,64 @@
     </col>
     {{/each}}
   </dialog>
+  {{#else}}
+  <section card=true title="New job">
+    <col gap=3>
+      <grid cols=3 gap=3 min=180>
+        <input stack=true bind="nj_number" label="Job number" placeholder="2026-0815"/>
+        <input stack=true bind="nj_name" label="Name" placeholder="Website relaunch"/>
+        <input stack=true bind="nj_customer" label="Customer" placeholder="ACME GmbH"/>
+      </grid>
+      <grid tracks="minmax(0,1.5fr) minmax(0,1fr) minmax(0,0.5fr)" gap=3>
+        <input stack=true bind="nj_description" label="Description" placeholder="Optional notes"/>
+        <input stack=true bind="nj_tags" label="Default tags" placeholder="Add tag…"/>
+        <col align=end><button run="zeiterfassung.job-save" with="number={{ state.nj_number }}, name={{ state.nj_name }}, customer={{ state.nj_customer }}, description={{ state.nj_description }}, defaultTags={{ state.nj_tags }}" into="jsaved" then="nj_number=" emit="jobs-changed" label="Create job" variant=primary size=md wide=true/></col>
+      </grid>
+    </col>
+  </section>
+  <section card=true title="{{ data.j.jobsHead }}">
+    {{#if data.j.toolbar}}<row gap=2 wrap=true justify=end>{{#each data.j.toolbar}}<button run="{{ flow }}" with="{{ with }}" emit="jobs-changed" confirm="{{ confirm }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/each}}</row>{{/if}}
+    {{#if data.j.jobs}}
+    <sheet caption="All jobs">
+      <shead><srow><scell head=true>Number</scell><scell head=true>Name</scell><scell head=true>Customer</scell><scell head=true num=true>Hours</scell><scell head=true num=true>Entries</scell>{{#if data.j.columnTitle}}<scell head=true>{{ data.j.columnTitle }}</scell>{{/if}}<scell head=true>Status</scell><scell head=true></scell></srow></shead>
+      <sbody>
+        {{#each data.j.jobs}}
+        <srow tone="{{ active ? 'plain' : 'muted' }}">
+          <scell><mono size=sm>{{ number }}</mono></scell>
+          <scell><text><b>{{ name }}</b></text>{{#if description}}<small tone=muted>{{ description }}</small>{{/if}}{{#if tags}} <small tone=muted>{{ tags }}</small>{{/if}}</scell>
+          <scell>{{ customer }}</scell>
+          <scell num=true>{{ hours }}</scell>
+          <scell num=true>{{ entries }}</scell>
+          {{#if data.j.columnTitle}}<scell><small tip="{{ markTitle }}">{{ mark }}</small></scell>{{/if}}
+          <scell><badge tint="{{ active ? '#7c3aed' : '#a1a1aa' }}">{{ status }}</badge></scell>
+          <scell><row gap=1 justify=end wrap=false>
+            <button action="state" state="jd" value="job:{{ id }}" label="Open" variant=plain/>
+            <button action="state" state="jobedit" value="{{ id }}" label="Edit" variant=plain/>
+            <button run="zeiterfassung.job-save" with="id={{ id }}, active={{ active ? 'false' : 'true' }}" emit="jobs-changed" label="{{ toggle }}" variant=plain/>
+          </row></scell>
+        </srow>
+        {{/each}}
+      </sbody>
+    </sheet>
+    {{#else}}<empty text="No jobs yet."/>{{/if}}
+  </section>
+  <dialog bind="jobedit" reset="ej_" title="Edit job">
+    {{#each data.j.jobs | where('id', state.jobedit)}}
+    <let name="ecu" value="state | get('ej_customer') | default(customer)"/>
+    <let name="ede" value="state | get('ej_description') | default(description)"/>
+    <col gap=2>
+      <grid cols=2 gap=2 min=150>
+        <input bind="ej_number" label="Number" value="{{ number }}"/>
+        <input bind="ej_name" label="Name" value="{{ name }}"/>
+        <input bind="ej_customer" label="Customer" value="{{ customer }}"/>
+        <input bind="ej_tags" label="Default tags" value="{{ tags }}"/>
+      </grid>
+      <input bind="ej_description" label="Description" value="{{ description }}"/>
+      <row gap=2><button run="zeiterfassung.job-save" with="id={{ id }}, full=true, number={{ state.ej_number | default(number) }}, name={{ state.ej_name | default(name) }}, customer={{ state.ej_customer == '' ? '~' : ecu }}, description={{ state.ej_description == '' ? '~' : ede }}, defaultTags={{ state.ej_tags | default(tags) }}" into="jsaved" then="jobedit=" emit="jobs-changed" label="Save" variant=primary/></row>
+    </col>
+    {{/each}}
+  </dialog>
+  {{/if}}
 </col>
 {{#else}}<text tone=muted>…</text>{{/if}}
+</split>

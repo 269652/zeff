@@ -1,7 +1,19 @@
 <data name="f" lambda="zeiterfassung.day" with="date={{ state.fdate }}, week={{ state.fweek }}, state={{ state | tojson }}" when="{{ state.view == 'day' }}" debounce=600/>
 <on event="day-changed" action="reload"/>
-{{#if data.f}}
+<split width=288 side=left gap=6 sticky=true>
 <col gap=3>
+  <report-tabs/>
+  {{#if data.f}}
+  <col gap=3>
+    <heading level=2>{{ data.f.title }}</heading>
+    <text tone=muted>{{ data.f.intro }}</text>
+    <text>{{#if data.f.mode == 'week'}}<button action="state" state="fweek" value="" label="← End of day" variant=link/>{{#else}}<button action="state" state="fweek" value="current" label="The whole week →" variant=link/>{{/if}}</text>
+    <small tone=muted>It's booked just like by hand; then everything is in the weekly report (and goes from there to Chrono/Punch when you export).</small>
+  </col>
+  {{/if}}
+</col>
+{{#if data.f}}
+<col gap=6>
   {{#if data.fbooked.fbooked.message}}
   <callout tone=good>
     <row gap=2 align=center justify=between wrap=true>
@@ -10,23 +22,26 @@
     </row>
   </callout>
   {{/if}}
-  <row gap=2 align=center wrap=true justify=between>
-    <col><heading level=2>{{ data.f.title }}</heading><small><muted>{{ data.f.intro }}</muted></small></col>
-    <row gap=2>
-      {{#if data.f.mode == 'week'}}<button action="state" state="fweek" value="" label="End of day" variant=plain/>{{#else}}<button action="state" state="fweek" value="current" label="The whole week →" variant=plain/>{{/if}}
-    </row>
-  </row>
   {{#each data.f.days}}
-  <section card=true title="{{ head }}" aside="{{ sub }}">
+  {{#if data.f.mode == 'week'}}<heading level=3>{{ head }} <small tone=muted>{{ sub }}</small></heading>{{/if}}
+  <section card=true>
+    <row gap=4 wrap=true align=start justify=between>
+      <row gap=6 wrap=true align=center>
+        <text>{{ sums.booked }}</text><text>{{ sums.selected }}</text>
+        {{#if sums.itemized}}<text tone=muted>{{ sums.itemized }}</text>{{/if}}
+        <text tone="{{ sums.tone }}">{{ sums.result }}</text>
+      </row>
+      <col gap=1 align=end>
+        <row gap=2 align=center>
+          <button action="state" state="{{ spreadKey }}" value="{{ spreadOn ? '' : '1' }}" label="Spread the rest" tip="Spread the missing hours over the ticked ticket lines" variant="{{ spreadOn ? 'primary' : 'plain' }}" disabled="{{ canSpread ? 'false' : 'true' }}"/>
+          <button run="zeiterfassung.day-book" with="date={{ date }}, state={{ state | tojson }}" into="fbooked" emit="day-changed" label="{{ bookLabel }}" disabled="{{ whyNot ? 'true' : 'false' }}" variant=primary/>
+        </row>
+        {{#if whyNot}}<small tone=warn>{{ whyNot }}</small>{{/if}}
+      </col>
+    </row>
+  </section>
     {{#if lines}}
     <col gap=2>
-      <row gap=3 wrap=true align=center>
-        <small>{{ sums.booked }}</small><small>{{ sums.selected }}</small>
-        {{#if sums.itemized}}<small><muted>{{ sums.itemized }}</muted></small>{{/if}}
-        <text tone="{{ sums.tone }}">{{ sums.result }}</text>
-        {{#if canSpread}}<button action="state" state="{{ spreadKey }}" value="{{ spreadOn ? '' : '1' }}" label="{{ spreadOn ? '☑' : '☐' }} Spread the rest" tip="Spread the missing hours over the ticked ticket lines" variant=quiet/>{{/if}}
-      </row>
-      {{#if whyNot}}<small><text tone=warn>{{ whyNot }}</text></small>{{/if}}
       {{#each lines}}
       <let name="inc" value="state | get(ki) | default(include)"/>
       <box tone="{{ inc == '1' ? 'plain' : 'muted' }}">
@@ -44,10 +59,9 @@
         </row>
       </box>
       {{/each}}
-      <row gap=2 justify=end><button run="zeiterfassung.day-book" with="date={{ date }}, state={{ state | tojson }}" into="fbooked" emit="day-changed" label="{{ bookLabel }}" disabled="{{ whyNot ? 'true' : 'false' }}" variant=primary/></row>
     </col>
-    {{#else}}<text tone=muted>{{ empty }}</text>{{/if}}
-  </section>
+    {{#else}}<col align=center><text tone=muted>{{ empty }}</text></col>{{/if}}
   {{/each}}
 </col>
 {{#else}}<text tone=muted>…</text>{{/if}}
+</split>

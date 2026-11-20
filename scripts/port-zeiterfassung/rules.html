@@ -1,7 +1,7 @@
 <data name="r" lambda="zeiterfassung.rules" with="n={{ state.rn }}" when="{{ state.view == 'settings' }}"/>
 <on event="rules-changed" action="reload"/>
 {{#if data.r}}
-<col gap=3>
+<col gap=6>
   {{#if data.rsaved.rsaved.message}}<callout tone=good>{{ data.rsaved.rsaved.message }}</callout>{{/if}}
 
   <section card=true title="Entry type rules">
@@ -17,9 +17,9 @@
       </row>
       {{/each}}
       <grid cols=3 gap=2 min=180>
-        <select bind="tr_job" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="When job is"/>
-        <input bind="tr_text" label="and description contains"/>
-        <select bind="tr_type" options="{{ data.r.typeOptions | tojson }}" label="→ Type"/>
+        <select stack=true bind="tr_job" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="When job is"/>
+        <input stack=true bind="tr_text" label="and description contains"/>
+        <select stack=true bind="tr_type" options="{{ data.r.typeOptions | tojson }}" label="→ Type"/>
       </grid>
       <row gap=2>
         <button run="zeiterfassung.rule-op" with="what=types, op=add, jobNumber={{ state.tr_job }}, description={{ state.tr_text }}, type={{ state.tr_type }}" into="rsaved" then="tr_text=" emit="rules-changed" label="Add rule" variant=primary/>
@@ -41,10 +41,10 @@
       </row>
       {{/each}}
       <grid cols=3 gap=2 min=180>
-        <select bind="rr_f1" options="{{ data.r.fieldOptions | tojson }}" label="Condition 1"/><input bind="rr_v1" label="value"/>
-        <input bind="rr_template" label="Output" placeholder="{ticket}: {desc}"/>
-        <select bind="rr_f2" options="{{ data.r.fieldOptions | tojson }}" label="Condition 2"/><input bind="rr_v2" label="value"/>
-        <input bind="rr_tags" label="Tags" placeholder="mob"/>
+        <select stack=true bind="rr_f1" options="{{ data.r.fieldOptions | tojson }}" label="Condition 1"/><input stack=true bind="rr_v1" label="value"/>
+        <input stack=true bind="rr_template" label="Output" placeholder="{ticket}: {desc}"/>
+        <select stack=true bind="rr_f2" options="{{ data.r.fieldOptions | tojson }}" label="Condition 2"/><input stack=true bind="rr_v2" label="value"/>
+        <input stack=true bind="rr_tags" label="Tags" placeholder="mob"/>
       </grid>
       <small><muted>Leave a value empty to leave its condition out; no condition at all matches every entry.</muted></small>
       <row gap=2>
@@ -68,8 +68,8 @@
       </row>
       {{/each}}
       <grid cols=3 gap=2 min=180>
-        <input bind="mr_match" label="Title contains"/>
-        {{#if data.r.jobOptions}}<select bind="mr_job" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>{{#else}}<text tone=warn>Create a job first — rules book meetings on a job number.</text>{{/if}}
+        <input stack=true bind="mr_match" label="Title contains"/>
+        {{#if data.r.jobOptions}}<select stack=true bind="mr_job" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>{{#else}}<text tone=warn>Create a job first — rules book meetings on a job number.</text>{{/if}}
         <toggle bind="mr_group" label="Group meeting (a mob day)"/>
       </grid>
       <row gap=2>
@@ -77,7 +77,7 @@
         <button run="zeiterfassung.rule-op" with="what=meetings, op=none, apply=true" into="rsaved" emit="rules-changed" label="Reapply to imported meetings" confirm="Move the imported meetings that match a rule to its job?" variant=plain/>
       </row>
       <row gap=2 align=end>
-        <select bind="mr_default" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="Job for every other meeting"/>
+        <select stack=true bind="mr_default" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="Job for every other meeting"/>
         <button run="zeiterfassung.rule-op" with="what=meetings, op=default, jobNumber={{ state.mr_default | default(data.r.meetingDefaultJob) }}" into="rsaved" emit="rules-changed" label="Save" variant=plain/>
       </row>
     </col>
@@ -90,7 +90,7 @@
       <row gap=2 align=center><text>{{ value }}</text><button action="state" state="ruleedit" value="exclude:{{ i }}" label="✎" tip="Edit" variant=quiet/><button run="zeiterfassung.rule-op" with="what=exclude, op=remove, index={{ i }}" into="rsaved" emit="rules-changed" label="✕" variant=quiet/></row>
       {{/each}}
       <row gap=2 align=end>
-        <input bind="ex_value" label="Title contains"/>
+        <input stack=true bind="ex_value" label="Title contains"/>
         <button run="zeiterfassung.rule-op" with="what=exclude, op=add, value={{ state.ex_value }}" into="rsaved" then="ex_value=" emit="rules-changed" label="Add" variant=primary/>
       </row>
     </col>
@@ -101,7 +101,7 @@
     <col gap=2>
       <text tone=muted>Two tasks of one job done at the same time (by their start and hours) are not booked on top of each other. Choose how they are booked when Zeff notices — you can change each case afterwards.</text>
       <row gap=2 align=end wrap=true>
-        <select bind="pm_mode" options="{{ data.r.parallelOptions | tojson }}" value="{{ data.r.parallelMode }}" label="Parallel work, by default"/>
+        <select stack=true bind="pm_mode" options="{{ data.r.parallelOptions | tojson }}" value="{{ data.r.parallelMode }}" label="Parallel work, by default"/>
         <button run="zeiterfassung.rule-op" with="what=parallel, mode={{ state.pm_mode }}" into="rsaved" emit="rules-changed" label="Save" variant=plain/>
       </row>
       <small><muted>{{ data.r.parallelWhat }}</muted></small>
@@ -112,7 +112,7 @@
     <col gap=2>
       <text tone=muted>Tags label entries (typically tickets). Add them here, or just type #tag in an entry description — the hashtag becomes a tag.</text>
       <row gap=2 align=end wrap=true>
-        <input bind="tg_name" label="New tag"/>
+        <input stack=true bind="tg_name" label="New tag"/>
         <button run="zeiterfassung.rule-op" with="what=tag, op=add, name={{ state.tg_name }}" into="rsaved" then="tg_name=" emit="rules-changed" label="Add tag" variant=primary/>
       </row>
       {{#each data.r.tagList}}
@@ -127,7 +127,7 @@
   <dialog bind="tagedit" reset="tn_" title="Rename tag">
     {{#each data.r.tagList | where('id', state.tagedit)}}
     <col gap=2>
-      <input bind="tn_name" label="Name" value="{{ name }}"/>
+      <input stack=true bind="tn_name" label="Name" value="{{ name }}"/>
       <row gap=2><button run="zeiterfassung.rule-op" with="what=tag, op=rename, id={{ id }}, name={{ state.tn_name | default(name) }}" into="rsaved" then="tagedit=" emit="rules-changed" label="Save" variant=primary/></row>
     </col>
     {{/each}}
@@ -143,8 +143,8 @@
       </row>
       {{/each}}
       <row gap=2 align=end>
-        <input bind="nt_label" label="New type"/>
-        <input bind="nt_color" type=color label="Color" value="#6366f1"/>
+        <input stack=true bind="nt_label" label="New type"/>
+        <input stack=true bind="nt_color" type=color label="Color" value="#6366f1"/>
         <button run="zeiterfassung.rule-op" with="what=entry-type, op=add, label={{ state.nt_label }}, color={{ state.nt_color | default('#6366f1') }}" into="rsaved" then="nt_label=" emit="rules-changed" label="Add type" variant=primary/>
       </row>
     </col>
@@ -153,9 +153,9 @@
     {{#each data.r.typeRules}}{{#if state.ruleedit == 'types:' + i}}
     <col gap=2>
       <grid cols=3 gap=2 min=180>
-        <select bind="rt_job" value="{{ jobNumber }}" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="When job is"/>
-        <input bind="rt_text" label="and description contains" value="{{ description }}"/>
-        <select bind="rt_type" value="{{ typeKey }}" options="{{ data.r.typeOptions | tojson }}" label="→ Type"/>
+        <select stack=true bind="rt_job" value="{{ jobNumber }}" options="{{ data.r.jobOptionsAny | tojson }}" search=true label="When job is"/>
+        <input stack=true bind="rt_text" label="and description contains" value="{{ description }}"/>
+        <select stack=true bind="rt_type" value="{{ typeKey }}" options="{{ data.r.typeOptions | tojson }}" label="→ Type"/>
       </grid>
       <small><muted>Now: {{ job }} · {{ text }} → {{ type }}</muted></small>
       <row gap=2><button run="zeiterfassung.rule-op" with="what=types, op=update, index={{ i }}, jobNumber={{ state.rt_job | default(jobNumber) }}, description={{ state.rt_text | default(description) }}, type={{ state.rt_type | default(typeKey) }}" into="rsaved" then="ruleedit=" emit="rules-changed" label="Save" variant=primary/></row>
@@ -164,11 +164,11 @@
     {{#each data.r.reportRules}}{{#if state.ruleedit == 'report:' + i}}
     <col gap=2>
       <grid cols=3 gap=2 min=180>
-        <select bind="rp_f1" value="{{ f1 }}" options="{{ data.r.fieldOptions | tojson }}" label="Condition 1"/><input bind="rp_v1" label="value" value="{{ v1 }}"/>
-        <input bind="rp_template" label="Output" value="{{ template }}"/>
-        <select bind="rp_f2" value="{{ f2 }}" options="{{ data.r.fieldOptions | tojson }}" label="Condition 2"/><input bind="rp_v2" label="value" value="{{ v2 }}"/>
-        <input bind="rp_tags" label="Tags" value="{{ tagsText }}"/>
-        <select bind="rp_f3" value="{{ f3 }}" options="{{ data.r.fieldOptions | tojson }}" label="Condition 3"/><input bind="rp_v3" label="value" value="{{ v3 }}"/>
+        <select stack=true bind="rp_f1" value="{{ f1 }}" options="{{ data.r.fieldOptions | tojson }}" label="Condition 1"/><input stack=true bind="rp_v1" label="value" value="{{ v1 }}"/>
+        <input stack=true bind="rp_template" label="Output" value="{{ template }}"/>
+        <select stack=true bind="rp_f2" value="{{ f2 }}" options="{{ data.r.fieldOptions | tojson }}" label="Condition 2"/><input stack=true bind="rp_v2" label="value" value="{{ v2 }}"/>
+        <input stack=true bind="rp_tags" label="Tags" value="{{ tagsText }}"/>
+        <select stack=true bind="rp_f3" value="{{ f3 }}" options="{{ data.r.fieldOptions | tojson }}" label="Condition 3"/><input stack=true bind="rp_v3" label="value" value="{{ v3 }}"/>
       </grid>
       <small><muted>Now: {{ when }} → {{ template }}</muted></small>
       <row gap=2><button run="zeiterfassung.rule-op" with="what=report, op=update, index={{ i }}, f1={{ state.rp_f1 | default(f1) }}, v1={{ state.rp_v1 | default(v1) }}, f2={{ state.rp_f2 | default(f2) }}, v2={{ state.rp_v2 | default(v2) }}, f3={{ state.rp_f3 | default(f3) }}, v3={{ state.rp_v3 | default(v3) }}, template={{ state.rp_template | default(template) }}, tags={{ state.rp_tags | default(tagsText) }}" into="rsaved" then="ruleedit=" emit="rules-changed" label="Save" variant=primary/></row>
@@ -177,8 +177,8 @@
     {{#each data.r.meetingRules}}{{#if state.ruleedit == 'meetings:' + i}}
     <col gap=2>
       <grid cols=3 gap=2 min=180>
-        <input bind="rm_match" label="Title contains" value="{{ match }}"/>
-        <select bind="rm_job" value="{{ jobNumber }}" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>
+        <input stack=true bind="rm_match" label="Title contains" value="{{ match }}"/>
+        <select stack=true bind="rm_job" value="{{ jobNumber }}" options="{{ data.r.jobOptions | tojson }}" search=true label="Job"/>
       </grid>
       <button action="state" state="rm_group" value="{{ (state | get('rm_group') | default(groupFlag)) == 'true' ? 'false' : 'true' }}" label="{{ (state | get('rm_group') | default(groupFlag)) == 'true' ? '☑' : '☐' }} Group meeting (a mob day)" variant=quiet/>
       <small><muted>Now: {{ match }} → {{ job }}</muted></small>
@@ -187,7 +187,7 @@
     {{/if}}{{/each}}
     {{#each data.r.excludeRules}}{{#if state.ruleedit == 'exclude:' + i}}
     <col gap=2>
-      <input bind="rx_value" label="Title contains" value="{{ value }}"/>
+      <input stack=true bind="rx_value" label="Title contains" value="{{ value }}"/>
       <row gap=2><button run="zeiterfassung.rule-op" with="what=exclude, op=update, index={{ i }}, value={{ state.rx_value | default(value) }}" into="rsaved" then="ruleedit=" emit="rules-changed" label="Save" variant=primary/></row>
     </col>
     {{/if}}{{/each}}
@@ -195,11 +195,34 @@
   <dialog bind="typeedit" reset="et_" title="Entry types">
     {{#each data.r.entryTypes | where('key', state.typeedit)}}
     <col gap=2>
-      <input bind="et_label" label="Name" value="{{ label }}"/>
-      <input bind="et_color" type=color label="Color" value="{{ color }}"/>
+      <input stack=true bind="et_label" label="Name" value="{{ label }}"/>
+      <input stack=true bind="et_color" type=color label="Color" value="{{ color }}"/>
       <row gap=2><button run="zeiterfassung.rule-op" with="what=entry-type, op=update, key={{ key }}, label={{ state.et_label | default(label) }}, color={{ state.et_color | default(color) }}" into="rsaved" then="typeedit=" emit="rules-changed" label="Save" variant=primary/></row>
     </col>
     {{/each}}
   </dialog>
 </col>
 {{#else}}<text tone=muted>…</text>{{/if}}
+{{#if data.s}}
+  <section card=true title="Absences & time off">
+    <col gap=2>
+      <grid cols=5 gap=2 min=130>
+        <input stack=true bind="na_start" type=date label="From" value="{{ data.s.today }}"/>
+        <input stack=true bind="na_end" type=date label="To"/>
+        <select stack=true bind="na_type" options="{{ data.s.absenceTypes | tojson }}" label="Type"/>
+        <input stack=true bind="na_hours" type=number label="Hours/day" placeholder="full day"/>
+        <input stack=true bind="na_until" type=date label="Repeat weekly until"/>
+      </grid>
+      <input stack=true bind="na_note" label="Note"/>
+      <row gap=2><button run="zeiterfassung.absence" with="startDate={{ state.na_start | default(data.s.today) }}, endDate={{ state.na_end }}, type={{ state.na_type }}, hours={{ state.na_hours }}, note={{ state.na_note }}, repeatUntil={{ state.na_until }}" into="ssaved" emit="settings-changed" label="Add absence" variant=primary/></row>
+      {{#if data.s.absences}}
+      <sheet caption="Absences">
+        <shead><srow><scell head=true>From</scell><scell head=true>To</scell><scell head=true>Type</scell><scell head=true num=true>Hours/day</scell><scell head=true>Note</scell><scell head=true></scell></srow></shead>
+        <sbody>{{#each data.s.absences}}<srow><scell><mono size=sm>{{ from }}</mono></scell><scell><mono size=sm>{{ to }}</mono></scell><scell><badge color=gray>{{ type }}</badge></scell><scell num=true>{{ hours }}</scell><scell>{{ note }}</scell><scell><row justify=end><button run="zeiterfassung.absence" with="delete={{ id }}" confirm="{{ confirm }}" emit="settings-changed" label="Delete" variant=danger/></row></scell></srow>{{/each}}</sbody>
+      </sheet>
+      {{#else}}<empty text="No absences recorded."/>{{/if}}
+    </col>
+  </section>
+{{/if}}
+</col>
+</split>

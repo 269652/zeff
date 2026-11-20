@@ -84,7 +84,8 @@ export function analysisScreen(input: { weeks?: unknown; tickets?: string; split
     meetingPercent: `${a.meetingPercent}%`,
     typeSplit: typesWithHours.map((x) => ({ key: x.key, label: x.label, color: x.color, hours: a.byType[x.key] ?? 0, hoursText: `${h(a.byType[x.key] ?? 0)} h`, pct: `${pct(a.byType[x.key] ?? 0)}%` })),
     jobItems: a.byJob.map((j) => ({ key: j.jobNumber, label: `${j.jobNumber} ${j.jobName}`, value: j.hours, valueLabel: `${h(j.hours)} h`, color: "#0ea5e9" })),
-    weekRows: a.weeks.flatMap((w) => typesWithHours.map((x) => ({ week: `W${w.label}`, type: x.label, hours: w.byType[x.key] ?? 0 }))),
+    // (each part in its type's colour; badge: the week's tickets worked — or closed, with Jira — under its column)
+    weekRows: a.weeks.flatMap((w) => typesWithHours.map((x) => ({ week: `W${w.label}`, type: x.label, hours: w.byType[x.key] ?? 0, color: x.color, badge: a.jira ? (w.closed ? `${w.closed}✓` : "") : w.ticketsWorked ? `${w.ticketsWorked}🎫` : "" }))),
     weekBadges: a.weeks.map((w) => ({ week: `W${w.label}`, total: h(w.total), badge: a.jira ? (w.closed ? `${w.closed}✓` : "") : w.ticketsWorked ? `${w.ticketsWorked}🎫` : "" })),
     weekLegend: a.jira ? t("✓ tickets closed") : t("🎫 tickets worked"),
     performance: a.weeks.map((w) => ({ week: `W${w.label}`, days: w.avgResolutionDays ?? 0 })),

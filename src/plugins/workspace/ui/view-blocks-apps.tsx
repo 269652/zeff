@@ -13,13 +13,33 @@ const PALETTE = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#0ea5e9", "#a855f7
 const colorOf = (c: string | undefined, i: number) => (c ? (c.startsWith("#") ? c : (NAMED[c] ?? PALETTE[i % PALETTE.length])) : PALETTE[i % PALETTE.length]);
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-export type SeriesPoint = { label: string; value: number; parts?: number[] };
+export type SeriesPoint = { label: string; value: number; parts?: number[]; text?: string };
 
 /** Several series over the same labels: stacked columns (column), stacked bars (bar), a line each (line); its legend under it. */
-export function SeriesChart({ kind = "column", data, series }: { kind?: string; data: SeriesPoint[]; series: { name: string; color?: string }[] }) {
+export function SeriesChart({ kind = "column", look, data, series }: { kind?: string; look?: string; data: SeriesPoint[]; series: { name: string; color?: string }[] }) {
   if (!data.length || !series.length) return null;
   const colors = series.map((s, i) => colorOf(s.color, i));
   const part = (d: SeriesPoint, i: number) => Math.max(0, d.parts?.[i] ?? 0);
+  // (look=track, columns: a report's weeks — the total above each column, its label under it, and its text= as a small badge)
+  if (kind === "column" && look === "track") {
+    const totals = data.map((d) => series.reduce((n, _s, i) => n + part(d, i), 0));
+    const top = Math.max(...totals, 1);
+    return (
+      <div className="flex items-end gap-2 overflow-x-auto pb-1" style={{ minHeight: 174 }}>
+        {data.map((d, j) => (
+          <div key={d.label} className="flex min-w-9 flex-1 flex-col items-center gap-1">
+            <div className="text-xs font-medium text-zinc-500 tabular-nums">{totals[j] ? fmt(totals[j]) : ""}</div>
+            <div className="flex w-full flex-col-reverse items-stretch" style={{ height: 130 }}>
+              {series.map((s, i) => (part(d, i) > 0 ? <div key={s.name} style={{ height: `${(part(d, i) / top) * 100}%`, backgroundColor: colors[i] }} title={`${s.name}: ${fmt(part(d, i))}`} /> : null))}
+              {totals[j] === 0 && <div className="mt-auto h-0.5 w-full bg-zinc-200 dark:bg-zinc-800" />}
+            </div>
+            <div className="text-xs text-zinc-500">{d.label}</div>
+            {d.text && <div className="rounded bg-sky-50 px-1 text-xs font-medium text-sky-700 tabular-nums dark:bg-sky-950 dark:text-sky-300">{d.text}</div>}
+          </div>
+        ))}
+      </div>
+    );
+  }
   const tip = (d: SeriesPoint) => `${d.label}: ${series.map((s, i) => `${s.name} ${fmt(d.parts?.[i] ?? 0)}`).join(", ")}`;
   const legend = (
     <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-zinc-600 dark:text-zinc-400">
