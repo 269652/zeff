@@ -27,7 +27,7 @@ type Screen = {
   archivedCount: number;
   running: number;
   ticketPage?: { title: string; sessions: { id: number }[] };
-  session?: { found: boolean; runId: number; title: string; statusText: string; active: boolean; turns: { runId: number; ask: string; lines: Line[]; cut: string }[]; canReplyLive: boolean; asks: unknown[]; error: string };
+  session?: { found: boolean; runId: number; title: string; statusText: string; active: boolean; turns: { runId: number; ask: string; blocks: { t: string; text?: string; steps?: (Line & { kind: string })[] }[]; cut: string; meta: string }[]; canReplyLive: boolean; asks: unknown[]; error: string };
 };
 
 let made: ReturnType<typeof build> | null = null;
@@ -117,9 +117,11 @@ test("a session's page: the conversation lines as the log reads them, the state,
   assert.equal(s.session!.found, true);
   assert.equal(s.session!.title, "Fix the login");
   assert.equal(s.session!.active, false);
-  const lines = s.session!.turns.flatMap((t) => t.lines);
-  assert.ok(lines.some((l) => l.k === "say" && l.text === "I fixed it."));
-  assert.ok(lines.some((l) => l.k === "tool" && l.text.includes("npm test")));
+  // (the conversation as blocks: the worker's words, its steps between them — and under the answer which backend answered)
+  const blocks = s.session!.turns.flatMap((t) => t.blocks);
+  assert.ok(blocks.some((l) => l.t === "say" && l.text === "I fixed it."));
+  assert.ok(blocks.flatMap((b) => b.steps ?? []).some((l) => l.kind === "tool" && l.text.includes("npm test")));
+  assert.match(s.session!.turns[s.session!.turns.length - 1].meta, /^Claude CLI/);
   assert.equal(s.session!.canReplyLive, false);
   assert.ok(s.groups.flatMap((g) => g.items).find((r) => r.id === a.run)!.selected);
   const failed = await call<Screen>("work.screen", { sel: `run:${b.run}` });
@@ -165,7 +167,7 @@ test("the screen's template draws without an error: new, a session (idle and ask
   assert.deepEqual(draw(await call("work.screen", { sel: "run:99999" }), { sel: "run:99999" }).errors, []);
   assert.deepEqual(draw(await call("work.screen", { q: "nothing-matches-this" }), { q: "nothing-matches-this" }).errors, []);
   // A live session asking: a permission, a plan, a question — shaped as the lambda gives them.
-  const ASK_BASE = { has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x" };
+  const ASK_BASE = { detailPath: "a.ts", diffs: [{ old: "a", new: "b" }], command: "npm test", url: "", has0: false, has1: false, has2: false, has3: false, qt0: "", qt1: "", qt2: "", qt3: "", submit: "{}", ready: false, more: "", diff: "", reason: "", alwaysLabel: "Always: Bash(npm test)", alwaysTip: "x" };
   const asking = {
     mode: "session",
     groups: [],
@@ -187,7 +189,50 @@ test("the screen's template draws without an error: new, a session (idle and ask
       todoId: 1,
       cost: "$0.10",
       side: [{ todoId: 2, ref: "T-2", text: "side", active: true }],
-      turns: [{ runId: 7, ref: "W-7", ask: "do it", cut: "3 earlier lines are cut.", lines: [{ i: 0, k: "say", text: "hi", answer: "", bad: false, diff: "" }, { i: 1, k: "tool", text: "Edit  a.ts", answer: "", bad: false, diff: "- a\n+ b" }, { i: 2, k: "out", text: "bad", answer: "", bad: true, diff: "" }, { i: 3, k: "ask", text: "ok?", answer: "yes", bad: false, diff: "" }] }],
+      turns: [
+        {
+          runId: 7,
+          ref: "W-7",
+          ask: "do it",
+          label: "",
+          cut: "3 earlier lines are cut.",
+          blocks: [
+            { t: "say", text: "hi" },
+            { t: "you", text: "more", note: "" },
+            { t: "shell", cmd: "! ls", text: "a.ts", bad: false },
+            { t: "note", text: "Turn done" },
+            { t: "raw", text: "plain output" },
+            ...[false, true].map((fold) => ({
+              t: "steps",
+              fold,
+              title: "6 steps",
+              names: "· Edit",
+              shown: [{ kind: "ask", tool: "", text: "ok?", answer: "", bad: false, diffs: [], detail: "", plan: false, full: "", more: false }],
+              steps: [
+                { kind: "tool", tool: "Edit", text: "a.ts", answer: "", bad: false, diffs: [{ old: "a", new: "b" }], detail: "", plan: false, full: "", more: true },
+                { kind: "tool", tool: "Bash", text: "npm test", answer: "", bad: false, diffs: [], detail: "", plan: false, full: "", more: false },
+                { kind: "out", tool: "", text: "bad", answer: "", bad: true, diffs: [], detail: "", plan: false, full: "", more: false },
+                { kind: "ask", tool: "", text: "ok?", answer: "yes", bad: false, diffs: [], detail: "", plan: false, full: "", more: false },
+                { kind: "deny", tool: "", text: "rm", answer: "", bad: true, diffs: [], detail: "", plan: false, full: "", more: false },
+              ],
+            })),
+          ],
+          doing: "It asks you — below",
+          spin: false,
+          summary: "",
+          draft: "",
+          draftLabel: "Draft",
+          error: "",
+          errors: "",
+          gitSummary: "",
+          empty: "",
+          meta: "",
+          metaTip: "",
+        },
+      ],
+      pill: "run",
+      commitTitle: "ABC-1: T",
+      live: { mode: "default", modeOptions: '[["","Mode: Ask"]]', modeTip: "asks", modeTone: "", model: "", modelOptions: '[["","Default"]]', effort: "", effortOptions: '[["","Effort: default"]]', working: false, dot: "warn", queued: "1 queued" },
       kind: "session",
       busy: true,
       queuedLabel: "1 message(s) wait their turn.",
@@ -433,7 +478,8 @@ test("switching to the plugin: its pages are found, the built-in stands in throu
   await port!.switch();
   const { workCodePage, workSettingsPage } = await import("@/plugins/work/to-plugin");
   const { getPage } = await import("@/plugins/workspace/store");
-  assert.equal(getPage(workCodePage()!)?.title, "Sessions");
+  // (the screen's page, at the top of the Workspace under the app's name)
+  assert.ok(["Sessions", "Code"].includes(getPage(workCodePage()!)?.title ?? ""));
   assert.equal(getPage(workSettingsPage()!)?.title, "Code settings");
   assert.equal(state.isInstalled("work"), true, "the built-in counts as there through its port");
   assert.equal(state.onlyThroughPort("work"), true);
