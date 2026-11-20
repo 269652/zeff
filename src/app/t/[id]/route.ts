@@ -1,4 +1,5 @@
 import { prefixedUrl } from "@/lib/redirect";
+import { fullScreen } from "@/lib/full-screen";
 import { isInstalled } from "@/plugins/state";
 import { getTodo } from "@/lib/todos/store";
 import { mergedIntoChain } from "@/lib/todos/merge";
@@ -14,5 +15,5 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const page = todosApp();
   if (!page) return Response.redirect(prefixedUrl("/plugins", request.url), 307);
   const q = todosState({ todos: t && t.status !== "open" ? "done" : undefined }, t?.id);
-  return Response.redirect(prefixedUrl(`/workspace/${page}${q ? `?${q}` : ""}`, request.url), 307);
+  return Response.redirect(prefixedUrl(fullScreen(`/workspace/${page}${q ? `?${q}` : ""}`), request.url), 307);
 }

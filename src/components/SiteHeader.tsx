@@ -383,7 +383,9 @@ export function SiteHeader({
                 {tabs.map((tab) => {
                   // A tab owns its page and what is below it ("/work" is not "/workspace").
                   const under = (base: string) => pathname === base || pathname.startsWith(base.endsWith("/") ? base : `${base}/`);
-                  const active = tab.href === "/" ? pathname === "/" : under(tab.href);
+                  // (A page another tab claims — the Todos app's Workspace page — lights that tab, not the one whose address is around it.)
+                  const claimed = tabs.some((o) => o.href !== tab.href && (o.also ?? []).some(under) && !(tab.also ?? []).some(under));
+                  const active = (tab.href === "/" ? pathname === "/" : under(tab.href)) && !claimed;
                   const current = active || (tab.also ?? []).some(under);
                   const inner = (
                     <>
@@ -451,7 +453,8 @@ export function SiteHeader({
             { href: "/todos", label: t("Todos"), icon: "M5 10.5l3 3 7-7" },
             { href: "/chat", label: t("Chat"), icon: "M4 5.5h12v7.5H9l-3.5 3v-3H4z" },
           ].map((tab) => {
-            const current = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+            const also = tabs.find((x) => x.href === tab.href)?.also ?? [];
+            const current = pathname === tab.href || pathname.startsWith(`${tab.href}/`) || also.some((u) => pathname === u || pathname.startsWith(`${u}/`));
             return (
               <Link key={tab.href} href={tab.href} aria-current={current ? "page" : undefined} className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-xs font-medium ${current ? "text-indigo-600 dark:text-indigo-400" : "text-zinc-600 dark:text-zinc-400"}`}>
                 {current && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-indigo-600 dark:bg-indigo-400" aria-hidden />}

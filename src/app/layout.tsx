@@ -65,7 +65,13 @@ const pluginGroups = (): MenuGroup[] => {
 /** The header's tabs — those whose plugin gives a dropdown (Kanban's boards) as split buttons. */
 const headerTabs = () => {
   const withMenu = tabsWithMenu();
-  return appTabs().map((tab) => ({ href: tab.href, label: tab.label, short: tab.short, also: tab.also, menu: withMenu.has(tab.href) }));
+  // (A tab whose screens are now a Workspace page — Todos, Code — stays lit on that page, as it was on its old address.)
+  const appPage: Record<string, number | null> = { "/todos": todosApp(), "/work": workCodePage() };
+  return appTabs().map((tab) => {
+    const page = appPage[tab.href];
+    const also = page ? [...(tab.also ?? []), `/workspace/${page}`] : tab.also;
+    return { href: tab.href, label: tab.label, short: tab.short, also, menu: withMenu.has(tab.href) };
+  });
 };
 /** The pages the setup assistant leads to: its steps, the plugins' settings, sign-ins, syncs, accounts. */
 const setupPages = () => ["/setup", "/settings/connections", "/plugins", "/accounts", "/preferences", ...PLUGINS.flatMap((p) => (p.settings ? [p.settings.href.split(/[?#]/)[0]] : []))];
@@ -93,6 +99,8 @@ import { PeopleProvider } from "@/plugins/people/PersonMention";
 import { I18nProvider } from "@/components/I18nProvider";
 import { applyLanguage, t } from "@/lib/i18n/server";
 import "./globals.css";
+import { todosApp } from "@/plugins/workspace/todos-app";
+import { workCodePage } from "@/plugins/work/to-plugin";
 
 // The fonts are files of the repository (Geist, SIL Open Font License): Zeff builds and runs without a connection.
 const geistSans = localFont({ src: "./fonts/Geist-latin.woff2", variable: "--font-geist-sans", weight: "100 900", fallback: ["system-ui", "Arial"] });

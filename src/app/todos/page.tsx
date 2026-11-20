@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { t } from "@/lib/i18n/server";
 import { redirect } from "@/lib/redirect";
+import { fullScreen } from "@/lib/full-screen";
 import { PluginNotInstalled } from "@/components/PluginNotInstalled";
 import { isInstalled } from "@/plugins/state";
 
@@ -20,5 +21,6 @@ export default async function TodosPage({ searchParams }: { searchParams: Promis
   const id = todosApp();
   if (!id) return redirect("/plugins");
   const q = todosState(await searchParams);
-  return redirect(`/workspace/${id}${q ? `?${q}` : ""}`);
+  // (Full screen, as the old Todos page had the whole width — Zeff's header stays.)
+  return redirect(fullScreen(`/workspace/${id}${q ? `?${q}` : ""}`));
 }
