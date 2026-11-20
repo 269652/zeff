@@ -68,3 +68,39 @@ The flows' own run time (30 – 380 ms warm) is unchanged; what changed is how l
 - Other plugin screens (Todos, Time tracking, Work sessions, People, Documents) get the route, the kept answers and the status line
   automatically where they use `<data>`; screens that load by server actions of their own (not `<data>`) are not touched yet.
 - Prefetch of the next pages and bundle size (dev mode hides them) were not measured; measure on `next build` before touching them.
+
+## Compiling (`next dev`)
+
+The pages are only as quick as the dev server compiles them. Measured with `node scripts/perf-dev.mjs` (a disposable test server
+— scripts/test-server.mjs — cold, its own dist dir removed first; headless Chrome; the API routes the pages call; an edit and the
+recompile; the server's memory and what it wrote; `--trace` for Turbopack's own trace, `--warm-cache` for a restart).
+
+What made it slow, and what keeps it fast:
+
+1. **Dynamic imports on the server.** The server code has ~3 400 `await import()`. Turbopack makes each of them a chunk group, and
+   by default (in `next dev`) a group carries *everything* its import reaches — also what the page loading it already has. As Zeff
+   grew this got quadratic: 1.4 GB of server chunks for eight pages, the instrumentation alone ~52 000 copies of ~1 900 modules.
+   `experimental.turbopackServerSideNestedAsyncChunking` (next.config.ts) makes a group carry only what isn't loaded yet.
+2. **An entry that loads nothing statically.** Nested chunking only helps when the entry (a page, a route handler, the
+   instrumentation) already has most of Zeff: an entry of a few modules with a dozen sibling `await import()`s of big subgraphs
+   still costs one chunk group per path. Pages have the root layout (≈1 200 modules statically). The instrumentation imports its
+   parts statically from one file (instrumentation-node.ts); route handlers that reach all of Zeff import `@/plugins/contributions`
+   statically (search: 20 s → 4 s). **A new route handler or start step that reaches the plugins: do the same.** Check with
+   perf-dev: an entry whose cold compile is far above its neighbours' is usually this.
+3. **Big server-only libraries bundled per layer.** Instrumentation, pages and route handlers are separate layers that each compile
+   what they use; drizzle, zod and the mail libraries were a quarter of the modules. They are `serverExternalPackages` now (Node
+   loads them from node_modules). Add a new big server-side dependency there too.
+4. **The mods' catalog** (next.config.ts writes zeff-hooks.json at every start): parsed all of src/ — 6–9 s before anything
+   compiled; now only the changed files (cache in `<dist dir>/cache/zeff-hooks.json`).
+5. **The mods' build loader** (scripts/mods/hook-loader.cjs) ran on every file once per layer, parsing it each time: ~20 % of a
+   cold compile (A/B with `ZEFF_MOD_HOOKS=0`). It keeps its answer per file and text now, and next.config.ts hands it only files
+   it would hook (an exported function or const, no "use server") — on par with hooks off.
+
+Still costly: the first page compiles the server components' layer of ~2 000 modules (10–15 s cold), the first route handler
+the route handlers' layer again (8–10 s — the first view's `<data>` waits for it), the instrumentation its own at the start
+(the start ~20 s). They are three layers of the same code; the graph is that big because reading any extension point loads
+every plugin's server.ts (plugins/contributions → server.generated.ts) and most modules reach that. A restart reuses Turbopack's
+cache (`--warm-cache`: pages 0.3–3 s). Compiling the route handlers in the background after the start was tried: it made the
+first page that much slower (both compile at once), so it is not done.
+
+Not causes (measured): source maps (off: no faster), a storm of file writes elsewhere under Turbopack's root (no recompiles).
