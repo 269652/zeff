@@ -1,6 +1,6 @@
 /**
- * Runs once when a Zeff server starts (Node.js only, not while building): context items become
- * one item per linked source (see unifySources), work runs are picked up again, and the periodic
+ * Runs once when a Zeff server starts (Node.js only, not while building): the start guard, then what instrumentation-node.ts
+ * does — context items become one item per linked source (see unifySources), work runs are picked up again, and the periodic
  * syncs start.
  */
 export async function register() {
@@ -13,166 +13,15 @@ export async function register() {
   } catch (e) {
     console.error("[safe mode] the start guard failed", e);
   }
-  // The mods that are on (docs/mods.md): their hooks in place before the first request — also for what renders no page (API, actions).
-  boot?.bootStep("loading the mods");
+  // Everything else in one import (instrumentation-node.ts — why one, not one per part: there): a failure loading it is said, and
+  // counts as a start that didn't get through (the start guard's step names it).
+  boot?.bootStep("loading the server's parts");
+  let node: typeof import("./instrumentation-node");
   try {
-    const failed = (await import("./lib/mods/server")).loadMods(true);
-    if (failed.length) console.warn("[mods] not loaded:", failed.join("; "));
+    node = await import("./instrumentation-node");
   } catch (e) {
-    console.error("[mods] loading failed", e);
-  }
-  // A big streamed page makes Next's gzip stream collect drain listeners while it waits for the socket: Node warned about
-  // "a possible memory leak" on every such page (thousands of lines that hid the real errors in the log). They go when the
-  // response ends, so the limit is raised — a true leak still shows, only later.
-  (await import("node:events")).EventEmitter.defaultMaxListeners = 50;
-  // The sync host (see lib/host/role.ts) does only what the web server hands it: the scheduler and the runs.
-  // Resuming work runs, documents, the plugin event watcher … stay with the web server — twice would be wrong.
-  if (process.env.ZEFF_ROLE === "sync") {
-    try {
-      const { failInterruptedRuns } = await import("./lib/runs/store");
-      const { listAccounts, withAccount } = await import("./db/accounts");
-      // A board run or recap can't outlive the server that ran it — this one, now.
-      for (const a of listAccounts()) withAccount(a.id, failInterruptedRuns);
-    } catch (e) {
-      console.error("[sync host] marking interrupted runs failed", e);
-    }
-    const { startSyncScheduler } = await import("./lib/sync-scheduler");
-    startSyncScheduler();
-    console.log("[sync host] the scheduler and the runs are here now");
-    boot?.bootReady();
+    console.error("[start] loading the server's parts failed", e);
     return;
   }
-  try {
-    const { unifySources } = await import("./lib/contexts");
-    const { copies, split, merged } = unifySources();
-    if (copies + split + merged) {
-      console.log(`[context] one item per source: ${copies} copied message(s) cleared, ${split} item(s) split, ${merged} duplicate(s) merged`);
-    }
-  } catch (e) {
-    console.error("[context] unifying linked sources failed", e);
-  }
-  boot?.bootStep("following packages.json (the plugins)");
-  try {
-    // The runtime plugins' own texts (contributes.locales) for t() on the server — also before the first page is drawn.
-    await import("./lib/i18n/plugin-strings");
-  } catch (e) {
-    console.error("[i18n] reading the plugins' texts failed", e);
-  }
-  try {
-    // packages.json (the plugins this Zeff has, and where from): followed when it changes; the repositories checked for newer versions.
-    (await import("./lib/ext/packages-sync")).startPackagesWatch();
-  } catch (e) {
-    console.error("[packages] starting the watch on packages.json failed", e);
-  }
-  try {
-    // The lock (Settings → Lock): the key watcher ends every session the moment the security key is pulled out.
-    const { lockEnabled } = await import("./lib/lock/shared");
-    if (lockEnabled()) (await import("./lib/lock/detect")).startKeyWatch();
-  } catch (e) {
-    console.error("[lock] starting the key watcher failed", e);
-  }
-  const { runsWork, delegates } = await import("./lib/host/role");
-  // A web server with a sync host: the briefing, the syncs and the recap run there, not here — so a restart of this
-  // server interrupts none of them (and doesn't fail their rows). It copies what the host is doing instead.
-  if (delegates()) (await import("./lib/host/mirror")).startHostMirror();
-  try {
-    if (!runsWork()) throw new Error("skipped");
-    const { failInterruptedRuns } = await import("./lib/runs/store");
-    const { listAccounts, withAccount } = await import("./db/accounts");
-    // A board run or recap can't outlive the server that ran it — in every account, not only the one you're in.
-    for (const a of listAccounts()) withAccount(a.id, failInterruptedRuns);
-  } catch (e) {
-    if (!(e instanceof Error && e.message === "skipped")) console.error("[boards] marking interrupted runs failed", e);
-  }
-  try {
-    // Documents a server that has gone left "being read": waiting again, and read — in every account that keeps documents.
-    const { listAccounts, withAccount } = await import("./db/accounts");
-    const { isInstalled } = await import("./plugins/state");
-    for (const a of listAccounts()) {
-      await withAccount(a.id, async () => {
-        if (!isInstalled("documents")) return;
-        const { readingDocuments } = await import("./plugins/documents/store");
-        if (readingDocuments().length) (await import("./plugins/documents/process")).startProcessing();
-      });
-    }
-  } catch (e) {
-    console.error("[documents] picking up the waiting documents failed", e);
-  }
-  try {
-    const { listAccounts, withAccount } = await import("./db/accounts");
-    for (const a of listAccounts()) {
-      // The ids of plugins that went (kanban, notes, keep-write) out of what you set — once.
-      await withAccount(a.id, async () => {
-        const { onceDone } = await import("./lib/once-done");
-        const { RETIRED_PLUGINS_ONCE, rewriteRetiredPlugins } = await import("./plugins/state");
-        await onceDone(RETIRED_PLUGINS_ONCE, rewriteRetiredPlugins);
-      }).catch((e) => console.error("[plugins] rewriting the retired plugin ids failed", e));
-      // System → Prompts in the Workspace (a page per prompt; what the settings had goes in once).
-      await withAccount(a.id, async () => (await import("./lib/prompts")).ensureSystemPrompts()).catch((e) => console.error("[prompts] the system pages failed", e));
-      // My briefing replaced by Meine Lage, a database with a pipeline like any other (where Jira is in use).
-      await withAccount(a.id, async () => {
-        const { isInstalled } = await import("./plugins/state");
-        if (isInstalled("jira-lage") && isInstalled("workspace")) await (await import("./plugins/jira-lage/to-workspace")).replaceBriefingOnce();
-      }).catch((e) => console.error("[jira] Meine Lage as a pipeline database failed", e));
-    }
-  } catch (e) {
-    console.error("[workspace] setting up the accounts failed", e);
-  }
-  try {
-    const { keepCommentsFromRuns } = await import("./lib/jira/comments");
-    keepCommentsFromRuns(); // once: the comments past runs read
-  } catch (e) {
-    console.error("[boards] keeping comments failed", e);
-  }
-  boot?.bootStep("resuming the work runs");
-  try {
-    const { resumeWork } = await import("./lib/work/runner");
-    // Workers that outlived the old server are watched again, the queue goes on — in every account: one left out kept its
-    // live sessions (a lesson's chat waiting for you) counted as working, and with the workers taken a new message waited
-    // in the queue for good.
-    const { accountsInstalled, listAccounts, withAccount } = await import("./db/accounts");
-    const ids = accountsInstalled() ? listAccounts().filter((a) => !a.demo).map((a) => a.id) : [null];
-    for (const id of ids)
-      try {
-        if (id === null) resumeWork();
-        else withAccount(id, () => resumeWork());
-      } catch (e) {
-        console.error(`[work] resuming work runs${id ? ` (account ${id})` : ""} failed`, e);
-      }
-  } catch (e) {
-    console.error("[work] resuming work runs failed", e);
-  }
-  try {
-    const { writeKnowledgeInstances } = await import("./plugins/knowledge/instances");
-    writeKnowledgeInstances(); // the launcher runs a knowledge server per account with the plugin
-  } catch (e) {
-    console.error("[knowledge] listing the knowledge servers failed", e);
-  }
-  boot?.bootStep("starting the plugins' event watcher");
-  try {
-    const { startExtWatcher } = await import("./lib/ext/work");
-    startExtWatcher(); // external plugins' work.changed / todos.changed events
-  } catch (e) {
-    console.error("[ext] starting the event watcher failed", e);
-  }
-  if (runsWork()) {
-    const { startSyncScheduler } = await import("./lib/sync-scheduler");
-    startSyncScheduler();
-  }
-  // The first page after a start no longer pays for loading the flow engine, the lambda runner and the plugin scan: done now, in the
-  // background, once the server is up (a failure here only means the first page does it, as before).
-  setTimeout(() => {
-    void (async () => {
-      try {
-        const { listAccounts, withAccount } = await import("./db/accounts");
-        const { scanPlugins } = await import("./lib/ext/registry");
-        await import("./plugins/contributions");
-        await Promise.all([import("./plugins/workspace/flows/engine"), import("./plugins/workspace/lambdas/run"), import("./plugins/workspace/actions/flows"), import("./lib/data-cache")]);
-        for (const a of listAccounts()) withAccount(a.id, () => scanPlugins());
-      } catch {
-        // the first page does it
-      }
-    })();
-  }, 1500).unref?.();
-  boot?.bootReady();
+  await node.startServer(boot);
 }

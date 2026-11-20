@@ -127,9 +127,9 @@ const ownDistTaken = (dist) => readRegistry().some((e) => alive(e.pid) && e.repo
 
 /**
  * Start one. Resolves with its registry entry once it answers HTTP (the first page compile is the caller's).
- * opts: { port?, ttlMs?, seeds?: string[], force?, fakeAi?, log? }
+ * opts: { port?, ttlMs?, seeds?: string[], force?, fakeAi?, log?, nextArgs?: string[] (more for `next dev`, e.g. --internal-trace) }
  */
-export async function startTestServer({ port, ttlMs = DEFAULT_TTL_MS, seeds = [], force = false, fakeAi = false, log = (s) => console.error(s), readyTimeoutMs = 5 * 60_000 } = {}) {
+export async function startTestServer({ port, ttlMs = DEFAULT_TTL_MS, seeds = [], force = false, fakeAi = false, log = (s) => console.error(s), readyTimeoutMs = 5 * 60_000, nextArgs = [] } = {}) {
   if (!force && os.freemem() < MIN_FREE_BYTES) throw new Error(`Only ${(os.freemem() / 1024 ** 3).toFixed(1)} GB of RAM free (< 4 GB): no test server started (--force to start anyway).`);
   if (!fs.existsSync(NEXT_BIN)) throw new Error(`No Next.js at ${NEXT_BIN} (node_modules missing?).`);
   port = port ? Number(port) : await freePort();
@@ -154,7 +154,7 @@ export async function startTestServer({ port, ttlMs = DEFAULT_TTL_MS, seeds = []
   };
   const logFile = path.join(dataDir, "server.log");
   const out = fs.openSync(logFile, "a");
-  const child = spawn(process.execPath, [MARKER, NEXT_BIN, "dev", "-H", "127.0.0.1", "-p", String(port)], { cwd: REPO, env, detached: true, stdio: ["ignore", out, out], windowsHide: true });
+  const child = spawn(process.execPath, [MARKER, NEXT_BIN, "dev", "-H", "127.0.0.1", "-p", String(port), ...nextArgs], { cwd: REPO, env, detached: true, stdio: ["ignore", out, out], windowsHide: true });
   child.unref();
   fs.closeSync(out);
   const startedAt = Date.now();

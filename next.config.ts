@@ -96,6 +96,11 @@ const configFor = (modHooks: boolean): NextConfig => {
     experimental: {
       // Context items upload files (screenshots, documents) with their form — up to 20 MB each.
       serverActions: { bodySizeLimit: "50mb" },
+      // The server code has thousands of `await import()`. Without this every one of them is a chunk group with everything it
+      // reaches, even what the page loading it already has: the dev server built and wrote the same modules dozens of times over
+      // (1.4 GB of server chunks for eight pages, ~50 copies of each module for the instrumentation alone). With it, an import
+      // carries only what isn't loaded already: 229 MB, pages compile in a half to a quarter of the time (scripts/perf-dev.mjs).
+      turbopackServerSideNestedAsyncChunking: true,
     },
   };
 
