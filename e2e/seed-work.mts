@@ -163,6 +163,16 @@ fake.copilot[r6] = {
   busy: true,
   permission: { title: "Run shell command", detail: "npm install --save-dev prettier", options: [{ id: "o1", name: "Allow once", kind: "allow_once" }, { id: "o2", name: "Allow always", kind: "allow_always" }, { id: "o3", name: "Deny", kind: "reject_once" }] },
   waiting: null,
+  // (what Copilot CLI's ACP server offers: images in a prompt, its models and reasoning efforts as session config options)
+  features: ["images", "files", "model", "effort"],
+  models: [
+    { value: "auto", label: "Auto" },
+    { value: "claude-sonnet-5.5", label: "Claude Sonnet 5.5" },
+    { value: "gpt-6.2-sol", label: "GPT-6.2 Sol" },
+  ],
+  model: "claude-sonnet-5.5",
+  efforts: ["low", "medium", "high", "xhigh", "max"],
+  effort: "medium",
 };
 
 // 7. Cancelled, ten days ago.

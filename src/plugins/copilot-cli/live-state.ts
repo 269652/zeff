@@ -13,6 +13,13 @@ export type LiveView = {
   permission: { title: string; detail: string | null; options: { id: string; name: string; kind: string }[] } | null;
   /** Its turn ended without a result: what it said last (a question, a status) — your move. */
   waiting: string | null;
+  /** What else it lets you choose (an ACP agent's session config options): its models and the one it uses, its reasoning efforts and the one set. */
+  models?: { value: string; label: string }[];
+  model?: string;
+  efforts?: string[];
+  effort?: string;
+  /** What a message may carry besides text: images, files (as links to them). */
+  features?: ("images" | "files" | "effort" | "model")[];
 };
 
 /** A live session, server side (one Next server holds it; a restart ends it). */
@@ -33,6 +40,8 @@ export type Live = {
   view: LiveView;
   /** What it has said in the current turn (its result is parsed from it). */
   turnText: string;
+  /** Its session config options (ACP: model, reasoning effort …), each an id to set it by. */
+  config?: { id: string; category?: string; currentValue: string; options: { value: string; name: string }[] }[];
   buf: string;
 };
 

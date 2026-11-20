@@ -213,7 +213,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       const live = s
         ? { kind: "session", busy: !!busyNow, host: s.host, queued: s.queued, modes: s.modes, asks: s.asks.map((a) => ({ requestId: a.requestId, tool: a.tool, description: a.description, reason: a.reason, at: a.at, always: a.suggestions.length > 0, alwaysLabel: alwaysLabel(a.suggestions), diffs: a.tool === "Edit" ? [{ old: clip(String(a.input.old_string ?? ""), 1500), new: clip(String(a.input.new_string ?? ""), 1500) }] : a.tool === "MultiEdit" && Array.isArray(a.input.edits) ? (a.input.edits as Record<string, string>[]).slice(0, 8).map((x) => ({ old: clip(String(x.old_string ?? ""), 800), new: clip(String(x.new_string ?? ""), 800) })) : [], input: { command: clip(String(a.input.command ?? ""), 1500), file_path: String(a.input.file_path ?? a.input.path ?? ""), plan: clip(String(a.input.plan ?? ""), 8000), questions: Array.isArray(a.input.questions) ? a.input.questions.slice(0, 4) : undefined, url: String(a.input.url ?? ""), pattern: String(a.input.pattern ?? "") } })), mode: l?.mode ?? "", model: s.model, models: s.models.map((m) => ({ value: m.value, label: m.label })), effort: s.effort, allowBypass: s.allowBypass, features: s.features, provider: s.provider, commands: s.commands.slice(0, 300), shellPending: s.shellPending, sessionElevated: s.elevated }
         : l
-          ? { kind: "live", busy: !!l.busy, permission: l.permission ?? null, mode: l.mode, modes: l.modes, waiting: l.waiting }
+          ? { kind: "live", busy: !!l.busy, permission: l.permission ?? null, mode: l.mode, modes: l.modes, waiting: l.waiting, features: l.features ?? [], models: l.models ?? [], model: l.model ?? "", efforts: l.efforts ?? [], effort: l.effort ?? "" }
           : null;
       const cost = runs.reduce((n, r) => n + (r.costUsd ?? 0), 0) + (s?.costUsd && !last.costUsd ? s.costUsd : 0);
       return {
@@ -757,8 +757,11 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
           const { resolveAttachments } = await import("@/lib/work/attachments");
           const fsx = await import("node:fs");
           const types: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp" };
-          const images = resolveAttachments(pending.map((x) => x.ref)).map((a) => ({ mediaType: types[a.name.split(".").pop()?.toLowerCase() ?? ""] ?? "", data: fsx.readFileSync(/*turbopackIgnore: true*/ a.path).toString("base64") }));
-          (body as { images?: unknown }).images = images;
+          // (pictures as images; any other file as where it is — the session reads it itself)
+          const all = resolveAttachments(pending.map((x) => x.ref));
+          const typeOf = (name: string) => types[name.split(".").pop()?.toLowerCase() ?? ""] ?? "";
+          (body as { images?: unknown }).images = all.filter((a) => typeOf(a.name)).map((a) => ({ mediaType: typeOf(a.name), data: fsx.readFileSync(/*turbopackIgnore: true*/ a.path).toString("base64") }));
+          (body as { files?: unknown }).files = all.filter((a) => !typeOf(a.name));
         }
       }
       if (what === "shell") (body as { cmd?: string }).cmd = String(i.cmd ?? "");
