@@ -449,7 +449,8 @@ export async function handler(event, context) {
         lostLive: status === "running" && !live,
         canReplyLive: status === "running" && (live?.kind === "session" || live?.kind === "live"),
         error: status === "failed" ? (s.last.error ?? "") : "",
-        placeholder: s.active ? (status === "queued" ? t("Waiting for a free worker … — your reply is sent after it") : t("Working … — your reply is sent as soon as it has answered")) : t("Reply …"),
+        // (a live session's box says what it takes, as Claude Code's does)
+        placeholder: live?.kind === "session" && status === "running" ? (live.busy && !live.asks.length ? t("Message — it reads it after this step (Enter)") : t("Message (Enter) · / commands · @ files · ! shell · paste images")) : s.active ? (status === "queued" ? t("Waiting for a free worker … — your reply is sent after it") : t("Working … — your reply is sent as soon as it has answered")) : t("Reply …"),
         priority: priorityOf({ waiting: asks.length > 0, live: !!live, status }),
       };
     }
