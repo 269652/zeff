@@ -89,6 +89,10 @@ const configFor = (modHooks: boolean): NextConfig => {
       "/": ["data/**", "data/**/*", "dist/**", ".claude/**", "knowledge/data/**", ".next-old/**"],
       "/**": ["data/**", "data/**/*", "dist/**", ".claude/**", "knowledge/data/**", ".next-old/**"],
     },
+    // Libraries the server loads from node_modules as they are, not bundled: big, server-side, plain Node packages. Bundled, each of
+    // them was compiled again for every server layer (the instrumentation, the pages, the API routes) — a quarter of the server's
+    // ~2 250 modules (zod, drizzle, the mail libraries …), for nothing. The browser's bundles are untouched.
+    serverExternalPackages: ["drizzle-orm", "zod", "imapflow", "mailparser", "nodemailer", "htmlparser2", "domutils", "css-select", "quickjs-emscripten-core", "@jitl/quickjs-wasmfile-release-sync"],
     // Pages that moved: plain HTTP redirects (src/lib/moved-pages.ts — the proxy does the same under an account's prefix).
     redirects() {
       return Promise.resolve(MOVED_PAGES);
