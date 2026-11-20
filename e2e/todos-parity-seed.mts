@@ -36,7 +36,13 @@ const tickets = [
   ["PROJ-102", "Export to CSV", "In Review", "inprogress"],
   ["PROJ-103", "Dark mode for the settings", "To Do", "todo"],
   ["PROJ-104", "Payment webhook retries", "Testing", "inprogress"],
-].map(([key, summary, status, statusCategory]) => ({ key, summary, url: null, status, statusCategory, issueType: "Story", priority: "Medium", assignee: "Me", parent: null, updatedAt: ago(600), comments: 2, analyzed: true }));
+].map(([key, summary, status, statusCategory]) => ({ key, summary, url: null, status, statusCategory, issueType: "Story", priority: "Medium", assignee: "Me", parent: null, updatedAt: ago(600), comments: 2, analyzed: true, recent: [] as { id: string; author: string; at: string; text: string }[] }));
+// The comments the run read (a todo's context: what it came from).
+tickets[0].recent = [
+  { id: "10001", author: "Anna Berg", at: ago(300), text: "The SSO login loops after the redirect — can you review the fix in the MR?" },
+  { id: "10002", author: "Thomas Kurz", at: ago(240), text: "I added a test for the callback; please check the session cookie too." },
+];
+tickets[1].recent = [{ id: "10003", author: "Anna Berg", at: ago(500), text: "Should the CSV export include archived rows? The customer asks." }];
 const result = {
   lede: "Two tickets wait on you, the export is in review.",
   tickets: tickets.map((t, i) => ({ key: t.key, attention: ["feedback", "active", "check", "spec"][i], lead: `${t.summary}: what is next.`, summary: "", happened: [], todos: [], resolved: [], flags: [] })),
@@ -49,12 +55,12 @@ sq.prepare("insert into board_runs (status, jql, model, tickets, result, cost_us
 );
 const runId = (sq.prepare("select max(id) id from board_runs").get() as { id: number }).id;
 
-type T = { ticket?: string; text: string; kind?: string; owner?: string; status?: string; due?: string | null; flagged?: boolean; deferred?: boolean; needsInput?: string; workerDone?: object; byWorker?: boolean; note?: string; source?: string; refs?: string[]; also?: string[]; recurrence?: object; userNotes?: object[]; created?: number };
+type T = { ops?: object[]; planned?: object[]; why?: string; ticket?: string; text: string; kind?: string; owner?: string; status?: string; due?: string | null; flagged?: boolean; deferred?: boolean; needsInput?: string; workerDone?: object; byWorker?: boolean; note?: string; source?: string; refs?: string[]; also?: string[]; recurrence?: object; userNotes?: object[]; created?: number };
 const add = (t: T): number => {
   const created = ago(t.created ?? 3000);
   const r = sq
     .prepare(
-      "insert into todos (ticket, text, kind, owner, status, source, refs, note, run_id, due, flagged_at, deferred_at, needs_input, worker_done, by_worker, also_tickets, recurrence, user_notes, created_at, updated_at, done_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "insert into todos (ticket, text, kind, owner, status, source, refs, note, run_id, due, flagged_at, deferred_at, needs_input, worker_done, by_worker, also_tickets, recurrence, user_notes, created_at, updated_at, done_at, ops, planned, auto_ops_why) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       t.ticket ?? "",
@@ -78,16 +84,19 @@ const add = (t: T): number => {
       created,
       created,
       t.status && t.status !== "open" ? ago(120) : null,
+      JSON.stringify(t.ops ?? []),
+      JSON.stringify(t.planned ?? []),
+      t.why ?? null,
     );
   return Number(r.lastInsertRowid);
 };
 
 const ids = {
-  important: add({ ticket: "PROJ-101", text: "Review the SSO login fix", kind: "review", flagged: true }),
-  overdue: add({ ticket: "PROJ-102", text: "Answer Anna about the CSV export", kind: "reply", due: inDays(-3), needsInput: "Should the export include archived rows?" }),
-  today: add({ ticket: "PROJ-103", text: "Comment on the dark mode spec", kind: "comment", due: inDays(0) }),
+  important: add({ ticket: "PROJ-101", text: "Review the SSO login fix", kind: "review", flagged: true, refs: ["jira-comment:10001", "jira-comment:10002"], userNotes: [{ at: ago(100), text: "The MR is !168 — check the cookie flags." }], planned: [{ path: null, steps: [{ text: "Merge the SSO fix", kind: "merge", owner: "me" }, { text: "Deploy to staging", kind: "deploy", owner: "me" }] }] }),
+  overdue: add({ ticket: "PROJ-102", text: "Answer Anna about the CSV export", kind: "reply", due: inDays(-3), needsInput: "Should the export include archived rows?", refs: ["jira-comment:10003"] }),
+  today: add({ ticket: "PROJ-103", text: "Comment on the dark mode spec", kind: "comment", due: inDays(0), ops: [{ type: "jira-comment", ticket: "PROJ-103", body: "The spec looks good. Two questions: does the toggle follow the system setting, and do charts switch too?" }] }),
   week: add({ text: "Pay the hosting invoice", kind: "other", due: inDays(3), recurrence: { freq: "monthly", interval: 1 }, note: "Invoice 2026-11 from the hosting company", source: "Mail from billing" }),
-  later: add({ ticket: "PROJ-104", text: "Update the webhook retry docs", kind: "document", due: inDays(20), workerDone: { at: ago(20), by: "Copilot · W-3", note: "Docs updated in the README" } }),
+  later: add({ ticket: "PROJ-104", text: "Update the webhook retry docs", kind: "document", due: inDays(20), workerDone: { at: ago(20), by: "Copilot · W-3", note: "Docs updated in the README" }, ops: [{ type: "jira-transition", ticket: "PROJ-104", to: "Done" }, { type: "jira-comment", ticket: "PROJ-104", body: "The retry docs are updated in the README." }], why: "The worker reports the docs done — the ticket can be closed with a note." }),
   none: add({ ticket: "PROJ-101", text: "Check the failing nightly build", kind: "fix", also: ["PROJ-104"], workerDone: { at: ago(25), by: "Review", note: "The last build was green", suggested: true } }),
   none2: add({ text: "Prepare the sprint demo", kind: "other", source: "Weekly meeting", userNotes: [{ at: ago(200), text: "Show the export and the dark mode." }] }),
   deferred: add({ ticket: "PROJ-103", text: "Clean up old feature flags", kind: "implement", deferred: true }),
@@ -96,6 +105,22 @@ const ids = {
   done2: add({ ticket: "PROJ-104", text: "Reply to the vendor about retries", kind: "reply", status: "dismissed" }),
   worker: add({ ticket: "PROJ-104", text: "Run the migration script on staging", kind: "deploy", byWorker: true }),
 };
+
+// What the knowledge base has on the overdue one (the Knowledge plugin on): a page, an entity, a system's address.
+try {
+  setInstalled("knowledge" as never, true);
+} catch {
+  // not in this version
+}
+sq.prepare("update todos set knowledge = ? where id = ?").run(
+  JSON.stringify({
+    at: ago(60),
+    pages: [{ id: "conf:4711", title: "CSV export — design", space: "DEV", url: "https://wiki.example.com/csv-export", summary: "How the export writes rows, which columns, archived rows are left out by default.", snippet: "archived rows are left out", heading: "Rows", score: 0.8 }],
+    entities: [{ id: 1, name: "CSV export", type: "feature", summary: "The export of the list as CSV.", aliases: [], pages: 1, related: [] }],
+    links: [{ env: "test", label: "Export (test)", url: "https://test.example.com/export", page: "conf:4711" }],
+  }),
+  ids.overdue,
+);
 
 // Time on the important one (45 min, by hand).
 try {

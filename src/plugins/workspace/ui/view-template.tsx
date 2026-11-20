@@ -4,7 +4,7 @@ import { confirmAction } from "@/components/confirm";
 import { ComputeData } from "./compute-data";
 import { GiroCode } from "@/components/GiroCode";
 import { TimelineList } from "@/plugins/timeline/ui/TimelineList";
-import { SourcesBlock } from "./sources-block";
+import { SourcesBlock, TodoContextBlock } from "./sources-block";
 import { SuggestedActions } from "./suggested";
 import { KnowPanel } from "@/plugins/know/ui/KnowPanel";
 import { ExtFrame } from "@/components/ext/ExtFrame";
@@ -881,7 +881,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return typeof value === "string" && value ? <SuggestedActions key={key} rowId={Number(a.row)} value={value} onDone={() => (props.reload(), app.reload())} /> : null;
       }
       case "sources":
-        return <SourcesBlock key={key} refs={a.refs} open={a.open === "true"} />;
+        return a.todo ? <TodoContextBlock key={key} todo={Number(a.todo)} summary={a.summary} show={a.show === "knowledge" ? "knowledge" : "context"} /> : <SourcesBlock key={key} refs={a.refs} open={a.open === "true"} />;
       case "rowtimeline":
         return <TimelineList key={key} row={Number(a.row)} limit={Number(a.limit) || 20} compact filters={false} title={a.title || undefined} hideWhenOff />;
       case "girocode": {
