@@ -1,11 +1,11 @@
-import { tFor } from "./lib.mjs";
+import { fileStatusText, tFor } from "./lib.mjs";
 
 /**
  * A session's Changes and Preview panes (views/work.html reads it as data.panes): the files it changed since it began with their diffs (each patch as lines
  * marked added / removed / context), and its dev servers. The kernel's read work.session-changes does the git; this shapes it.
  * event: { run }
  */
-const FILE = { added: "text-good", untracked: "text-good", modified: "text-warn", deleted: "text-bad", renamed: "text-info" };
+const TONE = { added: "good", untracked: "good", modified: "warn", deleted: "bad", renamed: "info" };
 
 export async function handler(event, context) {
   const t = tFor(context.language);
@@ -13,7 +13,6 @@ export async function handler(event, context) {
   if (!run) return { found: false };
   const c = await context.zeff.call("work.session-changes", { run });
   if (!c.found) return { found: false, error: c.error };
-  const status = { added: t("added"), untracked: t("new"), modified: t("changed"), deleted: t("deleted"), renamed: t("renamed") };
   const added = c.files.reduce((n, f) => n + f.added, 0);
   const removed = c.files.reduce((n, f) => n + f.removed, 0);
   return {
@@ -21,11 +20,14 @@ export async function handler(event, context) {
     error: c.error,
     summary: `${t("{n} file(s)", { n: c.files.length })} · +${added} −${removed}${c.base ? ` · ${t("since {base}", { base: c.base.slice(0, 8) })}` : ""}`,
     empty: !c.files.length,
+    // (a few files: each shown open, as the built-in did up to eight)
+    few: c.files.length <= 8,
     emptyText: t("No changes yet."),
     truncated: c.truncated ? t("Some diffs are too big to show — see git.") : "",
     files: c.files.map((f) => ({
       path: f.path,
-      status: status[f.status] ?? f.status,
+      status: fileStatusText(t, f.status),
+      tone: TONE[f.status] ?? "",
       added: f.added,
       removed: f.removed,
       binary: f.binary,

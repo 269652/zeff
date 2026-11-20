@@ -54,8 +54,9 @@ const scopeOf = (v: unknown) => (/^(new|run:\d+)$/.test(String(v ?? "")) ? Strin
 function slim(l: import("@/lib/work/shared").WorkLogLine) {
   const o: Record<string, unknown> = { ...l };
   for (const k of ["text", "answer", "cmd"]) if (typeof o[k] === "string") o[k] = clip(o[k] as string, k === "text" ? 2400 : 600);
-  delete o.full;
-  delete o.detail;
+  // (a long output and a tool's whole input: kept short — the step unfolds to them)
+  if (typeof o.full === "string") o.full = clip(o.full, 4000);
+  if (typeof o.detail === "string") o.detail = clip(o.detail, 4000);
   if (Array.isArray(o.diff)) o.diff = (o.diff as { old: string; new: string }[]).slice(0, 3).map((d) => ({ old: clip(d.old, 400), new: clip(d.new, 400) }));
   return o;
 }
@@ -68,7 +69,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
     summary:
       "The tickets with sessions (a session = a todo's conversation with a worker, shown as its newest run), each with its sessions: id, ref, status, whether it is live or waits for you, provider, title, time, todo, branch, archived; and how many are archived and running.",
     input: [f("archived", "boolean", { help: "Your archived sessions too (marked)." })],
-    output: "{ tickets: [{ ticket, summary, status, url, openTodos, active, lastAt, sessions: [{ id, ref, status, live, waiting, provider, title, at, todoId, branch, archived }] }], archivedCount, running, gitMissing, settingsPage, tabs: [{ id, title, plugin, href }], panels: [{ id, plugin, entry, title }] }",
+    output: "{ tickets: [{ ticket, summary, status, url, assignee, issueType, openTodos, active, lastAt, sessions: [{ id, ref, status, live, waiting, provider, title, at, todoId, branch, archived }] }], archivedCount, running, gitMissing, settingsPage, tabs: [{ id, title, plugin, href }], panels: [{ id, plugin, entry, title }] }",
     run: async (i) => {
       need();
       const { sessionTickets } = await import("@/lib/work/sessions");
@@ -78,7 +79,13 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       const { gitAvailable, gitMissingMessage } = await import("@/lib/git");
       const { extWorkPanels } = await import("@/lib/ext/work");
       return {
-        tickets: tickets.filter((x) => x.sessions.length > 0),
+        // (a ticket's card as its page shows it: who has it, what kind)
+        tickets: await (async () => {
+          const shown = tickets.filter((x) => x.sessions.length > 0);
+          const { getTicketCards } = await import("@/lib/jira/store");
+          const cards = getTicketCards(shown.map((x) => x.ticket));
+          return shown.map((x) => ({ ...x, assignee: cards[x.ticket.toUpperCase()]?.assignee ?? null, issueType: cards[x.ticket.toUpperCase()]?.issueType ?? null }));
+        })(),
         archivedCount: archivedSessions().size,
         running,
         gitMissing: gitAvailable() ? "" : gitMissingMessage(),
@@ -146,7 +153,7 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
       "A session (any run of its conversation): the todo, its ticket card, the newest run's state, the conversation — every run on the todo, oldest first, each with your words and the last `tail` log lines of all (default 150) — and what a live session asks of you (asks: a permission, a plan, a question), its modes, whether it works.",
     input: [f("run", "number", { required: true }), f("tail", "number", { help: "How many log lines at most (all runs together), the newest." })],
     output:
-      "{ found, todo: { id, ref, text }, ticket, card, last: { id, ref, status, provider, branch, repo, cwd, costUsd, elevated }, active, statusText, cost, side: [{ todoId, text, active }], turns: [{ runId, ref, label, ask, status, lines }], live: { busy, host, queued, modes, asks }, git }",
+      "{ found, todo: { id, ref, text }, ticket, card, last: { id, ref, status, provider, branch, repo, cwd, costUsd, elevated }, active, statusText, cost, side: [{ todoId, text, active }], turns: [{ runId, ref, label, ask, status, lines, provider, model, durationMs, turnsTaken, costUsd, summary, draft, channel, outcome, error, errors, gitSummary, sessionId }], live: { busy, host, queued, modes, asks }, git }",
     run: async (i) => {
       need();
       const { getRun, runsForTodos, toRunView } = await import("@/lib/work/store");
@@ -170,12 +177,28 @@ export const WORK_FLOW_ACTIONS: FlowAction[] = [
         .slice()
         .reverse()
         .map((r) => {
-          const lines = readLog(r.id).lines;
+          const read = readLog(r.id);
+          const lines = read.lines;
           const take = Math.min(lines.length, Math.max(0, room));
           room -= take;
+          // (what answered it, for the line under the answer: backend, model, how long, turns, cost — and how it ended)
+          const model = [...lines].reverse().find((x) => x.k === "start" && x.model);
           return {
             runId: r.id,
             ref: r.ref,
+            provider: r.provider,
+            model: (model && model.k === "start" ? model.model : null) ?? r.model ?? null,
+            durationMs: r.durationMs ?? null,
+            turnsTaken: r.turns ?? null,
+            costUsd: r.costUsd ?? null,
+            summary: r.summary?.trim() || r.result?.draft?.trim() || "",
+            draft: r.result?.draft?.trim() ?? "",
+            channel: r.result?.channel ?? "",
+            outcome: r.result?.outcome ?? null,
+            error: r.error ?? "",
+            errors: read.errors.slice(-5),
+            gitSummary: r.gitSummary ?? "",
+            sessionId: r.sessionId ?? null,
             label: `${WORK_MODE_LABELS[r.mode]}${todo ? ` · ${todoRef(todo.id)} ${todo.text}` : ""}`,
             ask: todo?.userNotes.filter((n) => n.kind === "instruction" && n.run === r.id).map((n) => n.text).join("\n\n") || null,
             status: r.status,

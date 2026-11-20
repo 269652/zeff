@@ -90,23 +90,23 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // A sidebar of entries: drawn beside the view, or (the view's setting) under its database in the Workspace tree.
   nav: T({ title: "text" }),
   entry: T({ id: "text", label: "text", icon: "text", row: "text", state: "text", value: "text", href: "url", n: "text", group: "text" }, true),
-  row: T({ fill: { oneOf: ["true", "false"] }, tip: "text", gap: "int", align: { oneOf: ["start", "center", "end", "baseline"] }, wrap: { oneOf: ["true", "false"] }, justify: { oneOf: ["start", "between", "end"] } }),
+  row: T({ /** true: set in like a line under the one above (pl-4). */ indent: { oneOf: ["true", "false"] }, fill: { oneOf: ["true", "false"] }, tip: "text", gap: "int", align: { oneOf: ["start", "center", "end", "baseline"] }, wrap: { oneOf: ["true", "false"] }, justify: { oneOf: ["start", "between", "end"] } }),
   // masonry=true: the cells flow down columns, each in the shortest (cards of different heights).
   grid: T({ cols: "int", gap: "int", min: "int", /** Fixed columns, e.g. "3rem repeat(7,minmax(0,1fr)) 4.5rem" (a calendar: every row lines up); minw: the least width in px, narrower scrolls sideways. */ tracks: "text", minw: "int", masonry: { oneOf: ["true", "false"] } }),
-  col: T({ gap: "int", fill: { oneOf: ["true", "false"] }, width: "int", tip: "text", align: { oneOf: ["start", "center", "end"] }, max: "text", /** bottom: stays at the pane's bottom (a reply box). */ dock: { oneOf: ["bottom"] }, /** At most this % of the screen's height, scrolling in itself. */ scroll: "int", /** Opened at its end (a chat). */ end: { oneOf: ["true", "false"] } }),
+  col: T({ /** The text size of what is in it: xs | sm. */ size: { oneOf: ["xs", "sm"] }, gap: "int", fill: { oneOf: ["true", "false"] }, width: "int", tip: "text", align: { oneOf: ["start", "center", "end"] }, max: "text", /** bottom: stays at the pane's bottom (a reply box). */ dock: { oneOf: ["bottom"] }, /** At most this % of the screen's height, scrolling in itself. */ scroll: "int", /** Opened at its end (a chat). */ end: { oneOf: ["true", "false"] } }),
   truncate: T({ tip: "text" }),
   mono: T({ tip: "text" }),
   b: T({ tip: "text" }),
   small: T({ tip: "text" }),
   muted: T({ tip: "text" }),
   // open=wide: open on a wide screen, folded on a phone.
-  section: T({ title: "text", aside: "text", card: { oneOf: ["true", "false"] }, collapsible: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false", "wide"] }, scroll: "int", /** true: a small grey fold heading with its count (a list's groups). */ dense: { oneOf: ["true", "false"] }, /** with dense: not capitals, no count — a fold line in a conversation ('5 steps · Read, Edit'). */ quiet: { oneOf: ["true", "false"] } }),
+  section: T({ /** bar: a file's head — a grey bar with the title in its tone (good|warn|bad|info), the aside cut to one line and the added/removed counts (green/red); folds what is in it. */ look: { oneOf: ["plain", "bar"] }, tone: { oneOf: ["plain", "good", "warn", "bad", "info"] }, added: "text", removed: "text", title: "text", aside: "text", card: { oneOf: ["true", "false"] }, collapsible: { oneOf: ["true", "false"] }, open: { oneOf: ["true", "false", "wide"] }, scroll: "int", /** true: a small grey fold heading with its count (a list's groups). */ dense: { oneOf: ["true", "false"] }, /** with dense: not capitals, no count — a fold line in a conversation ('5 steps · Read, Edit'). */ quiet: { oneOf: ["true", "false"] } }),
   /** A row of a list you pick from: a dot for how it stands, its label (cut to one line), a small mono note, the time at the end; what is inside is its '⋯' menu, shown on hover. */
   item: T({ state: "text", value: "text", label: "text", sub: "text", meta: "text", tone: { oneOf: ["run", "queued", "done", "bad", "off", "warn", "none"] }, selected: { oneOf: ["true", "false"] }, dim: { oneOf: ["true", "false"] }, tip: "text" }),
   /** In a pane (flush=true): the part that scrolls by itself and takes the room left — a conversation (end=true: opened at its end and kept there as more comes, unless you scrolled up; center=true: in a column in the middle). */
-  scroller: T({ end: { oneOf: ["true", "false"] }, pad: { oneOf: ["true", "false"] }, center: { oneOf: ["true", "false"] } }),
+  scroller: T({ end: { oneOf: ["true", "false"] }, /** true: room all round; top: a little above. */ pad: { oneOf: ["true", "false", "top"] }, center: { oneOf: ["true", "false"] }, /** true: what is in it stands in the middle of the height (a start page). */ middle: { oneOf: ["true", "false"] } }),
   /** In a pane (flush=true): a part that stays — at the top (a header) or the bottom (a reply box) — while the scroller between them scrolls. */
-  dock: T({ edge: { oneOf: ["top", "bottom"] }, /** true: no frame of its own — a line under a header, room above a reply box (a plain screen). */ plain: { oneOf: ["true", "false"] }, /** true: its content in a column in the middle (as a centered conversation above it). */ center: { oneOf: ["true", "false"] } }),
+  dock: T({ edge: { oneOf: ["top", "bottom"] }, /** true: no frame of its own — a line under a header, room above a reply box (a plain screen). */ plain: { oneOf: ["true", "false"] }, /** true: its content in a column in the middle (as a centered conversation above it). */ center: { oneOf: ["true", "false"] }, /** The rule at its edge: true / false (a plain top dock has one, a plain bottom dock none). */ line: { oneOf: ["true", "false"] } }),
   /** A message of yours in a conversation: right-aligned in a rounded grey bubble, a long one cut with 'Show all'. */
   bubble: T({ text: "code", end: { oneOf: ["true", "false"] }, note: "text" }, true),
   strike: T({}),
@@ -119,9 +119,9 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   sfoot: T({}),
   srow: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, hover: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] } }),
   scell: T({ head: { oneOf: ["true", "false"] }, row: { oneOf: ["true", "false"] }, num: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "today", "off", "muted", "good", "warn", "bad"] }, span: "int", dim: { oneOf: ["true", "false"] }, top: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tip: "text" }),
-  box: T({ /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, scroll: "int" }),
-  heading: T({ level: { oneOf: ["1", "2", "3"] } }),
-  text: T({ tone: { oneOf: ["plain", "muted", "good", "warn", "bad"] }, tip: "text", pre: { oneOf: ["true", "false"] } }),
+  box: T({ /** true: a highlighted line (a tinted strip, no border) — with tone. */ line: { oneOf: ["true", "false"] }, /** field=true: a rounded card around a text box and its buttons (a chat's message box) — no padding of its own, lit while you type in it. */ field: { oneOf: ["true", "false"] }, /** A small cell (a calendar day): less padding, the content spread top and bottom. */ dense: { oneOf: ["true", "false"] }, title: "text", /** Beside the title, not bold (what the title is about). */ aside: "text", /** true: less padding, no shadow (a card inside a reply area). */ compact: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "muted", "good", "warn", "bad", "info", "ask", "accent"] }, scroll: "int" }),
+  heading: T({ /** 4: a small grey label in capitals over a list. */ level: { oneOf: ["1", "2", "3", "4"] } }),
+  text: T({ tone: { oneOf: ["plain", "muted", "faint", "good", "warn", "bad"] }, tip: "text", pre: { oneOf: ["true", "false"] } }),
   tile: T({ label: "text", value: "text", sub: "text", tint: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "good", "warn", "bad"] }, tip: "text", icon: "text", trend: "text", spark: "text" }),
   bar: T({ value: "num", max: "num", color: "color", fill: "paint" }, true),
   dot: T({ color: "paint" }, true),
@@ -164,7 +164,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // A transfer as a GiroCode (EPC QR code) to scan with a banking app, its fields beside it.
   girocode: T({ name: "text", iban: "text", bic: "text", amount: "text", purpose: "text" }, true),
   panes: T({ /** true: no frames — the columns stand on the page as they are (a full-window app: a sidebar and its content). */ plain: { oneOf: ["true", "false"] } }),
-  pane: T({ title: "text", aside: "text", width: "int", flush: { oneOf: ["true", "false"] } }),
+  pane: T({ title: "text", aside: "text", width: "int", flush: { oneOf: ["true", "false"] }, /** true: a « at its top folds it away (a » brings it back), kept in this browser — a sidebar. */ fold: { oneOf: ["true", "false"] } }),
   cover: T({ src: "url", h: "int", title: "text", subtitle: "text" }, true),
   callout: T({ tone: { oneOf: ["info", "good", "warn", "bad"] }, title: "text", icon: "text" }),
   empty: T({ icon: "text", title: "text", text: "text" }),
@@ -194,7 +194,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // The view drawn again every so many seconds (1 – 3600): now and what is worked out of it go on (a stopwatch, a countdown).
   tick: T({ every: "num" }, true),
   selected: T({ empty: "text" }),
-  button: T({ action: "text", label: "text", icon: "text", request: "text", row: "text", prop: "text", value: "text", values: "text", state: "text", href: "url", confirm: "text", variant: { oneOf: ["primary", "plain", "quiet", "danger", "link", "send"] }, print: { oneOf: ["true", "false"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, wide: { oneOf: ["true", "false"] }, keys: "text", emit: "text", run: "text", do: "text", fill: "text", undo: "text", with: "text", into: "text", done: "text", then: "text", transition: "text", note: { oneOf: ["true", "false"] }, score: "text", correct: "text", total: "text", feedback: "text", finished: { oneOf: ["true", "false"] }, chat: "text", key: "text", text: "text", title: "text" }, true),
+  button: T({ action: "text", label: "text", icon: "text", request: "text", row: "text", prop: "text", value: "text", values: "text", state: "text", href: "url", confirm: "text", variant: { oneOf: ["primary", "plain", "quiet", "danger", "link", "send", "inline"] }, /** A second, smaller line under the label (an option and what it means). */ sub: "text", print: { oneOf: ["true", "false"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, wide: { oneOf: ["true", "false"] }, keys: "text", emit: "text", run: "text", do: "text", fill: "text", undo: "text", with: "text", into: "text", done: "text", then: "text", transition: "text", note: { oneOf: ["true", "false"] }, score: "text", correct: "text", total: "text", feedback: "text", finished: { oneOf: ["true", "false"] }, chat: "text", key: "text", text: "text", title: "text" }, true),
   // A flow's output loaded into data.<name> — again whenever what it is called with changes (flows/).
   data: T({ name: "text", flow: "text", lambda: "text", compute: "text", do: "text", with: "text", when: "text", /** In ms (up to 3000). */ debounce: "num", /** In s. */ every: "num", reload: { oneOf: ["true", "false"] } }, true),
   // A row's lifecycle: its transitions as buttons (only those it can take now enabled) and its way so far.
@@ -205,7 +205,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   ask: T({ placeholder: "text", suggest: "text", intro: "text" }, true),
   dossier: T({ focus: "text", empty: "text", plain: { oneOf: ["true", "false"] } }, true),
   lookup: T({ source: "text", map: "text", placeholder: "text", unique: "text", language: "text", open: { oneOf: ["true", "false"] } }, true),
-  select: T({ bind: "text", options: "text", value: "text", label: "text", /** true: the label above the field and the field as wide as its place (a form). */ stack: { oneOf: ["true", "false"] }, /** Typed to find (an autocomplete), as wide as there is room. */ search: { oneOf: ["true", "false"] }, /** An event sent once a value is picked (its value in the state): saved at once. */ emit: "text" }, true),
+  select: T({ bind: "text", options: "text", value: "text", label: "text", /** quiet: small and borderless, as wide as what is picked (in a message box's row); tone=info|warn|bad colours it. */ look: { oneOf: ["plain", "quiet"] }, /** sm: small, filling its row, the label beside it (a list's sort). */ size: { oneOf: ["sm", "md"] }, tone: { oneOf: ["plain", "info", "warn", "bad"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, /** true: the label above the field and the field as wide as its place (a form). */ stack: { oneOf: ["true", "false"] }, /** Typed to find (an autocomplete), as wide as there is room. */ search: { oneOf: ["true", "false"] }, /** An event sent once a value is picked (its value in the state): saved at once. */ emit: "text" }, true),
   toggle: T({ bind: "text", label: "text" }, true),
   field: T({ name: "text" }, true),
   part: T(ANY),
@@ -246,7 +246,15 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // Settings of the app: declared with <setting>, edited in <settings/>, read as settings.<name>.
   setting: T({ name: "text", label: "text", type: { oneOf: ["text", "number", "toggle", "select"] }, options: "text", default: "text" }, true),
   settings: T({ title: "text" }, true),
-  upload: T({ bind: "text", label: "text", accept: "text", max: "int", /** An event sent once the file is read (its text in the state): what the view does with it at once. */ emit: "text", /** A flow that takes the file(s) as they are (bytes, not text): its input is `with` plus name, mime, size and token (`files.take` keeps the file) — once per file. */ run: "text", with: "text", multiple: { oneOf: ["true", "false"] }, done: "text", /** view: files can be dropped anywhere on the view (it is outlined while they are dragged over). */ zone: { oneOf: ["view"] } }, true),
+  upload: T({ /** icon: only its label (📎) as a small square button. */ look: { oneOf: ["button", "icon"] }, tip: "text", bind: "text", label: "text", accept: "text", max: "int", /** An event sent once the file is read (its text in the state): what the view does with it at once. */ emit: "text", /** A flow that takes the file(s) as they are (bytes, not text): its input is `with` plus name, mime, size and token (`files.take` keeps the file) — once per file. */ run: "text", with: "text", multiple: { oneOf: ["true", "false"] }, done: "text", /** view: files can be dropped anywhere on the view (it is outlined while they are dragged over). */ zone: { oneOf: ["view"] } }, true),
+  /** A change, coloured: an edit's old and new text line by line (old=, new=), or a unified patch from git (patch=). */
+  diff: T({ old: "code", new: "code", patch: "code" }, true),
+  /** A command's output on a dark ground (text=); title=: folded under that line (the command), tone=warn|bad its colour, open=true unfolded. */
+  terminal: T({ text: "code", title: "text", tone: { oneOf: ["plain", "warn", "bad"] }, open: { oneOf: ["true", "false"] } }, true),
+  /** A small rounded label: how something stands or a short reference — tone=run|plain|muted|off|done|bad|warn, dot=pulse|still|space|none, mono, bold, tag (a smaller label in it), caret (▾), shape=tag, width (px at most); href= a link, state=/value= sets the view's state, disabled. */
+  pill: T({ label: "text", tone: { oneOf: ["run", "plain", "muted", "off", "done", "bad", "warn"] }, dot: { oneOf: ["pulse", "still", "space", "none"] }, mono: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tag: "text", caret: { oneOf: ["true", "false"] }, shape: { oneOf: ["round", "tag", "bare"] }, width: "int", href: "url", state: "text", value: "text", disabled: { oneOf: ["true", "false"] }, tip: "text" }, true),
+  /** A small turning circle: something is under way. */
+  spinner: T({}, true),
   switch: T({ on: "text" }),
   case: T({ value: "text" }),
   otherwise: T({}),
@@ -255,7 +263,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   tab: T({ id: "text", label: "text", n: "text" }),
   // A dialog (center) or a drawer (side=right), open while state.<bind> is filled.
   dialog: T({ bind: "text", title: "text", reset: "text", side: { oneOf: ["center", "right"] }, wide: { oneOf: ["true", "false"] } }),
-  input: T({ /** Backspace in the empty field sends this event — the last chip taken off. */ back: "text", /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", /** true: a textarea grows with what is written in it (up to 320 px). */ grow: { oneOf: ["true", "false"] }, bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text", /** true: the label above the field and the field as wide as its place (a form). */ stack: { oneOf: ["true", "false"] }, /** true: no border of its own (inside a box field=true). */ bare: { oneOf: ["true", "false"] }, /** Suggestions under a text field while you type (free text stays allowed): [{"v":"value","l":"shown","d":"detail","set":{"other_state":"value"}}] — picking one fills the field and sets the other state keys it names. */ options: "code" }, true),
+  input: T({ /** Backspace in the empty field sends this event — the last chip taken off. */ back: "text", /** Enter (not Shift+Enter) sends this event — a chat line sent with Enter. */ enter: "text", /** Leaving the field after a change sends this event (a note saved when you leave it). */ leave: "text", /** A textarea's height in lines. */ rows: "int", /** true: a textarea grows with what is written in it (up to 320 px). */ grow: { oneOf: ["true", "false"] }, bind: "text", type: { oneOf: ["text", "number", "date", "time", "month", "week", "color", "textarea", "email", "url"] }, label: "text", placeholder: "text", value: "text", /** true: the label above the field and the field as wide as its place (a form). */ stack: { oneOf: ["true", "false"] }, /** true: no border of its own (inside a box field=true). */ bare: { oneOf: ["true", "false"] }, /** Suggestions under a text field while you type (free text stays allowed): [{"v":"value","l":"shown","d":"detail","set":{"other_state":"value"}}] — picking one fills the field and sets the other state keys it names. */ options: "code", /** sm: low and small text (a search over a list). */ size: { oneOf: ["sm", "md"] } }, true),
   slider: T({ bind: "text", min: "num", max: "num", step: "num", label: "text", value: "text", unit: "text" }, true),
   calendar: T({ source: "list", date: "list", bind: "text", empty: "text" }),
   heatmap: T({ source: "list", date: "list", value: "list", calc: { oneOf: ["count", "sum"] }, weeks: "int", label: "text", unit: "text" }, true),
@@ -301,6 +309,7 @@ const STATE_KEYS: Record<string, string[]> = {
   data: ["name"],
   entry: ["state"],
   item: ["state"],
+  pill: ["state"],
   button: ["state", "into"],
   box: ["state", "into"],
 };

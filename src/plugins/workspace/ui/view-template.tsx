@@ -60,8 +60,8 @@ type Props = AppViewProps & {
   /** Blocks drawn as given here instead of as saved (the Studio's preview of a block being edited). */ draftBlocks?: BlockDef[];
 };
 
-const TONE: Record<string, string> = { good: "text-emerald-700 dark:text-emerald-400", warn: "text-amber-700 dark:text-amber-400", bad: "text-red-600 dark:text-red-400", muted: "text-zinc-500" };
-const BOX_TONE: Record<string, string> = { accent: "border-transparent bg-indigo-50 shadow-none dark:bg-indigo-950/40", muted: "bg-zinc-50 dark:bg-zinc-900/40", good: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20", warn: "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20", bad: "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20" };
+const TONE: Record<string, string> = { faint: "text-zinc-400", good: "text-emerald-700 dark:text-emerald-400", warn: "text-amber-700 dark:text-amber-400", bad: "text-red-600 dark:text-red-400", muted: "text-zinc-500" };
+const BOX_TONE: Record<string, string> = { info: "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40", ask: "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40", accent: "border-transparent bg-indigo-50 shadow-none dark:bg-indigo-950/40", muted: "bg-zinc-50 dark:bg-zinc-900/40", good: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20", warn: "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20", bad: "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20" };
 const CELL_TONE: Record<string, string> = {
   today: "bg-indigo-50 dark:bg-indigo-950/40",
   off: "bg-zinc-50 dark:bg-zinc-900/60",
@@ -70,6 +70,10 @@ const CELL_TONE: Record<string, string> = {
   warn: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300",
   bad: "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300",
 };
+/** A bar's title colour (section look=bar): added, changed, gone, moved. */
+const BAR_TONE: Record<string, string> = { good: "text-emerald-600", warn: "text-amber-600", bad: "text-red-600", info: "text-sky-600" };
+/** A quiet pick's colour (tone=…): the riskier the choice, the louder. */
+const CELL_TONE_TEXT: Record<string, string> = { info: "font-medium text-sky-600", warn: "font-medium text-amber-600", bad: "font-medium text-red-600" };
 const json = <T,>(s: string | undefined, fallback: T): T => {
   try {
     return s ? (JSON.parse(s) as T) : fallback;
@@ -341,7 +345,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           return void (rowId && setState(a.selkey || "selected", String(rowId)));
         case "url":
           // Zeff's own pages in place, a mail written in the mail program, anything else in a new tab.
-          return void (a.href && (a.href.startsWith("/") ? router.push(a.href) : a.href.startsWith("mailto:") ? (window.location.href = a.href) : window.open(a.href, "_blank", "noopener")));
+          return void (a.href && (a.href.startsWith("/") && !a.href.startsWith("/api/") ? router.push(a.href) : a.href.startsWith("mailto:") ? (window.location.href = a.href) : window.open(a.href, "_blank", "noopener")));
         case "say": {
           // Into a plugin's live chat: its running session hears it; a chat that has not begun begins with it. The <chat> box shows the rest.
           if (!a.chat || !a.key || !a.text?.trim()) return;
@@ -572,8 +576,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         const card = a.card === "true";
         const fold = a.collapsible === "true";
         const inner = fold ? (
-          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} dense={a.dense === "true"} quiet={a.quiet === "true"} open={a.open === "wide" ? "wide" : a.open !== "false"}>
-            <div className={a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
+          <Fold key={card ? undefined : key} title={a.title} aside={a.aside} dense={a.dense === "true"} quiet={a.quiet === "true"} bar={a.look === "bar" ? { tone: a.tone ?? "", added: a.added ?? "", removed: a.removed ?? "" } : undefined} open={a.open === "wide" ? "wide" : a.open !== "false"}>
+            <div className={a.look === "bar" ? "" : a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
               {kids(n.c)}
             </div>
           </Fold>
@@ -620,13 +624,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       }
       case "scroller":
         return (
-          <Scroller key={key} end={a.end === "true"} pad={a.pad === "true"} center={a.center === "true"}>
+          <Scroller key={key} end={a.end === "true"} pad={a.pad === "true" ? "all" : a.pad === "top" ? "top" : ""} center={a.center === "true"} middle={a.middle === "true"}>
             {kids(n.c)}
           </Scroller>
         );
       case "dock":
         return (
-          <div key={key} className={a.plain === "true" ? (a.edge === "top" ? "shrink-0 border-b border-zinc-200 pb-2.5 dark:border-zinc-800" : "max-h-[55%] shrink-0 overflow-y-auto overscroll-contain pt-2") : `shrink-0 bg-white px-4 py-3 dark:bg-zinc-900 ${a.edge === "top" ? "border-b" : "max-h-[55%] overflow-y-auto overscroll-contain border-t"} border-zinc-200 dark:border-zinc-800`}>
+          <div key={key} className={a.plain === "true" ? (a.edge === "top" ? `shrink-0 ${a.line === "false" ? "pb-2" : "border-b border-zinc-200 pb-2.5 dark:border-zinc-800"}` : `max-h-[55%] shrink-0 overflow-y-auto overscroll-contain pt-2 ${a.line === "true" ? "border-t border-zinc-200 dark:border-zinc-800" : ""}`) : `shrink-0 bg-white px-4 py-3 dark:bg-zinc-900 ${a.edge === "top" ? "border-b" : "max-h-[55%] overflow-y-auto overscroll-contain border-t"} border-zinc-200 dark:border-zinc-800`}>
             {a.center === "true" ? <div className="mx-auto w-full max-w-3xl">{kids(n.c)}</div> : kids(n.c)}
           </div>
         );
@@ -684,16 +688,21 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return (
           <div
             key={key}
-            className={`${a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : "space-y-2 rounded-xl border border-zinc-200 bg-white p-4 shadow-xs dark:border-zinc-800 dark:bg-zinc-900"} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
+            className={`${a.line === "true" ? "rounded-md px-1.5 py-0.5" : a.field === "true" ? "rounded-2xl border border-zinc-200 bg-white shadow-sm transition focus-within:border-indigo-400 focus-within:shadow-md dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-indigo-500 pb-2 [&>.flex]:px-2.5" : a.dense === "true" ? "flex min-h-14 flex-col justify-between rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-900" : `space-y-2 rounded-xl border border-zinc-200 bg-white shadow-xs dark:border-zinc-800 dark:bg-zinc-900 ${a.compact === "true" ? "p-2.5 text-sm shadow-none" : "p-4"}`} ${BOX_TONE[a.tone ?? ""] ?? ""} ${go ? "cursor-pointer transition hover:border-indigo-300 dark:hover:border-indigo-700" : ""}`}
             style={scrolls(a)}
             {...(go ? { role: "button", tabIndex: 0, title: a.tip || undefined, onClick: () => void run(a), onKeyDown: (e: React.KeyboardEvent) => (e.key === "Enter" || e.key === " ") && e.target === e.currentTarget && (e.preventDefault(), void run(a)) } : {})}
           >
-            {a.title && <h3 className="text-sm font-semibold">{a.title}</h3>}
+            {a.title && (
+              <h3 className={a.compact === "true" ? `font-medium ${a.tone === "ask" ? "text-amber-950 dark:text-amber-100" : ""}` : "text-sm font-semibold"}>
+                {a.title}
+                {a.aside && <span className="ml-1 font-normal opacity-80">{a.aside}</span>}
+              </h3>
+            )}
             {kids(n.c)}
           </div>
         );
       case "heading": {
-        const cls = a.level === "1" ? "text-2xl font-semibold" : a.level === "3" ? "text-sm font-semibold" : "text-lg font-semibold";
+        const cls = a.level === "1" ? "text-2xl font-semibold tracking-tight" : a.level === "3" ? "text-sm font-semibold" : a.level === "4" ? "text-xs font-medium tracking-wide text-zinc-500 uppercase dark:text-zinc-400" : "text-lg font-semibold";
         return (
           <div key={key} role="heading" aria-level={Number(a.level) || 2} className={cls}>
             {kids(n.c)}
@@ -943,9 +952,34 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       }
       case "select": {
         const opts = json<[string, string, string?][]>(a.options, []);
+        // (size=sm: a small pick filling its row, its label beside it — a list's sort)
+        if (a.size === "sm")
+          return (
+            <label key={key} className="flex w-full items-center gap-1.5 text-xs text-zinc-500 print:hidden">
+              {a.label}
+              <select className="input h-6 flex-1 py-0 text-xs" value={a.current} aria-label={a.tip || a.label || undefined} onChange={(e) => (setState(a.bind, e.target.value), a.emit && setPending({ event: a.emit, id: ++pendingSeq.current }))}>
+                {opts.map(([v, label]) => (
+                  <option key={v} value={v}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          );
         // (emit=: what the view does with the value picked, at once — a status saved)
         const picked = (v: string) => (setState(a.bind, v), a.emit && setPending({ event: a.emit, id: ++pendingSeq.current }));
         const stack = a.stack === "true";
+        // (look=quiet: a small borderless pick inside a message box's row, as wide as what is picked — mode, model, effort)
+        if (a.look === "quiet")
+          return (
+            <select key={key} className={`field-sizing-content max-w-56 rounded-md border-0 bg-transparent py-0.5 pr-6 pl-1.5 text-xs text-zinc-500 hover:bg-zinc-100 focus:ring-1 focus:ring-indigo-400 disabled:opacity-60 print:hidden dark:hover:bg-zinc-800 ${CELL_TONE_TEXT[a.tone ?? ""] ?? ""}`} value={a.current} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} disabled={a.disabled === "true"} onChange={(e) => picked(e.target.value)}>
+              {opts.map(([v, label]) => (
+                <option key={v} value={v}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          );
         if (a.search === "true") {
           const box = <SearchSelect key={key} options={opts} value={a.current ?? ""} label={a.label} onPick={picked} />;
           return stack && a.label ? (
@@ -1055,7 +1089,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "button": {
         // A label that is only a sign (‹ ›): its tip is the button's name, and it is wide enough to hit (24 px).
         const sign = !!a.label && !/\p{L}/u.test(a.label);
-        const variant = a.variant === "send" ? "ml-auto grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-700 disabled:bg-zinc-200 disabled:text-zinc-400 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600" : a.variant === "link" ? "truncate text-left font-medium hover:underline" : a.variant === "primary" ? "btn btn-primary btn-sm" : a.variant === "danger" ? "btn btn-sm btn-danger" : a.variant === "quiet" ? "rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800" : "btn btn-sm";
+        const variant = a.variant === "inline" ? "text-indigo-600 hover:underline dark:text-indigo-400" : a.variant === "send" ? "ml-auto grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900 text-white transition hover:bg-zinc-700 disabled:bg-zinc-200 disabled:text-zinc-400 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-600" : a.variant === "link" ? "truncate text-left font-medium hover:underline" : a.variant === "primary" ? "btn btn-primary btn-sm" : a.variant === "danger" ? "btn btn-sm btn-danger" : a.variant === "quiet" ? "rounded px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800" : "btn btn-sm";
         return (
           <button
             key={key}
@@ -1063,12 +1097,31 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             disabled={a.disabled === "true"}
             title={a.tip || (a.keys ? `${a.label ?? a.action} (${a.keys})` : undefined)}
             aria-keyshortcuts={a.keys || undefined}
-            aria-label={sign && a.tip ? a.tip : undefined}
+            aria-label={(sign || a.variant === "send") && a.tip ? a.tip : undefined}
             className={`${variant} ${sign ? "min-w-7 justify-center" : ""} ${a.wide === "true" ? "w-full justify-center" : ""} ${a.print === "true" ? "" : "print:hidden"} ${a.action === "print" ? "max-sm:hidden" : ""}`}
             onClick={(e) => (e.stopPropagation(), void run(a))}
           >
-            {a.icon && <span aria-hidden>{a.icon}</span>}
-            {a.label ?? a.action}
+            {a.variant === "send" ? (
+              a.icon === "stop" ? (
+                <span className="size-2.5 rounded-[2px] bg-current" aria-hidden />
+              ) : (
+                <svg viewBox="0 0 20 20" fill="currentColor" className="size-4" aria-hidden>
+                  <path d="M10 3.5a.75.75 0 0 1 .53.22l5 5a.75.75 0 1 1-1.06 1.06l-3.72-3.72v9.19a.75.75 0 0 1-1.5 0V6.06L5.53 9.78a.75.75 0 0 1-1.06-1.06l5-5A.75.75 0 0 1 10 3.5Z" />
+                </svg>
+              )
+            ) : (
+              <>
+                {a.icon && <span aria-hidden>{a.icon}</span>}
+                {a.sub ? (
+                  <span className="text-left">
+                    <span className="block">{a.label ?? a.action}</span>
+                    <span className="block text-xs font-normal opacity-70">{a.sub}</span>
+                  </span>
+                ) : (
+                  (a.label ?? a.action)
+                )}
+              </>
+            )}
           </button>
         );
       }
@@ -1364,7 +1417,7 @@ function SearchSelect({ options, value, label, onPick }: { options: [string, str
 }
 
 /** A pane's part that scrolls by itself (min-h-0, the room left); end=true: kept at its end as more comes — unless you scrolled up. */
-function Scroller({ end, pad, center, children }: { end: boolean; pad: boolean; center: boolean; children: ReactNode }) {
+function Scroller({ end, pad, center, middle, children }: { end: boolean; pad: string; center: boolean; middle: boolean; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   useEffect(() => {
@@ -1384,7 +1437,7 @@ function Scroller({ end, pad, center, children }: { end: boolean; pad: boolean; 
         const el = e.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
       }}
-      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${pad ? "px-4 py-4" : ""}`}
+      className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${pad === "all" ? "px-1 py-4" : pad === "top" ? "pt-2" : ""} ${middle ? "flex flex-col justify-center pb-[12vh]" : ""}`}
     >
       {center ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}
     </div>
@@ -1412,18 +1465,28 @@ function Bubble({ text, note, end }: { text: string; note?: string; end: boolean
 }
 
 /** A section that folds: open or not — or "wide": open on a wide screen, folded on a phone (decided once it is shown). */
-function Fold({ title, aside, dense, quiet, open, children }: { title: string; aside?: string; dense?: boolean; quiet?: boolean; open: boolean | "wide"; children: React.ReactNode }) {
+function Fold({ title, aside, dense, quiet, bar, open, children }: { title: string; aside?: string; dense?: boolean; quiet?: boolean; bar?: { tone: string; added: string; removed: string }; open: boolean | "wide"; children: React.ReactNode }) {
   const [isOpen, setOpen] = useState(open !== false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the window's width is known only in the browser
     if (open === "wide" && window.matchMedia("(max-width: 639px)").matches) setOpen(false);
   }, [open]);
   return (
-    <details open={isOpen} onToggle={(e) => setOpen(e.currentTarget.open)} className={dense ? "group space-y-0.5" : "group space-y-2"}>
-      {dense ? (
-        <summary className="flex cursor-pointer items-center gap-1 px-0.5 pt-2 pb-0.5 text-xs text-zinc-500 select-none">
+    <details open={isOpen} onToggle={(e) => setOpen(e.currentTarget.open)} className={bar ? "group overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800" : dense ? "group space-y-0.5" : "group space-y-2"}>
+      {bar ? (
+        <summary className="flex w-full cursor-pointer list-none items-center gap-2 bg-zinc-50 px-2 py-1 text-left font-mono text-xs select-none dark:bg-zinc-900 [&::-webkit-details-marker]:hidden">
+          <span className={BAR_TONE[bar.tone] ?? ""}>{title}</span>
+          <span className="min-w-0 flex-1 truncate">{aside}</span>
+          {bar.added && <span className="text-emerald-600">{bar.added}</span>}
+          {bar.removed && <span className="text-red-600">{bar.removed}</span>}
+        </summary>
+      ) : dense ? (
+        <summary className={`flex cursor-pointer list-none items-center text-xs text-zinc-500 select-none hover:text-zinc-800 dark:hover:text-zinc-200 [&::-webkit-details-marker]:hidden ${quiet ? "gap-1.5" : "gap-1 px-0.5 pt-2 pb-0.5"}`}>
+          <span className="w-3 shrink-0 text-xs" aria-hidden>
+            {isOpen ? "▾" : "▸"}
+          </span>
           <span className={quiet ? "" : "font-medium tracking-wide uppercase"}>{title}</span>
-          {aside && <span className="ml-auto shrink-0 text-zinc-400 tabular-nums">{aside}</span>}
+          {aside && <span className={quiet ? "truncate text-zinc-400" : "ml-auto shrink-0 text-zinc-400 tabular-nums"}>{aside}</span>}
         </summary>
       ) : (
         <summary className="cursor-pointer text-sm font-semibold select-none">{title}</summary>

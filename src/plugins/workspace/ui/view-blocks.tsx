@@ -321,25 +321,8 @@ export function viewBlock(n: Node, key: string | number, kids: Kids, env: BlockE
       );
     case "menu":
       return <MenuBlock key={key} a={a} kids={() => kids(n.c)} />;
-    case "panes": {
-      const list = items(n);
-      const columns = list.map((p) => (Number(p.a.width) > 0 ? `${Math.min(640, Number(p.a.width))}px` : "minmax(0,1fr)")).join(" ");
-      return (
-        <FillHeight key={key} className={a.plain === "true" ? "ws-panes grid gap-6" : "ws-panes grid gap-3"} style={{ "--panes": columns } as CSSProperties}>
-          {list.map((p, i) => (
-            <section key={i} aria-label={p.a.title || undefined} className={a.plain === "true" ? "flex min-h-0 min-w-0 flex-col" : "flex min-h-0 min-w-0 flex-col rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}>
-              {(p.a.title || p.a.aside) && (
-                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
-                  <h2 className="truncate text-sm font-semibold">{p.a.title}</h2>
-                  {p.a.aside && <span className="text-xs text-zinc-500 tabular-nums">{p.a.aside}</span>}
-                </header>
-              )}
-              <div className={p.a.flush === "true" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3"}>{kids(p.c)}</div>
-            </section>
-          ))}
-        </FillHeight>
-      );
-    }
+    case "panes":
+      return <Panes key={key} a={a} list={items(n)} kids={kids} />;
     case "cover":
       return (
         <div key={key} className="relative overflow-hidden rounded-xl bg-zinc-200 dark:bg-zinc-800" style={{ height: Math.min(420, Number(a.h) || 180) }}>
@@ -459,6 +442,69 @@ export function viewBlock(n: Node, key: string | number, kids: Kids, env: BlockE
     default:
       return moreBlock(n, key, kids, env);
   }
+}
+
+/**
+ * Panes side by side (a sidebar and its content — one under the other on a phone). plain=true: no frames. A pane with fold=true has a « at its top that folds
+ * it away (a » brings it back), kept in this browser for the page.
+ */
+function Panes({ a, list, kids }: { a: Record<string, string>; list: Node[]; kids: Kids }) {
+  const t = useT();
+  const [folded, setFolded] = useState<number[]>([]);
+  const storeKey = () => `zeff-pane-fold:${window.location.pathname}`;
+  useEffect(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(storeKey()) ?? "[]") as unknown;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- as this browser keeps it, after hydration
+      if (Array.isArray(v)) setFolded(v.filter((x): x is number => typeof x === "number"));
+    } catch {
+      // nothing kept
+    }
+  }, []);
+  const fold = (i: number, on: boolean) => {
+    const next = on ? [...folded, i] : folded.filter((x) => x !== i);
+    setFolded(next);
+    try {
+      localStorage.setItem(storeKey(), JSON.stringify(next));
+    } catch {
+      // not kept
+    }
+  };
+  const shown = list.map((p, i) => ({ p, i })).filter((x) => !(x.p.a.fold === "true" && folded.includes(x.i)));
+  const back = list.map((p, i) => ({ p, i })).filter((x) => x.p.a.fold === "true" && folded.includes(x.i));
+  const columns = [...(back.length ? ["max-content"] : []), ...shown.map(({ p }) => (Number(p.a.width) > 0 ? `${Math.min(640, Number(p.a.width))}px` : "minmax(0,1fr)"))].join(" ");
+  const plain = a.plain === "true";
+  return (
+    <FillHeight className={plain ? "ws-panes grid gap-6" : "ws-panes grid gap-3"} style={{ "--panes": columns } as CSSProperties}>
+      {back.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {back.map(({ p, i }) => (
+            <button key={i} type="button" onClick={() => fold(i, false)} className="icon-btn shrink-0 self-start" title={t("Show the sidebar")} aria-label={t("Show the sidebar")}>
+              »
+            </button>
+          ))}
+        </div>
+      )}
+      {shown.map(({ p, i }) => (
+        <section key={i} aria-label={p.a.title || undefined} className={plain ? "flex min-h-0 min-w-0 flex-col" : "flex min-h-0 min-w-0 flex-col rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}>
+          {(p.a.title || p.a.aside) && (
+            <header className="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+              <h2 className="truncate text-sm font-semibold">{p.a.title}</h2>
+              {p.a.aside && <span className="text-xs text-zinc-500 tabular-nums">{p.a.aside}</span>}
+            </header>
+          )}
+          {p.a.fold === "true" && (
+            <div className="mb-4 flex shrink-0 justify-end max-md:hidden">
+              <button type="button" onClick={() => fold(i, true)} className="icon-btn" title={t("Collapse the sidebar")} aria-label={t("Collapse the sidebar")}>
+                «
+              </button>
+            </div>
+          )}
+          <div className={p.a.flush === "true" ? "flex min-h-0 flex-1 flex-col" : "min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3"}>{kids(p.c)}</div>
+        </section>
+      ))}
+    </FillHeight>
+  );
 }
 
 /**

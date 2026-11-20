@@ -1,5 +1,6 @@
 "use client";
 
+import { textBlock } from "./view-blocks-text";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
@@ -72,6 +73,11 @@ export function moreBlock(n: Node, key: string | number, kids: Kids, env: BlockE
       return <GraphBlock key={key} a={a} env={env} />;
     case "upload":
       return <UploadBlock key={key} a={a} env={env} />;
+    case "diff":
+    case "terminal":
+    case "spinner":
+    case "pill":
+      return textBlock(n.t, a, key, env.run);
     default:
       return undefined;
   }
@@ -188,7 +194,7 @@ function InputBlock({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
         onBlur={onBlur}
       />
     ) : (
-      <input type={type} className={`input py-1 text-sm ${type === "color" ? "h-8 w-12 p-0.5" : stack ? "w-full" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
+      <input type={type} className={`input ${a.size === "sm" ? "h-8 min-w-0 py-1 text-xs" : "py-1 text-sm"} ${type === "color" ? "h-8 w-12 p-0.5" : stack ? "w-full" : type === "number" ? "w-28" : type === "text" || type === "email" || type === "url" ? "w-full min-w-40" : "w-auto"}`} placeholder={a.placeholder} aria-label={a.label || a.placeholder} value={v} onChange={(e) => setV(e.target.value)} onKeyDown={onKeyDown} onBlur={onBlur} />
     );
   if (!a.label) return <span className={`print:hidden ${type === "textarea" || stack ? "block w-full" : "inline-flex"}`}>{field}</span>;
   return (
@@ -444,7 +450,7 @@ function UploadFiles({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone, a.multiple]);
   return (
-    <label ref={ref} className="btn btn-primary btn-sm cursor-pointer print:hidden">
+    <label ref={ref} title={a.tip || undefined} className={a.look === "icon" ? "grid size-7 shrink-0 cursor-pointer place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 print:hidden dark:hover:bg-zinc-800" : "btn btn-primary btn-sm cursor-pointer print:hidden"}>
       {a.label || t("Choose a file")}
       <input type="file" hidden multiple={a.multiple === "true"} accept={a.accept || undefined} onChange={(e) => (void take([...(e.target.files ?? [])]), (e.target.value = ""))} />
     </label>

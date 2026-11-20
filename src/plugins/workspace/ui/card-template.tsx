@@ -68,7 +68,7 @@ function drawNode(n: VNode, key: number, ext?: DrawExt): ReactNode {
       return (
         <div
           key={key}
-          className="flex items-center gap-x-1.5"
+          className={`flex items-center gap-x-1.5 ${n.a.indent === "true" ? "pl-4" : ""}`}
           style={{ flexWrap: n.a.wrap === "false" ? "nowrap" : "wrap", alignItems: n.a.align === "start" ? "flex-start" : n.a.align === "end" ? "flex-end" : n.a.align === "baseline" ? "baseline" : "center", justifyContent: n.a.justify === "between" ? "space-between" : n.a.justify === "end" ? "flex-end" : undefined, ...gap(n.a) }}
         >
           {kids}
@@ -76,7 +76,7 @@ function drawNode(n: VNode, key: number, ext?: DrawExt): ReactNode {
       );
     case "col":
       return (
-        <div key={key} className="flex flex-col gap-1" style={{ ...gap(n.a), ...(n.a.align === "end" ? { alignItems: "flex-end", textAlign: "right" } : n.a.align === "center" ? { alignItems: "center", textAlign: "center" } : n.a.align === "start" ? { alignItems: "flex-start" } : {}) }}>
+        <div key={key} className={`flex flex-col gap-1 ${n.a.size === "xs" ? "text-xs" : n.a.size === "sm" ? "text-sm" : ""}`} style={{ ...gap(n.a), ...(n.a.align === "end" ? { alignItems: "flex-end", textAlign: "right" } : n.a.align === "center" ? { alignItems: "center", textAlign: "center" } : n.a.align === "start" ? { alignItems: "flex-start" } : {}) }}>
           <Level nodes={n.c} ext={ext} />
         </div>
       );

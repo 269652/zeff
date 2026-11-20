@@ -42,7 +42,7 @@ const STRINGS = ${JSON.stringify(strings)};
 setPluginStrings((lang) => STRINGS[lang] ?? {});
 export const tFor = (lang) => translator(isLang(lang) ? lang : "en");
 export { groupSessions, priorityOf, stamp } from "@/components/work/session-groups";
-export { modeText } from "@/components/work/mode-text";`,
+export { fileStatusText, modeText } from "@/components/work/mode-text";`,
     resolveDir: ROOT,
     loader: "ts",
     sourcefile: "work-port.ts",
@@ -113,7 +113,7 @@ write(
     {
       format: 1,
       id: "work-ext",
-      version: "1.1.0",
+      version: "1.2.0",
       name: "Code",
       description: "The Code tab in the Workspace: sessions with workers, their conversations, permission questions, tickets.",
       icon: "🛠️",
@@ -147,6 +147,8 @@ write(
           answers: "{{ input.answers }}",
           mode: "{{ input.mode }}",
           option: "{{ input.option }}",
+          model: "{{ input.model }}",
+          effort: "{{ input.effort }}",
           cmd: "{{ input.cmd }}",
           attach: "{{ input.attach }}",
         }),

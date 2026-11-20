@@ -1,4 +1,4 @@
-import { groupSessions, priorityOf, stamp, tFor } from "./lib.mjs";
+import { groupSessions, modeText, priorityOf, stamp, tFor } from "./lib.mjs";
 
 /**
  * What the Code screen shows (views/work.html reads it as data.x): the session list (grouped and sorted like the built-in's sidebar), and — by what is picked —
@@ -6,6 +6,15 @@ import { groupSessions, priorityOf, stamp, tFor } from "./lib.mjs";
  * this shapes it for the view language: every line already a row of text, every ask already its buttons.
  * event: { sel ("run:12" | "ticket:ABC-1" | "ticket:-" | ""), q, sort, archived, tail, branches, all, msg, qpick, qo0..qo3, cprov, cmode, cmodel, ceffort, crepo, cws, cbrowse, cdir, cuse }
  */
+/** How long, as the built-in's runs say it (src/lib/work/shared.ts duration). */
+const duration = (ms) => {
+  if (!ms || ms < 0) return "";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${String(m).padStart(2, "0")} h` : `${m}:${String(s % 60).padStart(2, "0")} min`;
+};
 const DOT = { running: "🔵", queued: "⚪", done: "🟢", failed: "🔴", cancelled: "⚪", interrupted: "🟠" };
 
 /**
@@ -26,24 +35,29 @@ function blocksOf(lines, t) {
         text: l.text ?? "",
         bad: (l.k === "out" && !!l.error) || l.k === "deny" || (l.k === "ask" && l.ok === false),
         answer: l.k === "ask" && l.answer ? l.answer : "",
-        diff: Array.isArray(l.diff) ? l.diff.map((d) => `- ${d.old}\n+ ${d.new}`).join("\n") : "",
+        // (what unfolds under it: an edit's old and new text, a tool's whole input, a long output whole)
+        diffs: Array.isArray(l.diff) ? l.diff.map((d) => ({ old: d.old ?? "", new: d.new ?? "" })) : [],
+        detail: l.detail ?? "",
+        plan: l.k === "tool" && l.tool === "ExitPlanMode",
+        full: l.full ?? "",
       };
+      step.more = step.diffs.length > 0 || !!step.detail;
       if (last?.t === "steps") last.steps.push(step);
       else blocks.push({ id, t: "steps", steps: [step] });
     } else if (l.k === "raw") {
       if (last?.t === "raw") last.text += `\n${l.text}`;
       else blocks.push({ id, t: "raw", text: l.text ?? "" });
-    } else if (l.k === "you") blocks.push({ id, t: "you", text: l.text ?? "" });
-    else if (l.k === "shell") blocks.push({ id, t: "shell", text: `! ${l.cmd}${l.text ? `\n${l.text}` : ""}`, bad: !l.ok });
+    } else if (l.k === "you") blocks.push({ id, t: "you", text: l.text ?? "", note: l.images ? "🖼 " + t("{n} image(s)", { n: l.images }) : "" });
+    else if (l.k === "shell") blocks.push({ id, t: "shell", cmd: "! " + (l.cmd ?? ""), text: l.text ?? "", bad: !l.ok });
     else if (l.k === "note") blocks.push({ id, t: "note", text: l.text ?? "" });
-    else if (l.k === "end") blocks.push({ id, t: "end", text: l.text ?? "", bad: !l.ok });
   }
   for (const b of blocks) {
     if (b.t !== "steps") continue;
     const calls = b.steps.filter((x) => x.kind === "tool");
     const names = [...new Set(calls.map((x) => x.tool))];
-    b.fold = b.steps.length > 4 && !b.steps.some((x) => x.kind === "ask" && !x.answer);
-    b.title = (calls.length === 1 ? t("1 step") : t("{n} steps", { n: calls.length })) + (names.length ? " · " + names.slice(0, 5).join(", ") + (names.length > 5 ? " …" : "") : "");
+    b.fold = b.steps.length > 4;
+    b.title = calls.length === 1 ? t("1 step") : t("{n} steps", { n: calls.length });
+    b.names = names.length ? "· " + names.slice(0, 5).join(", ") + (names.length > 5 ? " …" : "") : "";
   }
   return blocks;
 }
@@ -58,6 +72,12 @@ export async function handler(event, context) {
   const showArchived = String(event?.archived) === "true" || event?.archived === true;
   const words = String(event?.q ?? "").trim().toLowerCase();
 
+  const base = (p) => String(p).split(/[\\/]/).filter(Boolean).pop() ?? String(p);
+  const CLAUDE = ["default", "acceptEdits", "auto", "plan", "dontAsk", "bypassPermissions"];
+  /** A mode's name and what it does — Claude's translated (mode-text.ts), another driver's as it gives them. */
+  const modeName = (m) => (CLAUDE.includes(m.id) ? modeText(t, m.id) : { label: t(m.label), hint: t(m.hint) });
+  /** A mode's tone as the quiet pick's colour: the riskier, the louder. */
+  const TONE = { danger: "bad", warn: "warn", info: "info" };
   const statusText = (s) => ({ queued: t("queued"), running: t("working"), done: t("done"), failed: t("failed"), cancelled: t("stopped"), interrupted: t("interrupted") })[s] ?? s;
   const ago = (iso) => {
     const at = stamp(iso);
@@ -132,11 +152,11 @@ export async function handler(event, context) {
       const m = ch?.models.find((x) => x.value === model);
       return e === "" || !m?.efforts || m.efforts.includes(e);
     });
-    const effort = efforts.includes(String(event?.ceffort ?? "")) && event?.ceffort ? String(event.ceffort) : ch?.defaultEffort ?? "";
+    const effort = event?.ceffort === "@none" ? "" : efforts.includes(String(event?.ceffort ?? "")) && event?.ceffort ? String(event.ceffort) : ch?.defaultEffort ?? "";
     const inferred = ticketArg ? (c.ticketRepos[ticketArg] ?? "") : "";
     const repo = event?.cuse ? String(event.cuse) : c.repos.some((r) => r.path === event?.crepo) ? String(event.crepo) : inferred;
     // The folder picker: any folder of this computer (the registered repos are the shortcuts), and the branches of the one chosen.
-    const browsing = String(event?.cbrowse) === "1";
+    const browsing = String(event?.cbrowse) === "1" || event?.crepo === "@browse";
     let folders = null;
     if (browsing) {
       const l = await zeff.call("work.folders", { path: String(event?.cdir ?? "") });
@@ -170,6 +190,25 @@ export async function handler(event, context) {
         { id: "checkout", label: t("In the checkout"), sel: ws === "checkout" },
       ],
       workspace: ws,
+      // The message box's row (the built-in's quiet picks): ticket, folder, branch, isolation, backend, mode, model, effort.
+      ticketOptions: JSON.stringify([["", t("No ticket")], ...list.tickets.filter((x) => x.ticket).map((x) => [x.ticket, x.ticket + (x.summary ? " · " + String(x.summary).slice(0, 40) : "")])]),
+      repoOptions: JSON.stringify([
+        ["", "📁 " + (repo && !event?.crepo && !event?.cuse ? base(repo) : t("Repo: the ticket's"))],
+        ...c.repos.map((r) => [r.path, "📁 " + r.name]),
+        ...(event?.cuse && !c.repos.some((r) => r.path === event.cuse) ? [[String(event.cuse), "📁 " + base(String(event.cuse))]] : []),
+        ["@browse", "📁 " + t("Choose another folder …")],
+      ]),
+      repoPick: event?.cuse ? String(event.cuse) : event?.crepo === "@browse" ? "@browse" : c.repos.some((r) => r.path === event?.crepo) ? String(event.crepo) : "",
+      branchOptions: br?.ok ? JSON.stringify([["", "⎇ " + (br.current ? t("{b} (current)", { b: br.current }) : t("default branch"))], ...br.branches.map((b) => [b.name, b.name + (b.remote ? " (remote)" : "") + (b.worktree ? " - in a worktree" : b.current ? " - checked out" : "")])]) : "",
+      branchError: br && !br.ok ? br.error : "",
+      wsOptions: JSON.stringify([["", t("Default isolation")], ["worktree", t("New branch in a worktree")], ["branch", t("This branch in a worktree")], ["checkout", t("In the repo itself")]]),
+      providerOptions: c.providers.length > 1 ? JSON.stringify([["", t("Default backend")], ...c.providers.map((p) => [p.id, p.label])]) : "",
+      // (a pick's "" is its default — the state starts empty; "@none": the model's own effort where a default effort is set)
+      modeOptions: ch ? JSON.stringify(ch.modes.map((m) => [m.id === ch.defaultMode ? "" : m.id, t("Mode: {m}", { m: modeName(m).label })])) : "",
+      modeTip: ch ? modeName(ch.modes.find((m) => m.id === mode) ?? ch.modes[0] ?? { id: "", label: "", hint: "" }).hint : "",
+      modeTone: ch ? TONE[ch.modes.find((m) => m.id === mode)?.tone] ?? "" : "",
+      modelOptions: ch ? JSON.stringify(ch.models.map((m) => [m.value, m.value ? m.label : t("Model: default")])) : "",
+      effortOptions: ch?.effort ? JSON.stringify(efforts.map((e) => [e === (ch.defaultEffort ?? "") ? "" : e || "@none", e ? t("Effort: {e}", { e }) : t("Effort: default")])) : "",
       files: ((await zeff.call("work.attachments", { scope: "new" })).files ?? []).map((x) => ({ ref: x.ref, name: x.name, size: `${Math.max(1, Math.round(x.size / 1024))} KB` })),
       labels: { browse: t("Choose another folder …"), up: t("Up"), use: t("Use this folder"), go: t("Go"), folder: t("Folder"), branches: t("Branches"), options: t("Options"), provider: t("Backend"), mode: t("Mode"), model: t("Model"), effort: t("Effort"), repo: t("Repo"), where: t("Where it works"), branch: t("Branch (optional)") },
     };
@@ -190,8 +229,10 @@ export async function handler(event, context) {
       title: ticketArg || t("No ticket"),
       url: tk?.url ?? "",
       summary: tk?.summary ?? "",
-      facts: tk ? [tk.status].filter(Boolean).join(" · ") : "",
-      sessions: (tk?.sessions ?? []).map((s) => ({ id: s.id, ref: s.ref, title: s.title, status: s.waiting ? t("waiting for you") : statusText(s.status), at: when(s.at) })),
+      sessions: (tk?.sessions ?? []).map((s) => ({ id: s.id, ref: s.ref, title: s.title, status: s.waiting ? t("waiting for you") : statusText(s.status), tone: ({ running: "run", queued: "plain", done: "done", failed: "bad", cancelled: "off", interrupted: "warn" })[s.status] ?? "plain", at: when(s.at) })),
+      facts: tk ? [tk.status, tk.assignee, tk.issueType].filter(Boolean).join(" · ") : "",
+      openLabel: t("open ↗"),
+      placeholder: ticketArg ? t("New session on {ticket} — what should we work on?", { ticket: ticketArg }) : t("New session — what should we work on?"),
       sessionsLabel: t("Sessions ({n})", { n: tk?.sessions.length ?? 0 }),
     };
   }
@@ -205,14 +246,43 @@ export async function handler(event, context) {
       const live = s.live;
       const status = s.last.status;
       const liveText = live?.kind === "session" ? (live.asks.length ? t("waits for your answer") : live.host === "starting" ? t("starting") : live.busy ? t("working") : t("waiting for you")) : live?.kind === "live" ? (live.permission ? t("asks for permission") : live.busy ? t("working") : t("waiting for you")) : statusText(status);
-      const turns = s.turns.map((turn) => ({
-        runId: turn.runId,
-        ref: turn.ref,
-        label: turn.label,
-        ask: turn.ask ?? "",
-        cut: turn.cut ? t("{n} earlier lines are cut.", { n: turn.cut }) : "",
-        blocks: blocksOf(turn.lines, t),
-      }));
+      const BACKEND = { claude: "Claude CLI", copilot: "Copilot CLI", codex: "ChatGPT", zeff: "Zeff", agent: "Agent (MCP)" };
+      const turns = s.turns.map((turn, ti) => {
+        const blocks = blocksOf(turn.lines, t);
+        const active = turn.status === "queued" || turn.status === "running";
+        const lastTurn = ti === s.turns.length - 1;
+        // (the newest steps of the one at work stay in sight while it works)
+        if (active && lastTurn && blocks.length && blocks[blocks.length - 1].t === "steps") blocks[blocks.length - 1].working = true;
+        for (const b of blocks) if (b.t === "steps") b.shown = b.fold ? b.steps.filter((x, i) => x.kind === "ask" || (b.working && i >= b.steps.length - 3)) : b.steps;
+        const lastSay = [...blocks].reverse().find((b) => b.t === "say");
+        const summary = turn.summary ?? "";
+        const asked = live?.kind === "session" ? live.asks.length > 0 : false;
+        const waiting = live?.kind === "session" ? asked || !live.busy : live?.kind === "live" ? !live.busy : false;
+        return {
+          runId: turn.runId,
+          ref: turn.ref,
+          label: turn.label,
+          ask: turn.ask ?? "",
+          cut: turn.cut ? t("{n} earlier lines are cut.", { n: turn.cut }) : "",
+          blocks,
+          active,
+          // What it is doing now (under the newest answer while it works) — with a spinner while it works.
+          doing: active ? (turn.status === "queued" ? t("Waiting for a free worker …") : asked ? t("It asks you — below") : waiting && lastTurn ? t("Waiting for you") : t("Working …")) : "",
+          spin: active && !(lastTurn && waiting),
+          summary: !active && summary && !(lastSay && (lastSay.text.trim() === summary || lastSay.text.includes(summary))) ? summary : "",
+          draft: !active && turn.draft && summary !== turn.draft ? turn.draft : "",
+          draftLabel: t("Draft") + (turn.channel ? " · " + turn.channel : ""),
+          error: !active ? (turn.error ?? "") : "",
+          errors: !active && turn.error && turn.errors?.length && !turn.error.includes(turn.errors[turn.errors.length - 1]) ? turn.errors.join("\n") : "",
+          gitSummary: !active ? (turn.gitSummary ?? "") : "",
+          empty: !active && !blocks.length && !summary && !turn.error ? t("No answer.") : "",
+          // Which backend and model answered, how long it took, what it cost.
+          meta: active
+            ? ""
+            : [BACKEND[turn.provider] ?? turn.provider, turn.model ?? (["claude", "copilot", "codex"].includes(turn.provider) ? t("default model") : null), duration(turn.durationMs), turn.turnsTaken ? t("{n} turns", { n: turn.turnsTaken }) : null, turn.costUsd != null ? `$${turn.costUsd.toFixed(2)}` : null].filter(Boolean).join(" · ") + (turn.outcome && turn.outcome !== "done" ? ` · ${turn.outcome}` : ""),
+          metaTip: turn.sessionId ? t("Session {id}", { id: turn.sessionId }) : "",
+        };
+      });
       const modes = live?.kind === "session" ? live.modes.map((m) => ({ id: m.id, label: t(m.label), hint: t(m.hint), sel: m.id === live.mode })) : [];
       // The questions of an ask: what is picked (qpick: { question: [labels] }) and your own words (qo0 … qo3), as the built-in's card keeps them.
       let picked = {};
@@ -252,6 +322,11 @@ export async function handler(event, context) {
                 description: a.description ?? "",
                 detail: a.input.file_path ? a.input.file_path + (a.input.command ? "\n" + a.input.command : "") : a.input.command || a.input.url || a.input.pattern || "",
                 diff: (a.diffs ?? []).map((d) => "- " + d.old + "\n+ " + d.new).join("\n\n"),
+                // (as the built-in's card shows it: the file, the edit coloured — or the command on a dark ground, the address, the whole input)
+                detailPath: a.input.file_path ?? "",
+                diffs: a.diffs ?? [],
+                command: !(a.diffs ?? []).length ? a.input.command || "" : "",
+                url: !(a.diffs ?? []).length && !a.input.command ? a.input.url || a.input.pattern || "" : "",
                 reason: a.reason && a.reason !== "This command requires approval" ? a.reason : "",
                 planText: a.input.plan || t("(no plan text)"),
                 always: !!a.alwaysLabel,
@@ -301,12 +376,31 @@ export async function handler(event, context) {
       const files = ((await zeff.call("work.attachments", { scope: attachScope })).files ?? []).map((x) => ({ ref: x.ref, name: x.name, size: Math.max(1, Math.round(x.size / 1024)) + " KB" }));
       const hostText = live?.kind === "session" ? (live.host === "starting" ? (live.sessionElevated ? t("starting as administrator — confirm Windows' prompt (UAC)") : t("starting …")) : live.host === "down" ? t("restarting …") : live.asks.length ? t("waits for your answer") : live.busy ? t("working …") : t("waiting for you")) : "";
       const models = live?.kind === "session" ? [...(live.models.some((m) => m.value === live.model) ? [] : [{ value: live.model ?? "", label: live.model || t("Default model") }]), ...live.models].map((m) => ({ value: m.value, label: m.label, sel: m.value === (live.model ?? "") })) : [];
+      const curMode = live?.kind === "session" ? live.modes.find((m) => m.id === live.mode) ?? live.modes[0] : null;
+      const liveRow =
+        live?.kind === "session"
+          ? {
+              mode: curMode?.id ?? live.mode,
+              // (each pick's "" is what it is now — picking another switches it, and the pick goes back to "")
+              modeOptions: JSON.stringify(live.modes.map((m) => [m.id === (curMode?.id ?? live.mode) ? "" : m.id, t("Mode: {m}", { m: modeName(m).label })])),
+              modeTip: curMode ? modeName(curMode).hint : "",
+              modeTone: TONE[curMode?.tone] ?? "",
+              model: live.model ?? "",
+              modelOptions: JSON.stringify([...(live.models.some((m) => m.value === live.model) ? [] : [[live.model ?? "", live.model || t("Default model")]]), ...live.models.map((m) => [m.value, m.label])].map(([v, l]) => [v === (live.model ?? "") ? "" : v || "@none", l])),
+              effort: live.effort ?? "",
+              effortOptions: (live.features ?? []).includes("effort") ? JSON.stringify(["", "low", "medium", "high", "xhigh", "max"].map((e) => [e === (live.effort ?? "") ? "" : e || "@none", e ? t("Effort: {e}", { e }) : t("Effort: default")])) : "",
+              working: !!live.busy && !live.asks.length,
+              dot: !!live.busy && !live.asks.length ? "run" : live.host !== "up" ? "run" : live.asks.length ? "warn" : "done",
+              queued: live.queued ? t("{n} queued", { n: live.queued }) : "",
+            }
+          : null;
       const efforts = live?.kind === "session" && (live.features ?? []).includes("effort") ? ["", "low", "medium", "high", "xhigh", "max"].map((e) => ({ value: e, label: e ? t("Effort: {e}", { e }) : t("Effort: default"), sel: e === live.effort })) : [];
       out.session = {
         found: true,
         runId: s.last.id,
         title: s.todo?.text ?? s.last.summary ?? s.last.ref,
         statusText: liveText,
+        pill: ({ running: "run", queued: "plain", done: "done", failed: "bad", cancelled: "off", interrupted: "warn" })[status] ?? "plain",
         active: s.active,
         status,
         tone: status === "failed" ? "bad" : status === "done" ? "good" : status === "interrupted" ? "warn" : "plain",
@@ -314,6 +408,7 @@ export async function handler(event, context) {
         elevatedLabel: t("Administrator"),
         ticket: s.ticket,
         noTicket: t("no ticket"),
+        commitTitle: `${s.ticket ? `${s.ticket}: ` : ""}${s.todo?.text ?? ""}`.slice(0, 120),
         cardSummary: s.card?.summary ?? "",
         branch: s.last.branch ?? "",
         repoName: s.last.repo ? s.last.repo.split(/[\\/]/).filter(Boolean).pop() : "",
@@ -337,6 +432,7 @@ export async function handler(event, context) {
         models,
         efforts,
         hostText,
+        live: liveRow,
         shellPendingLabel: live?.shellPending ? t("{n} command output(s) go along with your next message", { n: live.shellPending }) : "",
         features: live?.features ?? [],
         canShell: (live?.features ?? []).includes("shell"),
