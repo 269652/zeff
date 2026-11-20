@@ -1,29 +1,28 @@
-<col gap=3>
-<row gap=1 wrap=true align=center>
-<button action="state" state="feedfilter" value="all" label="{{ data.feed.labels.all }}" variant="{{ state.feedfilter == 'all' ? 'primary' : 'quiet' }}"/>
-<button action="state" state="feedfilter" value="closed" label="{{ data.feed.labels.closed }}" variant="{{ state.feedfilter == 'closed' ? 'primary' : 'quiet' }}"/>
-<button action="state" state="feedfilter" value="created" label="{{ data.feed.labels.created }}" variant="{{ state.feedfilter == 'created' ? 'primary' : 'quiet' }}"/>
-{{#if data.feed.unseenText}}<small><text tone=warn>{{ data.feed.unseenText }}</text></small>{{/if}}
-</row>
-{{#if not data.feed.days}}<muted>{{ data.feed.empty }}</muted>{{/if}}
+<line look=lines>
+<line look=bar>
+<pill look=filter on="{{ state.feedfilter == 'all' }}" action="state" state="feedfilter" value="all">{{ data.feed.labels.all }}</pill>
+<pill look=filter on="{{ state.feedfilter == 'closed' }}" action="state" state="feedfilter" value="closed">{{ data.feed.labels.closed }}</pill>
+<pill look=filter on="{{ state.feedfilter == 'created' }}" action="state" state="feedfilter" value="created">{{ data.feed.labels.created }}</pill>
+{{#if data.feed.unseenText}}<ink tone="amber">{{ data.feed.unseenText }}</ink>{{/if}}
+</line>
+{{#if data.feed}}{{#if not data.feed.days}}<empty text="{{ data.feed.empty }}"/>{{/if}}{{/if}}
 {{#each data.feed.days}}
-<col gap=1>
-<small><b>{{ label }}</b></small>
+<line look=section>
+<line look=caption>{{ label }}</line>
+<rows>
 {{#each items}}
-<box tone="{{ isNew ? 'warn' : 'plain' }}">
-<row gap=2 wrap=false align=start>
-<small><muted>{{ time }}</muted></small>
-<b>{{ icon }} {{ label }}</b>
-<col fill=true gap=1>
-<text>{{ text }}</text>
-<small><button action="state" state="panel" value="{{ todoId }}" label="{{ ref }}" variant=link/><muted> · {{ ticket }} · {{#if byHref}}<a href="{{ byHref }}" tip="{{ byTitle }}">{{ by }}</a>{{#else}}{{ by }}{{/if}}{{#if reopened}} · reopened{{/if}}</muted>
-{{#if run}} <button run="todos-ext.undo-run" with="run={{ run }}" into="undone" confirm="Dismiss the todos this run made that you haven't touched — those you worked on stay" emit="todos-changed" label="take back the run" variant=link/>{{/if}}</small>
-{{#if note}}<small><muted>{{ note }}</muted></small>{{/if}}
-</col>
-</row>
-</box>
+<listrow tone="{{ isNew ? 'new' : 'plain' }}">
+<ink tone=time>{{ time }}</ink>
+<ink tone="event {{ tone }}">{{ icon }} {{ label }}</ink>
+<ink tone=grow>
+<line look=block>{{#if isNew}}<ink tone=dot tip="new"></ink> {{/if}}<ink tone="{{ closedEvent ? 'zinc' : '' }}">{{ text }}</ink></line>
+<line look=sub><ink tone=code action="state" state="panel" value="{{ todoId }}">{{ ref }}</ink> · {{ ticket }} · {{#if byHref}}<ink tone=muted href="{{ byHref }}" tip="{{ byTitle }}">{{ by }}</ink>{{#else}}<ink tone=muted tip="{{ byTitle }}">{{ by }}</ink>{{/if}}{{#if reopened}} · reopened{{/if}}{{#if run}} · <ink tone=muted run="todos-ext.undo-run" with="run={{ run }}" into="undone" confirm="Dismiss the todos this run made that you haven't touched — those you worked on stay" emit="todos-changed" tip="Dismiss the todos this run made that you haven't touched — those you worked on stay">take back the run</ink>{{/if}}</line>
+{{#if note}}<line look=subnote>{{ note }}</line>{{/if}}
+</ink>
+</listrow>
 {{/each}}
-</col>
+</rows>
+</line>
 {{/each}}
-{{#if data.undone.message}}<small><text tone=good>{{ data.undone.message }}</text></small>{{/if}}
-</col>
+{{#if data.undone.message}}<line look=small>{{ data.undone.message }}</line>{{/if}}
+</line>

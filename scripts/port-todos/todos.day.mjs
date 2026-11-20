@@ -15,7 +15,8 @@ export async function handler(event, context) {
   const hours = (h) => h.toLocaleString(locale, { maximumFractionDigits: 2 });
   const time = (at) => (at ? new Date(at).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : "");
   const dayLabel = (d) => new Date(`${d}T00:00:00`).toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
-  const facts = (list) => list.map((f) => ({ time: time(f.at), kind: KIND[f.kind] ?? f.kind, hours: f.hours ? `${hours(f.hours)} h` : "", text: f.text }));
+  const TONE = { entry: "fill-emerald", todo: "fill-zinc", work: "fill-indigo", "jira-comment": "fill-sky", "jira-change": "fill-sky", commit: "fill-amber", gitlab: "fill-orange" };
+  const facts = (list) => list.map((f) => ({ time: time(f.at), kind: KIND[f.kind] ?? f.kind, kindTone: TONE[f.kind] ?? "fill-zinc", hours: f.hours ? `${hours(f.hours)} h` : "", text: f.text }));
   const since = r.since ? Math.max(0, Math.round((Date.now() - r.since) / 1000)) : 0;
   const when = (iso) => (iso ? new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) || iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`).toLocaleString(locale, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "");
   const mins = (ms) => (ms ? `${Math.floor(ms / 60000)}:${String(Math.round((ms % 60000) / 1000)).padStart(2, "0")} min` : "");

@@ -16,6 +16,7 @@ import { AgendaList } from "@/plugins/calendar/AgendaList";
 import { MonthGrid } from "@/plugins/calendar/MonthGrid";
 import { TimeGrid } from "@/plugins/calendar/TimeGrid";
 import { stampAt, viewRange, ymd, type Item } from "@/plugins/calendar/view-shared";
+import { listBlock } from "./view-blocks-list";
 
 /**
  * More of the view language's blocks (view-template.ts): tabs that hold their content, a dialog or drawer, inputs and a slider that
@@ -73,7 +74,7 @@ export function moreBlock(n: Node, key: string | number, kids: Kids, env: BlockE
     case "upload":
       return <UploadBlock key={key} a={a} env={env} />;
     default:
-      return undefined;
+      return listBlock(n, key, kids, env);
   }
 }
 

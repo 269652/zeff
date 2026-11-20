@@ -247,6 +247,45 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   setting: T({ name: "text", label: "text", type: { oneOf: ["text", "number", "toggle", "select"] }, options: "text", default: "text" }, true),
   settings: T({ title: "text" }, true),
   upload: T({ bind: "text", label: "text", accept: "text", max: "int", /** An event sent once the file is read (its text in the state): what the view does with it at once. */ emit: "text", /** A flow that takes the file(s) as they are (bytes, not text): its input is `with` plus name, mime, size and token (`files.take` keeps the file) — once per file. */ run: "text", with: "text", multiple: { oneOf: ["true", "false"] }, done: "text", /** view: files can be dropped anywhere on the view (it is outlined while they are dragged over). */ zone: { oneOf: ["view"] } }, true),
+  // A list of things to do and the screen around it (ui/view-blocks-list.tsx). <sidebarframe store="key"><sidebar>…</sidebar>content</sidebarframe>: a page with a
+  // sidebar on the left that folds away (kept in this browser under store). <card>: a framed card (gap=2 tighter; flush=phone: no frame on a phone).
+  // <segmented bind options='[["open","Yours","3"],…]'>: a segmented switch with counts. <checklist spacing=loose>: the list; <checkrow id label checked tone look=suggest>:
+  // a row with a round tick box (its click: the action attributes), the content, and a <hoverbar pin=true> of buttons shown on hover in its top-right corner
+  // (<vrule/>: a thin line between them). <iconbtn glyph=flag|flag-on|top|bottom|clock|calendar|close|note|spark|clip|time|attach|reply|qr|book|x size=sm on reveal tone dot>:
+  // a button that is an icon (its label is its name). <pill tone=bad|warn|plain|off look=filter|ghost|shortcut on>: a rounded label or button. <line look=…>: a line of
+  // text in a look (h1, h2, lead, struck, aside, meta, note, ask, error, caption, heading, small, faint, chips, bar, tools, between, body, bullets, bullet).
+  // <ink tone="bad warn good accent link mono code faint muted strong medium chip tag label flag sign lead" href>: words inline in a tone. <caption dot="#hex" n="3" tone=bad>:
+  // a small heading of a group with a dot and a count. <copytext text label tip>: a text copied by a click. <inset small=true>: a framed panel under a row.
+  // <searchfield bind placeholder enter back label>: a search field with <token label icon tip remove …action/> before the text and a <popover> of <optgroup label/>
+  // and <option label sub meta icon …action/> under it while you type.
+  sidebarframe: T({ store: "text" }),
+  sidebar: T({}),
+  card: T({ gap: "int", flush: { oneOf: ["phone"] } }),
+  segmented: T({ bind: "text", options: "text", value: "text", label: "text" }, true),
+  checklist: T({ spacing: { oneOf: ["tight", "loose"] } }),
+  checkrow: T({ id: "text", label: "text", checked: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "ask", "suggest", "good", "busy", "new", "dim"] }, look: { oneOf: ["plain", "suggest"] }, tip: "text", checktip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
+  hoverbar: T({ pin: { oneOf: ["true", "false"] } }),
+  vrule: T({}, true),
+  iconbtn: T({ glyph: "text", label: "text", tip: "text", size: { oneOf: ["sm", "md"] }, on: { oneOf: ["true", "false"] }, reveal: { oneOf: ["true", "false"] }, tone: { oneOf: ["bad", "accent"] }, dot: { oneOf: ["true", "false"] }, pressed: { oneOf: ["true", "false"] }, expanded: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }, true),
+  pill: T({ tone: { oneOf: ["bad", "warn", "plain", "off"] }, look: { oneOf: ["due", "filter", "ghost", "shortcut", "primary"] }, on: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
+  line: T({ look: "text", tip: "text" }),
+  // <splitbutton label tip menutip …action>: a main button with a chevron beside it that opens what is inside. <rows> of <listrow tone=new>: a list parted by thin lines.
+  splitbutton: T({ label: "text", tip: "text", menutip: "text", disabled: { oneOf: ["true", "false"] }, action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text" }),
+  rows: T({}),
+  // <datepick bind max label value>: a calendar button that opens the browser's date picker; the day picked goes to state.<bind>.
+  datepick: T({ bind: "text", max: "text", label: "text", value: "text" }, true),
+  // <fold label look=group store="key" open=true>: a fold-out with a small label (look=group: a list's group heading), kept open or closed in this browser.
+  fold: T({ label: "text", look: { oneOf: ["plain", "group"] }, store: "text", open: { oneOf: ["true", "false"] } }),
+  listrow: T({ tone: { oneOf: ["plain", "new"] } }),
+  ink: T({ glyph: "text", label: "text", tone: "text", tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
+  caption: T({ dot: "text", n: "text", tone: { oneOf: ["plain", "bad"] } }),
+  copytext: T({ text: "text", label: "text", tip: "text" }, true),
+  inset: T({ small: { oneOf: ["true", "false"] } }),
+  searchfield: T({ bind: "text", placeholder: "text", enter: "text", back: "text", label: "text" }),
+  token: T({ label: "text", icon: "text", tip: "text", remove: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }, true),
+  popover: T({}),
+  optgroup: T({ label: "text" }, true),
+  option: T({ empty: { oneOf: ["true", "false"] }, label: "text", sub: "text", meta: "text", icon: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }, true),
   switch: T({ on: "text" }),
   case: T({ value: "text" }),
   otherwise: T({}),

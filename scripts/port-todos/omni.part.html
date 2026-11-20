@@ -1,19 +1,13 @@
-<col gap=1>
-<row gap=1 wrap=true align=center>
-{{#each data.x.chips}}<button action="pick" state="chips" value="{{ pick }}" label="{{ title }} ×" variant=plain tip="Remove this filter"/>{{/each}}
-<col fill=true><input bind="omniq" enter="omni-first" back="omni-back" placeholder="Search todos, tickets, mails, comments, notes, people …"/><on event="omni-first" action="pick" state="chips" value="{{ data.hits.first }}"/><on event="omni-back" action="pop" state="chips"/></col>
-{{#if state.filter}}<button action="state" state="filter" value="" label="Clear the filter" variant=link/>{{/if}}
-{{#if data.x.chips}}<button action="state" state="chips" value="[]" label="Clear the filter" variant=link/>{{/if}}
-</row>
-{{#if state.omniq}}
-<box>
-<col gap=1>
-{{#if data.hits.none}}<small><muted>{{ data.hits.none }}</muted></small>{{/if}}
-{{#each data.hits.hits}}
-{{#if first}}<small><b>{{ label }}</b></small>{{/if}}
-<row gap=2 wrap=false align=baseline><button action="pick" state="chips" value="{{ pick }}" label="{{ icon }} {{ title }}" variant=quiet/><col fill=true>{{#if sub}}<small><muted>{{ sub }}</muted></small>{{/if}}</col><small><muted>{{ n }}</muted></small></row>
-{{/each}}
-</col>
-</box>
-{{/if}}
-</col>
+<line look=tools>
+<searchfield bind="omniq" placeholder="{{ data.x.chips ? 'and …' : 'Search todos, tickets, mails, comments, notes, people …' }}" label="Search the todos and everything they are made of" enter="omni-first" back="omni-back">
+{{#each data.x.chips}}<token label="{{ title }}" remove="Remove this filter" action="pick" state="chips" value="{{ pick }}"/>{{/each}}
+<popover>
+{{#if data.hits.none}}<option empty=true label="{{ data.hits.none }}"/>{{/if}}
+{{#if not data.hits}}<option empty=true label="Searching …"/>{{/if}}
+{{#each data.hits.hits}}{{#if first}}<optgroup label="{{ label }}"/>{{/if}}<option icon="{{ icon }}" label="{{ title }}" sub="{{ sub }}" meta="{{ n }}" action="pick" state="chips" value="{{ pick }}"/>{{/each}}
+</popover>
+</searchfield>
+<on event="omni-first" action="pick" state="chips" value="{{ data.hits.first }}"/><on event="omni-back" action="pop" state="chips"/>
+{{#if data.x.chips}}<ink tone="link quiet" action="state" state="chips" value="[]">Clear the filter</ink>{{/if}}
+{{#if state.filter}}<ink tone="link quiet" action="state" state="filter" value="">Clear the filter</ink>{{/if}}
+</line>

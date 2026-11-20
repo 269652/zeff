@@ -1,0 +1,15 @@
+<line look=stack>
+<line look=day>
+<iconbtn glyph="←" label="Day before" tip="Day before" action="state" state="recapday" value="{{ data.day.before }}"/>
+<line look=h2>{{ data.day.label }}</line>
+{{#if data.day.after}}<iconbtn glyph="→" label="Day after" tip="Day after" action="state" state="recapday" value="{{ data.day.after }}"/>{{/if}}
+<datepick bind="recapday" max="{{ data.day.max }}" label="Jump to a day"/>
+</line>
+{{#if data.day.facts}}<line look=mono>{{#each data.day.facts}}<ink>{{ text }}</ink>{{/each}}</line>{{/if}}
+</line>
+<line look=run>
+{{#if data.day.running}}<line look=status><ink tone=pulse></ink>{{ data.day.runningText }}</line>{{/if}}
+<pill look=primary run="todos-ext.recap-start" with="day={{ data.day.day }}" into="rran" emit="todos-changed" disabled="{{ data.day.running }}" tip="Gathers what you did that day (entries, todos, workers, Jira, commits, GitLab) and has the AI from the settings summarize it">{{ data.day.running ? 'Running…' : data.day.again ? 'Summarize again' : 'Summarize' }}</pill>
+{{#if data.rran.error}}<line look=error>{{ data.rran.message }}</line>{{/if}}
+</line>
+{{#if data.day.failed}}<line look=alert>{{ data.day.failed }}</line>{{/if}}
