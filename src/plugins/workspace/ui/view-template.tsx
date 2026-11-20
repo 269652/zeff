@@ -113,7 +113,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   const [own, setOwn] = useState<Record<string, string>>(() => {
     try {
       const saved = typeof window === "undefined" ? null : (JSON.parse(localStorage.getItem(keepKey) ?? "null") as unknown);
-      return saved && typeof saved === "object" && !Array.isArray(saved) ? Object.fromEntries(Object.entries(saved).filter((e): e is [string, string] => typeof e[1] === "string")) : {};
+      // (a value the link sets — ?s.<name>= — wins over the one kept: /todos?todos=done opens on Done)
+      const linked = typeof window === "undefined" ? new URLSearchParams() : new URLSearchParams(window.location.search);
+      return saved && typeof saved === "object" && !Array.isArray(saved) ? Object.fromEntries(Object.entries(saved).filter((e): e is [string, string] => typeof e[1] === "string" && !linked.has(`s.${e[0]}`))) : {};
     } catch {
       return {};
     }
@@ -330,7 +332,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         case "hide":
           return void (rowId && props.rowOps?.hide(rowId));
         case "state":
-          return void (a.state && setState(a.state, a.value ?? ""));
+          if (a.state) setState(a.state, a.value ?? "");
+          // (then="a=1; b=": more states set with it — a field filled as its editor opens)
+          for (const pair of (a.then ?? "").split(";")) {
+            const i = pair.indexOf("=");
+            if (i > 0) setState(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+          }
+          return;
         case "pop": {
           if (!a.state) return;
           let list: unknown[] = [];

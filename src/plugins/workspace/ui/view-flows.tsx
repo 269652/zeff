@@ -208,9 +208,10 @@ export async function runFlowButton(a: Record<string, string>, v: { row: number 
   else if (typeof (res.output as { message?: unknown } | null)?.message === "string" && (res.output as { message: string }).message) toast((res.output as { message: string }).message, { tone: "ok" });
   const goTo = (res.output as { href?: unknown } | null)?.href;
   if (typeof goTo === "string" && goTo.startsWith("/workspace/")) window.location.assign(goTo);
-  if (a.then) {
-    const i = a.then.indexOf("=");
-    if (i > 0) v.setState(a.then.slice(0, i).trim(), a.then.slice(i + 1).trim());
+  // (then="a=1; b=": states set after it worked)
+  for (const pair of (a.then ?? "").split(";")) {
+    const i = pair.indexOf("=");
+    if (i > 0) v.setState(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
   }
   v.reload();
 }

@@ -406,8 +406,8 @@ export function DatabaseView({ initial, dbId, viewId, onView, embedded = false, 
   const countText = rows.length === data.rows.length ? (rows.length === 1 ? t("1 row") : t("{n} rows", { n: rows.length })) : t("{n} of {total} rows", { n: rows.length, total: data.rows.length });
   // (A table says it in its footer: no line of its own under it.)
   const countInTable = !dayTab && view.type === "table" && rows.length > 0;
-  // An app of its own (<panes>, or a page with its controls beside it: <split … sticky=true>): it has its search, filters and counts, the table's tools around it would only compete.
-  const appScreen = view.type === "app" && /<panes\b|<split\b[^>]*\bsticky="?true/.test(view.template ?? "");
+  // An app of its own (<panes>, <sidebarframe>, or a page with its controls beside it: <split … sticky=true>): it has its search, filters and counts, the table's tools around it would only compete.
+  const appScreen = view.type === "app" && /<(panes|sidebarframe)\b|<split\b[^>]*\bsticky="?true/.test(view.template ?? "");
   return (
     <div className="space-y-2">
       <div ref={setBar} className={`${bare ? "hidden" : "flex"} items-center gap-1 ${narrow ? "flex-nowrap" : "flex-wrap"}`}>

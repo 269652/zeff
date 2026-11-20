@@ -2,6 +2,7 @@ import { extensionPoint } from "@/lib/plugin-kit/extension-point";
 import type { FlowAction } from "../workspace/flows/actions";
 import type { FieldSpec } from "../workspace/flows/types";
 import { PANEL_ACTIONS } from "./panel-actions";
+import { amountIn, ibansIn } from "@/lib/girocode";
 
 /**
  * The kernel's reads and writes of the todos for plugins' lambdas and flows (docs/zeff-kernel.md): the open todos with what an AI step needs
@@ -110,8 +111,8 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const seenAt = (await import("@/lib/prefs")).getPref<string | null>("todos:seen-at", null);
       const rows = shown.map((t0) => {
         const t = rich.get(t0.id) ?? t0;
-        const msgs = t.refs.filter((r) => r.startsWith("mail:"));
-        const origin = !t.ticket ? (t.refs.some((r) => r.startsWith("event:")) ? "Calendar" : msgs.length ? "Mail" : "") : "";
+        // (No ticket: where it came from — an appointment, else a message: what the built-in page said too.)
+        const origin = !t.ticket ? (t.refs.some((r) => r.startsWith("event:")) ? "Calendar" : "Mail") : "";
         const d = deferred[t.id];
         const isDeferred = !!d?.deferred;
         return {
@@ -136,6 +137,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           workerDone: t.workerDone ? { by: t.workerDone.by, note: t.workerDone.note ?? "", suggested: !!t.workerDone.suggested } : null,
           needsInput: t.needsInput ?? "",
           lastError: (t as { lastError?: string }).lastError ?? "",
+          lastErrorRun: (t as { lastErrorRun?: number }).lastErrorRun ?? 0,
           opsCount: t.ops.length,
           notesCount: t.userNotes.length,
           byWorker: t.byWorker,
@@ -149,6 +151,9 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           timeMinutes: (t.time ?? []).reduce((a, r) => a + r.minutes, 0),
           mrs: (t.links?.mrs ?? []).map((m) => ({ ref: m.ref, url: m.url, title: m.title, state: m.state ?? "" })),
           merged: !!t.mergedAt && !!seenAt && t.mergedAt > seenAt,
+          // (What its quick buttons offer: a reply to the message it is about, a payment it names.)
+          canReply: t.owner === "me" && [...t.refs, ...t.mailRefs].some((r) => r.startsWith("mail:") || r.startsWith("teams:")),
+          canPay: !t.ops.some((o) => o.type === "bank-transfer" || o.type === "revolut-pay") && (amountIn(t.text) != null || ibansIn(`${t.text} ${t.note ?? ""}`).length > 0),
           isNew: t.status === "open" && !t.byWorker && !!seenAt && Math.max(Date.parse(t.createdAt), t.mergedAt ? Date.parse(t.mergedAt) : 0) > Date.parse(seenAt),
         };
       });

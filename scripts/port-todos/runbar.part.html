@@ -1,23 +1,23 @@
-<row gap=2 wrap=true align=center>
-{{#if data.lage.running}}
-<small><muted>● {{ data.lage.runningText }}</muted></small>
-<button run="todos-ext.board-run" with="stop=true" into="ran" emit="todos-changed" label="Cancel"/>
-{{#else}}
-<button run="todos-ext.board-run" with="stop=false" into="ran" emit="todos-changed" label="Run now" variant=primary tip="Reads your tickets, syncs first and has the AI write the briefing"/>
-{{/if}}
-{{#if data.lage.nSteps}}
-<menu label="Steps" tip="What Run now does, in order">
+<line look=head>
+<line look=grow>
+<line look=h1>{{ state.part == 'tickets' ? 'Tickets' : 'Todos' }}</line>
+{{#if data.lage.asOf}}<line look=small>{{ data.lage.asOf }}</line>
+<line look=chips>{{#each data.lage.facts}}<ink tone=chip>{{ text }}</ink>{{/each}}</line>{{/if}}
+</line>
+<line look=shrink>
+<line look=run>
+{{#if data.lage.running}}<line look=status><ink tone=pulse></ink>{{ data.lage.runningText }} <ink tone=danger run="todos-ext.board-run" with="stop=true" into="ran" emit="todos-changed" tip="Cancel the run — the step it is on (sync, AI) ends with it">Cancel</ink></line>{{/if}}
+<splitbutton label="{{ data.lage.running ? 'Running…' : 'Run now' }}" disabled="{{ data.lage.running }}" run="todos-ext.board-run" with="stop=false" into="ran" emit="todos-changed" tip="First syncs what AI steps → “Sync first” lists, then reads your tickets (with comments and history) and what Zeff knows about them, has the AI from the settings write the briefing and the todos — and then matches each todo with the mails it is about" menutip="The run's steps — how they last ran, each one startable on its own">
+<line look=stepsnote>“Run now” does these steps one after another — each also works on its own.</line>
+<rows>
 {{#each data.lage.steps}}
-<row gap=2 wrap=false align=center>
-<col fill=true><a href="{{ href }}" tip="{{ what }}">{{ label }}</a><small><muted>{{#if failed}}✗ {{else}}{{#if ok}}✓ {{/if}}{{/if}}{{ text }}</muted></small>{{#if health}}<small><text tone=warn>{{ health }}</text></small>{{/if}}</col>
-{{#if running}}<button run="todos-ext.sync" with="key={{ key }}, stop=true" emit="todos-changed" label="■" variant=quiet tip="Cancel — what it started ends with it"/>{{#else}}<button run="todos-ext.sync" with="key={{ key }}, stop=false" into="synced" emit="todos-changed" label="⟳" variant=quiet tip="{{ label }} now — {{ what }}"/>{{/if}}
-</row>
+<listrow><ink tone=grow><ink href="{{ href }}" tip="{{ what }}" tone=medium>{{ label }}</ink><line look=sub>{{#if failed}}✗ {{else}}{{#if ok}}✓ {{/if}}{{/if}}{{ text }}</line>{{#if health}}<line look=warnline>{{ health }}</line>{{/if}}</ink>{{#if running}}<iconbtn glyph="■" label="Cancel" tip="Cancel — what it started ends with it" run="todos-ext.sync" with="key={{ key }}, stop=true" emit="todos-changed"/>{{#else}}<iconbtn glyph="⟳" label="{{ label }} now" tip="{{ label }} now — {{ what }}" run="todos-ext.sync" with="key={{ key }}, stop=false" into="synced" emit="todos-changed"/>{{/if}}</listrow>
 {{/each}}
-</menu>
-{{/if}}
-{{#if data.lage.asOf}}<small><muted>{{ data.lage.asOf }}</muted></small>{{/if}}
-{{#each data.lage.facts}}<chip>{{ text }}</chip>{{/each}}
-</row>
-{{#if data.synced.error}}<small><text tone=bad>{{ data.synced.error }}</text></small>{{/if}}
-{{#if data.ran.message}}<small><text tone="{{ data.ran.ok ? 'good' : 'bad' }}">{{ data.ran.message }}</text></small>{{/if}}
-{{#if data.lage.failed}}<callout tone=bad><text>{{ data.lage.failed }}</text></callout>{{/if}}
+</rows>
+</splitbutton>
+</line>
+{{#if data.synced.error}}<line look=error>{{ data.synced.error }}</line>{{/if}}
+{{#if data.ran.message}}{{#if not data.ran.ok}}<line look=error>{{ data.ran.message }}</line>{{/if}}{{/if}}
+</line>
+</line>
+{{#if data.lage.failed}}<line look=alert>{{ data.lage.failed }}</line>{{/if}}

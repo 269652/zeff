@@ -17,6 +17,7 @@ import { AgendaList } from "@/plugins/calendar/AgendaList";
 import { MonthGrid } from "@/plugins/calendar/MonthGrid";
 import { TimeGrid } from "@/plugins/calendar/TimeGrid";
 import { stampAt, viewRange, ymd, type Item } from "@/plugins/calendar/view-shared";
+import { listBlock } from "./view-blocks-list";
 
 /**
  * More of the view language's blocks (view-template.ts): tabs that hold their content, a dialog or drawer, inputs and a slider that
@@ -76,10 +77,12 @@ export function moreBlock(n: Node, key: string | number, kids: Kids, env: BlockE
     case "diff":
     case "terminal":
     case "spinner":
-    case "pill":
       return textBlock(n.t, a, key, env.run);
+    case "pill":
+      // (with label=: a status label; with content: a rounded button around it)
+      return a.label !== undefined ? textBlock(n.t, a, key, env.run) : listBlock(n, key, kids, env);
     default:
-      return undefined;
+      return listBlock(n, key, kids, env);
   }
 }
 
@@ -450,7 +453,7 @@ function UploadFiles({ a, env }: { a: Record<string, string>; env: BlockEnv }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone, a.multiple]);
   return (
-    <label ref={ref} title={a.tip || undefined} className={a.look === "icon" ? "grid size-7 shrink-0 cursor-pointer place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 print:hidden dark:hover:bg-zinc-800" : "btn btn-primary btn-sm cursor-pointer print:hidden"}>
+    <label ref={ref} title={a.tip || undefined} className={a.look === "icon" ? "grid size-7 shrink-0 cursor-pointer place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 print:hidden dark:hover:bg-zinc-800" : `${a.variant === "plain" ? "btn btn-sm" : "btn btn-primary btn-sm"} cursor-pointer print:hidden`}>
       {a.label || t("Choose a file")}
       <input type="file" hidden multiple={a.multiple === "true"} accept={a.accept || undefined} onChange={(e) => (void take([...(e.target.files ?? [])]), (e.target.value = ""))} />
     </label>

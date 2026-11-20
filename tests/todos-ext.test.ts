@@ -608,4 +608,4 @@ test("the last pieces: tagging a person, a picture in a note, the steps of the r
   const { PORTS } = await import("@/plugins/ports");
   assert.ok(PORTS.some((p) => p.builtin === "todos" && p.plugin === "todos-ext"));
 });
-const drawnHas = (r: { nodes: unknown; errors: unknown[] }) => r.errors.length === 0 && JSON.stringify(r.nodes).includes("Steps");
+const drawnHas = (r: { nodes: unknown; errors: unknown[] }) => r.errors.length === 0 && JSON.stringify(r.nodes).includes("todos-ext.sync");
