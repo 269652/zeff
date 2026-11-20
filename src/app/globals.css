@@ -460,6 +460,14 @@ p a:not([class*="btn"]):not([role]),
   }
 }
 
+/* <panes wide=lg>: side by side only from 1024 px (a sidebar app) — below, one under the other and the page scrolls. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .ws-panes.ws-panes-lg {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+}
+
 /* In a pane the pane is the frame: a list has none of its own, a search takes the room there is. */
 /* The reply under a mail or chat: it stays at the bottom of its pane while the mail above it scrolls (a long one scrolls in itself). */
 .ws-panes .ws-reply-dock {

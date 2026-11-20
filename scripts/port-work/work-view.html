@@ -12,7 +12,7 @@
 <on event="live-model" run="work.live" with="run={{ data.x.session.runId }}, do=model, model={{ state.lmodel == '@none' ? '' : state.lmodel }}" then="lmodel=" emit="work-changed"/>
 <on event="live-effort" run="work.live" with="run={{ data.x.session.runId }}, do=effort, effort={{ state.leffort == '@none' ? '' : state.leffort }}" then="leffort=" emit="work-changed"/>
 {{#if not data.x}}<muted>Loading …</muted>{{#else}}
-<panes plain=true>
+<panes plain=true wide=lg>
 <pane width=288 flush=true fold=true>
 <dock edge=top plain=true line=false>
 <col gap=2>
@@ -31,8 +31,8 @@
 {{#each items}}
 <item state="sel" value="run:{{ id }}" label="{{ title }}" sub="{{ ticket }}" meta="{{ ago }}" tone="{{ tone }}" selected="{{ selected }}" dim="{{ archived }}" tip="{{ tip }}">
 <menu label="⋯" tip="Session menu">
-<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=plain/>
-<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=danger disabled="{{ active }}" tip="{{ active ? 'It is working — stop it first.' : '' }}"/>
+<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=item/>
+<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=item-bad disabled="{{ active }}" tip="{{ active ? 'It is working — stop it first.' : '' }}"/>
 </menu>
 </item>
 {{/each}}
@@ -44,8 +44,8 @@
 {{#each items}}
 <item state="sel" value="run:{{ id }}" label="{{ title }}" meta="{{ ago }}" tone="{{ tone }}" selected="{{ selected }}" dim="{{ archived }}" tip="{{ tip }}">
 <menu label="⋯" tip="Session menu">
-<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=plain/>
-<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=danger disabled="{{ active }}"/>
+<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=item/>
+<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=item-bad disabled="{{ active }}"/>
 </menu>
 </item>
 {{/each}}
@@ -54,8 +54,8 @@
 {{#each items}}
 <item state="sel" value="run:{{ id }}" label="{{ title }}" sub="{{ ticket }}" meta="{{ ago }}" tone="{{ tone }}" selected="{{ selected }}" dim="{{ archived }}" tip="{{ tip }}">
 <menu label="⋯" tip="Session menu">
-<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=plain/>
-<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=danger disabled="{{ active }}"/>
+<button run="work.archive" with="todo={{ todoId }}, archived={{ archived ? 'false' : 'true' }}" emit="work-changed" label="{{ archived ? 'Unarchive' : 'Archive' }}" variant=item/>
+<button run="work.delete" with="todo={{ todoId }}" confirm="Delete this session for good? Its conversation, logs and result are deleted and cannot be brought back; its todo stays." emit="work-gone" label="Delete …" variant=item-bad disabled="{{ active }}"/>
 </menu>
 </item>
 {{/each}}

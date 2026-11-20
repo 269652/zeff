@@ -475,7 +475,7 @@ function Panes({ a, list, kids }: { a: Record<string, string>; list: Node[]; kid
   const columns = [...(back.length ? ["max-content"] : []), ...shown.map(({ p }) => (Number(p.a.width) > 0 ? `${Math.min(640, Number(p.a.width))}px` : "minmax(0,1fr)"))].join(" ");
   const plain = a.plain === "true";
   return (
-    <FillHeight className={plain ? "ws-panes grid gap-6" : "ws-panes grid gap-3"} style={{ "--panes": columns } as CSSProperties}>
+    <FillHeight wide={a.wide === "lg" ? 1024 : 768} className={`${plain ? "ws-panes grid gap-6" : "ws-panes grid gap-3"} ${a.wide === "lg" ? "ws-panes-lg" : ""}`} style={{ "--panes": columns } as CSSProperties}>
       {back.length > 0 && (
         <div className="flex flex-col gap-1">
           {back.map(({ p, i }) => (
@@ -511,7 +511,7 @@ function Panes({ a, list, kids }: { a: Record<string, string>; list: Node[]; kid
  * The panes as high as the window leaves below them, to its bottom edge (each pane scrolls by itself, the page doesn't): measured
  * where they start and what the page has below them, again when the window changes. Without a measure (print, a phone): the CSS's.
  */
-function FillHeight({ className, style, children }: { className: string; style: CSSProperties; children: ReactNode }) {
+function FillHeight({ className, style, children, wide = 768 }: { className: string; style: CSSProperties; children: ReactNode; /** From this width on side by side (and as high as the window). */ wide?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -523,7 +523,7 @@ function FillHeight({ className, style, children }: { className: string; style: 
         // What lies below the panes in their page — in a page the rest of the editor, on a database's own page its row count —, not
         // the sidebar beside it. (Phones, print: the CSS's height.)
         const page = el.closest(".ws-editor") ?? el.closest(".page > :not(.page-aside)");
-        if (!page || !window.matchMedia("(min-width: 768px)").matches) {
+        if (!page || !window.matchMedia(`(min-width: ${wide}px)`).matches) {
           // (a phone: the page scrolls as ever)
           if (locked) (locked.el.style.overflowY = locked.was), (locked = null);
           return void el.style.removeProperty("height");
@@ -557,7 +557,7 @@ function FillHeight({ className, style, children }: { className: string; style: 
       ro.disconnect();
       if (locked) locked.el.style.overflowY = locked.was;
     };
-  }, []);
+  }, [wide]);
   return (
     <div ref={ref} className={className} style={style}>
       {children}
