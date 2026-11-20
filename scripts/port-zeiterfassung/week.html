@@ -149,20 +149,16 @@
     <let name="hh" value="state | get(hKey) | default(hours)"/>
     <col gap=1>
       <row gap=3 wrap=false align=center justify=between>
-        <col fill=true>
-          <row gap=2 wrap=false align=baseline>
-            <small tone=muted><mono>{{ ref }}</mono></small><small><b>{{ date }}</b></small>{{#if ticket}}<mono>{{ ticket }}</mono>{{/if}}{{#if target}}<small tone=muted>{{ target }}</small>{{#else}}<small tone=warn>{{ noJobText }}</small>{{/if}}<small tone=muted>{{ by }}</small>
-            <col fill=true><truncate tip="{{ description }}">{{ description }}</truncate></col>
-          </row>
-        </col>
-        <row gap=1 wrap=false align=center>
+        <row gap=2 wrap=true align=baseline><small tone=muted><mono>{{ ref }}</mono></small><small><b>{{ date }}</b></small>{{#if ticket}}<mono>{{ ticket }}</mono>{{/if}}{{#if target}}<small tone=muted>{{ target }}</small>{{#else}}<small tone=warn>{{ noJobText }}</small>{{/if}}<small tone=muted>{{ by }}</small></row>
+        <col width=310 align=end><row gap=1 wrap=false align=center>
           <button action="state" state="{{ evKey }}" value="{{ ev == '1' ? '' : '1' }}" label="{{ evLabel }} {{ ev == '1' ? '▾' : '▸' }}" variant=quiet/>
           <b><edit type=number value="{{ hh }}" text="{{ hh }} h" min=0.25 max=24 step=0.25 label="Hours" tip="Click to change the hours" action="state" state="{{ hKey }}"/></b>
           <button action="state" state="sugedit" value="{{ id }}" label="Edit" variant=plain/>
           {{#if target}}<button run="zeiterfassung.suggestion" with="id={{ id }}, accept=true, hours={{ hh }}, description={{ description }}" emit="time-changed" done="Accepted." label="Accept" tip="{{ title }}" variant=primary/>{{/if}}
           <button run="zeiterfassung.suggestion" with="id={{ id }}, accept=false" emit="time-changed" done="Suggestion dismissed." label="Dismiss" variant=plain/>
-        </row>
+        </row></col>
       </row>
+      <truncate tip="{{ description }}">{{ description }}</truncate>
       {{#if ev == '1'}}<small tone=muted><text pre=true>{{ evidence }}</text></small>{{/if}}
     </col>
     {{/each}}
