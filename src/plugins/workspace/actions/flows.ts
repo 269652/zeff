@@ -69,6 +69,44 @@ export async function sourceCardsAction(refs: string[]) {
   });
 }
 
+/**
+ * The context of todos, for <sources todo=…>: per todo what it came from (comments, messages, mails, merge requests …) and the notes on it (yours, the runs'
+ * reports, those of the todos before it) — what the todo's "Context" fold shows. Settings → Todos may hide it (then nothing).
+ */
+export async function todoContextsAction(ids: number[]) {
+  return run(async () => {
+    const want = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))].slice(0, 300);
+    const { getTodoDisplayOff } = await import("@/lib/todo-display-store");
+    const { areaOn } = await import("@/lib/todo-display");
+    type Ctx = { sources: import("@/lib/todos/shared").TodoSource[]; notes: import("@/lib/todos/shared").TodoUserNote[]; knowledge: import("@/plugins/knowledge/shared").TodoKnowledge | null };
+    const off = getTodoDisplayOff();
+    if (!want.length) return { contexts: {} as Record<number, Ctx> };
+    const { todosByIds } = await import("@/lib/todos/store");
+    const { withAlternatives } = await import("@/lib/todos/alternatives");
+    const { todoSources } = await import("@/lib/todos/sources");
+    const { sourcesOf } = await import("@/lib/todos/shared");
+    const { lastGoodRun, latestRun } = await import("@/lib/runs/store");
+    const latest = latestRun();
+    const tickets = (latest?.status === "ok" ? latest : lastGoodRun())?.tickets ?? [];
+    const list = withAlternatives([...todosByIds(want).values()]);
+    const all = todoSources(list, tickets);
+    // The knowledge the Wissens-Zuordnung picked for each (as Settings → Todos lets it show: which kinds, entities, links).
+    const { kindOfPage, kindOn } = await import("@/lib/todo-display");
+    const { entitiesFor, pagesFor } = await import("@/plugins/knowledge/shared");
+    const knowledgeOn = (await import("@/plugins/state")).isInstalled("knowledge") && areaOn(off, "knowledge");
+    const knowledgeOf = (t: (typeof list)[number]) => {
+      if (!knowledgeOn || !t.knowledge) return null;
+      const pages = pagesFor(t.knowledge.pages, t.id).filter((x) => kindOn(off, kindOfPage(x)));
+      const entities = off.includes("entities") ? [] : entitiesFor(t.knowledge.entities, pages);
+      const links = off.includes("links") ? [] : (t.knowledge.links ?? []);
+      const repo = off.includes("links") ? undefined : t.knowledge.repo;
+      return pages.length || entities.length || links.length || repo ? { ...t.knowledge, pages, entities, links, repo } : null;
+    };
+    const context = areaOn(off, "context");
+    return { contexts: Object.fromEntries(list.map((t): [number, Ctx] => [t.id, { sources: context ? sourcesOf(t.refs, all) : [], notes: context ? [...t.userNotes, ...(t.relatedNotes ?? [])] : [], knowledge: knowledgeOf(t) }])) };
+  });
+}
+
 /** Every flow (name, title, inputs, whether it is a lookup), for the Studio and a template's checks. */
 export async function listFlowsAction() {
   return run(async () => ({ flows: (await import("../flows/store")).listFlows().map((f) => ({ pageId: f.pageId, parentId: f.parentId, name: f.name, title: f.title, description: f.description ?? "", inputs: f.inputs, lookup: !!f.lookup, enabled: f.enabled !== false, triggers: f.triggers, lastRunAt: f.lastRunAt })) }));

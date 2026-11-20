@@ -6,7 +6,7 @@ import type { BlockEnv } from "./view-blocks";
 import { SidebarFrame } from "@/components/SidebarFrame";
 import { CopyButton } from "@/components/CopyButton";
 import { TodoCheck } from "@/components/TodoCheck";
-import { BookIcon, CalendarIcon, ChevronIcon, ClockIcon, CloseIcon, FlagIcon, NoteIcon, PaperclipIcon, SparkIcon, ToBottomIcon, ToTopIcon } from "@/components/icons";
+import { BookIcon, CalendarIcon, CheckIcon, ChevronIcon, CollapseIcon, ExpandIcon, PencilIcon, ClockIcon, CloseIcon, FlagIcon, NoteIcon, PaperclipIcon, SparkIcon, ToBottomIcon, ToTopIcon } from "@/components/icons";
 
 /**
  * The view language's pieces for a list of things to do and a screen around it (view-template.ts): a page with a foldable sidebar
@@ -31,6 +31,16 @@ const ROW_TONE: Record<string, string> = {
   new: "bg-sky-50/80 ring-1 ring-sky-100 dark:bg-sky-950/30 dark:ring-sky-900/60",
   dim: "opacity-60 hover:bg-zinc-50 hover:opacity-100 dark:hover:bg-zinc-800/40",
   plain: "hover:bg-zinc-50 dark:hover:bg-zinc-800/40",
+};
+
+/** An action card's colour by what it does (lib/todos/op-look.ts's tones). */
+const CARD_TONE: Record<string, { bar: string; bubble: string }> = {
+  indigo: { bar: "border-l-indigo-400", bubble: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300" },
+  emerald: { bar: "border-l-emerald-400", bubble: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
+  sky: { bar: "border-l-sky-400", bubble: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300" },
+  violet: { bar: "border-l-violet-400", bubble: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" },
+  amber: { bar: "border-l-amber-400", bubble: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
+  zinc: { bar: "border-l-zinc-300", bubble: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300" },
 };
 
 const LINE: Record<string, string> = {
@@ -74,6 +84,12 @@ const LINE: Record<string, string> = {
   groups: "space-y-5",
   fold: "pt-1",
   block: "",
+  toggles: "mt-2 flex flex-wrap items-center gap-1.5",
+  opsbox: "relative mt-1.5 flex flex-col gap-1.5",
+  plan: "mt-1.5 block space-y-0.5 border-l-2 border-zinc-200 pl-2 text-xs text-zinc-500 dark:border-zinc-700 dark:text-zinc-400",
+  draft: "block rounded-md bg-zinc-50 px-2.5 py-2 text-sm whitespace-pre-wrap text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200",
+  suggested: "flex min-w-0 flex-1 items-start gap-1.5 rounded-md bg-violet-50 px-2 py-1 text-xs text-violet-800 dark:bg-violet-950/40 dark:text-violet-200",
+  outcome: "text-xs text-red-600 dark:text-red-400",
   retry: "flex shrink-0 gap-1",
   groups4: "space-y-4",
   facts: "mt-1.5 space-y-1",
@@ -192,6 +208,14 @@ function Glyph({ name }: { name: string }) {
       );
     case "x":
       return <>×</>;
+    case "tool-edit":
+      return <PencilIcon className={s} />;
+    case "pencil":
+      return <PencilIcon className={s} />;
+    case "check":
+      return <CheckIcon className={s} />;
+    case "close-sm":
+      return <CloseIcon className={s} />;
     default:
       return <>{name}</>;
   }
@@ -413,6 +437,33 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
           {kids(n.c)}
         </Fold>
       );
+    case "actioncard": {
+      // An action as a card: an icon in the colour of what it does, its title and a quiet line, what it carries (a draft) below, the button that runs it
+      // inside (<cardaction>) and small tools that show on hover (<cardtools>).
+      const tools = items(n).filter((c) => c.t === "cardtools");
+      const action = items(n).filter((c) => c.t === "cardaction");
+      const rest = n.c.filter((c) => typeof c === "string" || (c.t !== "cardtools" && c.t !== "cardaction"));
+      const tone = CARD_TONE[a.tone ?? "zinc"] ?? CARD_TONE.zinc;
+      return (
+        <span key={key} className={`group/op flex max-w-full min-w-0 flex-col gap-1.5 rounded-xl border border-l-4 border-zinc-200 bg-white px-3 py-2.5 shadow-sm transition hover:shadow-md dark:border-zinc-700 dark:bg-zinc-900 ${tone.bar}`}>
+          <span className="flex items-start gap-2.5">
+            <span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold ${tone.bubble}`} aria-hidden>
+              {a.icon}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm leading-snug font-medium break-words">{a.title}</span>
+              {a.detail && <span className="mt-0.5 block text-xs break-words text-zinc-500 dark:text-zinc-400">{a.detail}</span>}
+            </span>
+            {tools.length > 0 && <span className="flex shrink-0 items-center gap-0.5 opacity-50 transition group-hover/op:opacity-100 focus-within:opacity-100">{kids(tools.flatMap((x) => x.c))}</span>}
+          </span>
+          {kids(rest)}
+          {action.length > 0 && <span className="flex justify-end">{kids(action.flatMap((x) => x.c))}</span>}
+        </span>
+      );
+    }
+    case "cardtools":
+    case "cardaction":
+      return <span key={key}>{kids(n.c)}</span>;
     case "splitbutton":
       return <SplitButton key={key} a={a} kids={() => kids(n.c)} go={go} />;
     case "rows":
@@ -446,7 +497,13 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
     }
     case "pill": {
       const cls =
-        a.look === "primary"
+        a.look === "area"
+          ? `inline-flex flex-wrap items-center gap-x-1 gap-y-0.5 rounded-md border px-2 py-0.5 text-left text-xs font-medium transition ${a.on === "true" ? "border-zinc-300 bg-zinc-100 text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100" : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100"} ${a.tone === "violet" ? "[&_svg]:text-violet-600 dark:[&_svg]:text-violet-400" : a.tone === "emerald" ? "[&_svg]:text-emerald-600 dark:[&_svg]:text-emerald-400" : "[&_svg]:text-indigo-500 dark:[&_svg]:text-indigo-400"}`
+          : a.look === "run"
+            ? "btn btn-sm btn-primary shrink-0 rounded-full px-3.5 shadow-sm"
+            : a.look === "open"
+              ? "self-start rounded-full bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-700 hover:bg-sky-100 dark:bg-sky-950 dark:text-sky-300 dark:hover:bg-sky-900"
+          : a.look === "primary"
           ? "btn btn-primary"
           : a.look === "retry"
             ? "rounded border border-red-300 px-1.5 font-medium hover:bg-red-50 disabled:opacity-40 dark:border-red-800 dark:hover:bg-red-950"
@@ -459,9 +516,20 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
             : a.look === "shortcut"
               ? "rounded-full border border-violet-200 px-2 py-0.5 text-xs text-violet-700 hover:bg-violet-50 disabled:opacity-50 dark:border-violet-900 dark:text-violet-300 dark:hover:bg-violet-950"
               : `ml-0.5 rounded-full px-2 py-px font-medium ring-1 ring-inset ${PILL[a.tone ?? "plain"] ?? PILL.plain} ${a.tone === "off" ? "" : "hover:brightness-95"}`;
+      // (look=area: a toggle of a row's area — folded/unfolded marks before it, an icon of its kind; look=open with href: a link out)
+      const mark = a.look === "area" ? (a.on === "true" ? <CollapseIcon className="size-3 !text-zinc-400" /> : <ExpandIcon className="size-3 !text-zinc-400" />) : null;
+      const glyph = a.glyph ? <Glyph name={a.glyph} /> : null;
+      if (a.href)
+        return (
+          <a key={key} href={a.href} target="_blank" rel="noreferrer" className={cls} title={a.tip || undefined}>
+            {kids(n.c)}
+          </a>
+        );
       return acts(a) ? (
-        <button key={key} type="button" className={cls} title={a.tip || undefined} disabled={a.disabled === "true"} aria-pressed={a.look === "filter" ? a.on === "true" : undefined} onClick={go}>
-          {kids(n.c)}
+        <button key={key} type="button" className={cls} title={a.tip || undefined} disabled={a.disabled === "true"} aria-pressed={a.look === "filter" ? a.on === "true" : undefined} aria-expanded={a.look === "area" ? a.on === "true" : undefined} onClick={go}>
+          {mark}
+          {a.look === "area" ? <span>{kids(n.c)}</span> : kids(n.c)}
+          {glyph}
         </button>
       ) : (
         <span key={key} className={cls} title={a.tip || undefined}>

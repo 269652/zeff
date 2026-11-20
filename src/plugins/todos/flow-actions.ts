@@ -77,7 +77,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
     output: "{ rows: [{ id, ref, ticket, alsoTickets, text, kind, kindLabel, owner, status, source, note, due, dueDays, group, flagged, deferred, bubbledUp, repeats, workerDone, needsInput, lastError, opsCount, notesCount, byWorker, createdAt, doneAt }], counts: { open, waiting, done, worker }, tickets: { [key]: { summary, status, url } }, briefing: boolean }",
     run: async (i) => {
       const store = await import("@/lib/todos/store");
-      const { TODO_KIND_LABELS, opTitle } = await import("@/lib/todos/shared");
+      const { TODO_KIND_LABELS, opTitle, opNote, opsButton, sourcesOf } = await import("@/lib/todos/shared");
       const { translator } = await import("@/lib/i18n/shared");
       const { groupOf } = await import("@/lib/todos/groups");
       const { daysUntil } = await import("@/lib/todos/due-shared");
@@ -109,6 +109,17 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const rich = new Map(withAlternatives(shown).map((x) => [x.id, x]));
       const busy = workingRuns();
       const seenAt = (await import("@/lib/prefs")).getPref<string | null>("todos:seen-at", null);
+      // What the row shows under it, as the built-in page did: its context (counted here, the cards fetched when it opens), its actions as cards
+      // (inline, or folded behind a toggle — proposed by the AI, or several), the other ways to do it, what is planned after it.
+      const { todoSources } = await import("@/lib/todos/sources");
+      const { summarizeContext } = await import("@/lib/context-summary");
+      const { opLook } = await import("@/lib/todos/op-look");
+      const { actionHref } = await import("@/plugins/actions/catalog");
+      const { getTodoDisplayOff } = await import("@/lib/todo-display-store");
+      const { areaOn } = await import("@/lib/todo-display");
+      const off = getTodoDisplayOff();
+      const sourceMap = todoSources([...rich.values()], run?.tickets ?? []);
+      const en = translator("en");
       const rows = shown.map((t0) => {
         const t = rich.get(t0.id) ?? t0;
         // (No ticket: where it came from — an appointment, else a message: what the built-in page said too.)
@@ -154,6 +165,20 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
           // (What its quick buttons offer: a reply to the message it is about, a payment it names.)
           canReply: t.owner === "me" && [...t.refs, ...t.mailRefs].some((r) => r.startsWith("mail:") || r.startsWith("teams:")),
           canPay: !t.ops.some((o) => o.type === "bank-transfer" || o.type === "revolut-pay") && (amountIn(t.text) != null || ibansIn(`${t.text} ${t.note ?? ""}`).length > 0),
+          context: areaOn(off, "context") ? summarizeContext(sourcesOf(t.refs, sourceMap), [...t.userNotes, ...(t.relatedNotes ?? [])]) : { n: 0, groups: {}, remote: false },
+          // proposed: the AI's, behind "✨ Actions (n)"; folded: several cards (or a transfer), behind "⚡ Actions (n)"; inline: one card under the row.
+          opsMode: !t.ops.length || t.status !== "open" ? "" : t.autoOpsWhy ? (areaOn(off, "actions") ? "proposed" : "") : t.ops.length + (t.alternatives?.length ?? 0) > 1 || t.ops.some((o) => o.type === "bank-transfer" || o.type === "revolut-pay") ? "folded" : "inline",
+          ops: t.ops.map((op, index) => {
+            const note = opNote(op, en);
+            const href = actionHref(op) ?? "";
+            const look = opLook(op.type);
+            return { index, type: op.type, heading: note.heading, detail: note.detail ?? "", body: op.type === "bank-transfer" || op.type === "revolut-pay" ? "" : (note.body ?? ""), href, runnable: !href, button: href ? "" : opsButton([op], en), tone: look.tone, icon: look.icon, hasText: note.body !== null };
+          }),
+          alternatives: (t.alternatives ?? []).map((a) => ({ label: a.label, title: a.title, button: opsButton(a.ops, en), ...opLook(a.ops[0]?.type ?? "") })),
+          planned: t.status === "open" ? t.planned.map((p, n) => ({ path: p.path ?? "", n: n + 1, steps: p.steps.map((s) => s.text).join(" → ") })) : [],
+          blockedBy: t.blockedBy ?? "",
+          path: t.path ?? "",
+          knowledgeN: t.knowledge && areaOn(off, "knowledge") ? t.knowledge.pages.length + t.knowledge.entities.length + (t.knowledge.links?.length ?? 0) + (t.knowledge.repo ? 1 : 0) : 0,
           isNew: t.status === "open" && !t.byWorker && !!seenAt && Math.max(Date.parse(t.createdAt), t.mergedAt ? Date.parse(t.mergedAt) : 0) > Date.parse(seenAt),
         };
       });

@@ -162,7 +162,8 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   suggested: T({ row: "text" }, true),
   know: T({ row: "text", compact: { oneOf: ["true", "false"] } }, true),
   // Mails, letters and appointments by their refs ("mail:<key>", "doc:<id>", "event:…") as cards, as a todo's sources are shown (open=true: unfolded).
-  sources: T({ refs: "text", open: { oneOf: ["true", "false"] } }, true),
+  // todo="12" (summary='{"n":3,"groups":{…},"remote":false}' to start with): that todo's whole context — what it came from and the notes on it — behind its "Context (n)" toggle, as on the Todos page.
+  sources: T({ refs: "text", open: { oneOf: ["true", "false"] }, todo: "text", summary: "text", /** knowledge: the todo's knowledge ("Knowledge (n)") instead of its context. */ show: { oneOf: ["context", "knowledge"] } }, true),
   // What happened with a row, by day (the Timeline plugin — nothing while it is off).
   rowtimeline: T({ row: "text", limit: "int", title: "text" }, true),
   // A transfer as a GiroCode (EPC QR code) to scan with a banking app, its fields beside it.
@@ -258,7 +259,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   /** A small rounded label. With label=: how something stands or a short reference — tone=run|plain|muted|off|done|bad|warn, dot=pulse|still|space|none, mono, bold,
    *  tag (a smaller label in it), caret (▾), shape=round|tag|bare, width (px at most); href= a link, state=/value= sets the view's state, disabled.
    *  With content instead of label=: a rounded button or label around it — look=due|filter|ghost|shortcut|primary|retry|hide, on=true (picked), tone=bad|warn|plain|off, and the action attributes. */
-  pill: T({ label: "text", tone: { oneOf: ["run", "plain", "muted", "off", "done", "bad", "warn"] }, dot: { oneOf: ["pulse", "still", "space", "none"] }, mono: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tag: "text", caret: { oneOf: ["true", "false"] }, shape: { oneOf: ["round", "tag", "bare"] }, width: "int", look: { oneOf: ["due", "filter", "ghost", "shortcut", "primary", "retry", "hide"] }, on: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
+  pill: T({ label: "text", tone: { oneOf: ["run", "plain", "muted", "off", "done", "bad", "warn"] }, dot: { oneOf: ["pulse", "still", "space", "none"] }, mono: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tag: "text", caret: { oneOf: ["true", "false"] }, shape: { oneOf: ["round", "tag", "bare"] }, width: "int", look: { oneOf: ["due", "filter", "ghost", "shortcut", "primary", "retry", "hide", "area", "run", "open"] }, glyph: "text", on: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
   /** A small turning circle: something is under way. */
   spinner: T({}, true),
   // A list of things to do and the screen around it (ui/view-blocks-list.tsx). <sidebarframe store="key"><sidebar>…</sidebar>content</sidebarframe>: a page with a
@@ -285,6 +286,11 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // <splitbutton label tip menutip …action>: a main button with a chevron beside it that opens what is inside. <rows> of <listrow tone=new>: a list parted by thin lines.
   splitbutton: T({ label: "text", tip: "text", menutip: "text", disabled: { oneOf: ["true", "false"] }, action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text" }),
   rows: T({}),
+  // <actioncard tone=indigo|emerald|sky|violet|amber|zinc icon title detail>…<cardtools>small buttons, shown on hover</cardtools><cardaction>the button that runs it</cardaction></actioncard>:
+  // an action as a card (a todo's actions, the other ways to do it).
+  actioncard: T({ tone: { oneOf: ["indigo", "emerald", "sky", "violet", "amber", "zinc"] }, icon: "text", title: "text", detail: "text" }),
+  cardtools: T({}),
+  cardaction: T({}),
   // <datepick bind max label value>: a calendar button that opens the browser's date picker; the day picked goes to state.<bind>.
   datepick: T({ bind: "text", max: "text", label: "text", value: "text" }, true),
   // <fold label look=group store="key" open=true>: a fold-out with a small label (look=group: a list's group heading), kept open or closed in this browser.
@@ -1602,7 +1608,7 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
       if (!a.iban?.trim()) return [];
       return [{ t: "girocode", a, c: [] }];
     case "sources":
-      return a.refs?.trim() && a.refs.trim() !== "[]" ? [{ t: "sources", a, c: [] }] : [];
+      return (a.refs?.trim() && a.refs.trim() !== "[]") || a.todo?.trim() ? [{ t: "sources", a, c: [] }] : [];
     case "rowtimeline": {
       const id = Number(a.row ?? ctx.row?.id);
       return Number.isInteger(id) && id > 0 ? [{ t: "rowtimeline", a: { ...a, row: String(id) }, c: [] }] : [];
