@@ -8,7 +8,7 @@ import { listJobs } from "@/lib/jobs";
 import { lastAndCurrentMonth } from "@/lib/month";
 import { getPastWeeksDue } from "@/lib/monthly";
 import { formatPauses, totalPauseHours } from "@/lib/pauses-shared";
-import { getDefaultPauses, getFlexTime, getWeekTargets } from "@/lib/schedule";
+import { absenceHoursOn, bookedOnJob, getAbsenceJobs, getDefaultPauses, getFlexTime, getWeekTargets } from "@/lib/schedule";
 import { getJobByNumber } from "@/lib/jobs";
 import { latestPausesBefore, listPausesByDate } from "@/lib/pauses";
 import { collectCandidates, detectParallel, groupOptionsOn } from "@/lib/entry-parallel";
@@ -177,6 +177,24 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
   });
   const flex = getFlexTime();
   const flexJob = flex.jobNumber ? getJobByNumber(flex.jobNumber) : undefined;
+  // The absences' shadow rows (Settings → absence jobs): per kind of absence in this week that has a job, its hours on each of its days — booked
+  // not yet booked there, offered with a click (booked, it is a row of its own and the cell stays empty), as the flex row offers the missing hours.
+  const absenceJobs = getAbsenceJobs();
+  const absenceRows = (Object.keys(absenceJobs) as AbsenceType[]).flatMap((type) => {
+    const job = getJobByNumber(absenceJobs[type]!);
+    if (!job || filtered || !targets.absenceByDay.some((a) => a?.type === type)) return [];
+    const onJob = bookedOnJob(job.number, isoDays[0], isoDays[6]);
+    const cells = week.days.map((d, i) => {
+      const a = targets.absenceByDay[i];
+      const hours = a && a.type === type ? absenceHoursOn(a, targets.base[i]) : 0;
+      const open = round2(Math.max(0, hours - (onJob.get(isoDays[i]) ?? 0)));
+      return { iso: isoDays[i], label: formatDay(d, "EEE d MMM"), hours: hours ? h(hours) : "", open: open ? h(open) : "", openN: open, note: a && a.type === type ? (a.note ?? "") : "", tone: dayTone(i), dim: i >= 5 };
+    });
+    const openTotal = round2(cells.reduce((s, c) => s + c.openN, 0));
+    // (all of it booked: no shadow row — the job shows once, as its own row)
+    if (!openTotal) return [];
+    return [{ type, job: `${job.number} ${job.name}`, label: t("Absence · {kind}", { kind: labels[type] }), cells, openDates: cells.filter((c) => c.open).map((c) => c.iso).join(","), openTotal: openTotal ? h(openTotal) : "" }];
+  });
   const table = {
     heads: dayHeads,
     rows,
@@ -198,6 +216,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       pauseTotal: (() => { const x = round2(isoDays.reduce((a, d) => a + totalPauseHours(pauses[d] ?? []), 0)); return x ? h(x) : ""; })(),
     },
     empty: by ? t("No time booked in this week by {name} yet.", { name: by }) : t("No time booked in this week yet."),
+    absences: absenceRows,
     flex: flexJob && !filtered ? { job: `${flexJob.number} ${flexJob.name}`, comment: flex.comment, cells: week.days.map((d, i) => ({ iso: isoDays[i], label: formatDay(d, "EEE d MMM"), gap: shortfall[i].state === "ok" ? 0 : shortfall[i].gap, tone: dayTone(i), dim: i >= 5 })), any: shortfall.some((x) => x.state !== "ok" && x.gap > 0) } : null,
   };
 
@@ -236,6 +255,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     noJob: !s.project && !s.job,
     noJobText: s.ticket ? t("no job for {ticket} — set one on the Jira tab", { ticket: s.ticket }) : t("no job — set one on the Jira tab"),
     by: t("by {name}", { name: s.reportedBy }),
+    // (the state that unfolds its evidence, and how much there is)
+    evKey: `sev${s.id}`,
+    hKey: `sh${s.id}`,
+    evLabel: t("Evidence ({n})", { n: s.todos.length + s.runs.length + s.times.length }),
     evidence: [
       ...s.todos.map((td) => `${td.ref} ${td.text}`),
       ...s.times.map((r) => `${r.todo} ${formatMinutes(r.minutes)}${r.note ? ` · ${r.note}` : ""} — ${r.source === "hand" ? t("You") : r.by}`),
@@ -271,7 +294,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     linesText: d.lines.length === 1 ? t("1 line") : t("{n} lines", { n: d.lines.length }),
     open: d.date === today,
     total: `${h(d.total)} h`,
-    lines: d.lines.map((l) => ({
+    lines: d.lines.map((l, i) => ({
+      // (the state that opens a line of several entries)
+      key: `rl${d.date.replace(/-/g, "")}_${i}`,
       label: l.label,
       count: l.count > 1 ? `×${l.count}` : "",
       type: typeMap[l.type]?.label ?? l.type,

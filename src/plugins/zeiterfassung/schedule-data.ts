@@ -1,7 +1,7 @@
 import { formatHours } from "@/lib/format";
 import { t } from "@/lib/i18n/server";
 import { getJobByNumber, listJobs } from "@/lib/jobs";
-import { getFlexTime, getWorkSchedule, listAbsences, scheduleHours } from "@/lib/schedule";
+import { getAbsenceJobs, getFlexTime, getWorkSchedule, listAbsences, scheduleHours } from "@/lib/schedule";
 import { absenceLabels, WEEKDAY_KEYS, weekdayLabels, type AbsenceType } from "@/lib/schedule-shared";
 import { todayIso } from "@/lib/week";
 import { isInstalled } from "@/plugins/state";
@@ -30,6 +30,10 @@ export function scheduleScreen() {
     flexComment: flex.comment,
     flexJobOptions: [["", t("Off")] as [string, string], ...(flexJob ? [[flexJob.number, t("{name} (inactive)", { name: flexJob.name })] as [string, string]] : []), ...jobs],
     absenceTypes: (Object.keys(labels) as AbsenceType[]).map((k) => [k, labels[k]] as [string, string]),
+    // (the job each kind of absence is booked on — none: it only lowers the target)
+    absenceJobs: (Object.keys(labels) as AbsenceType[]).map((k) => ({ key: k, label: labels[k], job: getAbsenceJobs()[k] ?? "" })),
+    aj: Object.fromEntries((Object.keys(labels) as AbsenceType[]).map((k) => [k, getAbsenceJobs()[k] ?? ""])),
+    absenceJobOptions: [["", t("Not booked")] as [string, string], ...jobs],
     absences: listAbsences().map((a) => ({
       id: a.id,
       from: a.startDate,

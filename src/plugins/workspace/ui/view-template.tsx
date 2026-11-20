@@ -4,7 +4,7 @@ import { confirmAction } from "@/components/confirm";
 import { ComputeData } from "./compute-data";
 import { GiroCode } from "@/components/GiroCode";
 import { TimelineList } from "@/plugins/timeline/ui/TimelineList";
-import { SourcesBlock } from "./sources-block";
+import { SourcesBlock, TodoContextBlock } from "./sources-block";
 import { SuggestedActions } from "./suggested";
 import { KnowPanel } from "@/plugins/know/ui/KnowPanel";
 import { ExtFrame } from "@/components/ext/ExtFrame";
@@ -14,7 +14,7 @@ import { useLang, useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
 import { formatNumber, type Labels, type Property, type Row } from "../model";
 import type { ViewAppMeta } from "../view-apps";
-import { navOf, renderView, viewDefaults, type ViewNavEntry, type VNode } from "../view-template";
+import { navEntriesOf, navOf, renderView, viewDefaults, type ViewNavEntry, type VNode } from "../view-template";
 import type { ActionEnv, AppViewProps, ViewAppModule } from "./app-view";
 import { draw, Level, type DrawExt } from "./card-template";
 import { ChannelLogo } from "@/components/ChannelLogo";
@@ -70,6 +70,43 @@ const STAT_TONE: Record<string, { box: string; text: string }> = {
   warn: { box: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300" },
   good: { box: "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300" },
 };
+/** <edit>: a value that becomes a field when clicked — Enter or leaving it saves (when changed), Escape keeps it. */
+function InlineEdit({ a, save }: { a: Record<string, string>; save: (v: string) => unknown }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(a.value ?? "");
+  const done = useRef(false);
+  const open = () => ((done.current = false), setV(a.value ?? ""), setEditing(true));
+  const finish = (keep: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    setEditing(false);
+    if (keep && v !== (a.value ?? "")) void save(v);
+  };
+  if (!editing)
+    return (
+      <button type="button" onClick={open} title={a.tip || a.label || undefined} aria-label={a.label ? `${a.label}: ${a.text || a.value || ""}` : undefined} className="-mx-1 cursor-text rounded px-1 text-inherit tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-800 print:hidden">
+        {a.text || a.value || <span className="text-zinc-400">{a.placeholder || "—"}</span>}
+      </button>
+    );
+  return (
+    <input
+      autoFocus
+      type={a.type || "text"}
+      value={v}
+      min={a.min}
+      max={a.max}
+      step={a.step}
+      placeholder={a.placeholder}
+      aria-label={a.label || undefined}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => (e.key === "Enter" ? (e.preventDefault(), finish(true)) : e.key === "Escape" ? (e.preventDefault(), e.stopPropagation(), finish(false)) : undefined)}
+      onBlur={() => finish(true)}
+      className={`input py-0.5 text-sm ${a.type === "number" ? "num text-right" : ""}`}
+      style={{ width: Number(a.width) > 0 ? Math.min(400, Number(a.width)) : a.type === "number" ? 72 : a.type === "date" ? 150 : a.type === "time" ? 110 : 200 }}
+    />
+  );
+}
+
 /** A status sign in a circle (a tile's mark): cross — a problem, info — a heads-up, check — all good; in the text's colour. */
 function StatusMark({ kind, className = "" }: { kind: string; className?: string }) {
   return (
@@ -239,6 +276,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   // Its sidebar (a <nav>): beside the view — or, the view's setting, in the Workspace tree, whose entry picked (?nav=) sets the state.
   const nav = useMemo(() => navOf(r.nodes), [r.nodes]);
   const go = (e: ViewNavEntry) => (e.row ? props.openRow(e.row) : e.state ? setState(e.state, e.value ?? "") : e.href ? router.push(e.href) : undefined);
+  // (the same for a <nav inline=true> drawn in the view — a name of its own: a `go` of a case below shadows this one there)
+  const pickEntry = go;
 
   // The toolbar's New, when the app takes it over: run with the view as it is at the click.
   const envRef = useRef<ActionEnv | null>(null);
@@ -603,6 +642,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         // (card=true: the section as a bordered card with a small grey heading — how a report's parts stand on a page.)
         const card = a.card === "true";
         const fold = a.collapsible === "true";
+        // (framed, not folding: its parts as lines in a frame, a rule between them — a list inside a card)
+        if (a.framed === "true" && !fold)
+          return (
+            <div key={key} className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800/60 dark:border-zinc-800 [&>*]:px-3 [&>*]:py-1.5">
+              {kids(n.c)}
+            </div>
+          );
         const inner = fold ? (
           <Fold key={card ? undefined : key} title={a.title} aside={a.aside} note={a.note} dense={a.dense === "true"} quiet={a.quiet === "true"} framed={a.framed === "true"} card={card} bar={a.look === "bar" ? { tone: a.tone ?? "", added: a.added ?? "", removed: a.removed ?? "" } : undefined} open={a.open === "wide" ? "wide" : a.open !== "false"}>
             <div className={a.look === "bar" ? "" : a.framed === "true" ? "divide-y divide-zinc-100 text-sm dark:divide-zinc-800/60 [&>*]:px-3 [&>*]:py-1.5" : a.dense === "true" ? "space-y-0.5" : "space-y-3 pt-2"} style={scrolls(a)}>
@@ -835,7 +881,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return typeof value === "string" && value ? <SuggestedActions key={key} rowId={Number(a.row)} value={value} onDone={() => (props.reload(), app.reload())} /> : null;
       }
       case "sources":
-        return <SourcesBlock key={key} refs={a.refs} open={a.open === "true"} />;
+        return a.todo ? <TodoContextBlock key={key} todo={Number(a.todo)} summary={a.summary} show={a.show === "knowledge" ? "knowledge" : "context"} /> : <SourcesBlock key={key} refs={a.refs} open={a.open === "true"} />;
       case "rowtimeline":
         return <TimelineList key={key} row={Number(a.row)} limit={Number(a.limit) || 20} compact filters={false} title={a.title || undefined} hideWhenOff />;
       case "girocode": {
@@ -897,6 +943,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           </div>
         );
       }
+      case "edit":
+        return <InlineEdit key={key} a={a} save={(v) => run({ ...a, value: a.action === "state" ? v : a.value, with: (a.with ?? "").split("$value").join(v) })} />;
       case "badge":
         if (!a.tint) return undefined;
         return (
@@ -1192,8 +1240,11 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return <Part key={key} {...props} attrs={attrs} state={r.state} setState={setState} app={app.data} reloadApp={app.reload} rowId={rowAttr ? Number(rowAttr) : null}>{n.c.length ? kids(n.c) : undefined}</Part>;
       }
       case "nav":
-      case "entry":
+        // (inline=true: drawn here — a page's own menu in its side column)
+        if (a.inline === "true") return <ViewNav key={key} inline title={a.title ?? ""} entries={navEntriesOf(n)} active={(e) => (e.state ? (r.state[e.state] ?? "") === (e.value ?? "") : false)} onPick={pickEntry} />;
         return null; // (drawn beside the view, below — or in the tree)
+      case "entry":
+        return null;
       case "appwidget":
         return <BlockWidget key={key} block={a.block} params={a.params} title={a.title} height={a.height ? Number(a.height) : undefined} pageId={props.data.id} />;
       case "widget": {
@@ -1270,9 +1321,9 @@ function BlockWidget({ block, params, title, height, pageId }: { block: string; 
 }
 
 /** A view's sidebar: its entries (under their headings), the one picked marked, a count on the right. */
-function ViewNav({ title, entries, active, onPick }: { title: string; entries: ViewNavEntry[]; active: (e: ViewNavEntry) => boolean; onPick: (e: ViewNavEntry) => void }) {
+function ViewNav({ title, entries, active, onPick, inline }: { title: string; entries: ViewNavEntry[]; active: (e: ViewNavEntry) => boolean; onPick: (e: ViewNavEntry) => void; inline?: boolean }) {
   return (
-    <nav className="w-full shrink-0 md:sticky md:top-2 md:w-56 print:hidden">
+    <nav className={inline ? "w-full print:hidden" : "w-full shrink-0 md:sticky md:top-2 md:w-56 print:hidden"}>
       {title && <div className="px-2 pb-1 text-xs font-semibold tracking-wide text-zinc-400 uppercase">{title}</div>}
       <ul className="space-y-0.5">
         {entries.map((e, i) => {

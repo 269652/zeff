@@ -1,5 +1,6 @@
 "use client";
 
+import { FocusExit } from "@/components/FocusToggle";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
@@ -409,8 +410,10 @@ export function DatabaseView({ initial, dbId, viewId, onView, embedded = false, 
   // An app of its own (<panes>, <sidebarframe>, or a page with its controls beside it: <split … sticky=true>): it has its search, filters and counts, the table's tools around it would only compete.
   const appScreen = view.type === "app" && /<(panes|sidebarframe)\b|<split\b[^>]*\bsticky="?true/.test(view.template ?? "");
   return (
-    <div className="space-y-2">
-      <div ref={setBar} className={`${bare ? "hidden" : "flex"} items-center gap-1 ${narrow ? "flex-nowrap" : "flex-wrap"}`}>
+    // (data-app-screen: an app with a screen of its own — full screen, the Workspace's bars around it go: globals.css)
+    <div className="space-y-2" data-app-screen={appScreen || undefined}>
+      {appScreen && <FocusExit />}
+      <div ref={setBar} className={`ws-viewbar ${bare ? "hidden" : "flex"} items-center gap-1 ${narrow ? "flex-nowrap" : "flex-wrap"}`}>
         {/* Narrow (a phone): one row — the views scroll sideways instead of wrapping into rows of their own. */}
         <div className={`flex min-w-0 items-center gap-0.5 ${narrow ? "flex-1 flex-nowrap overflow-x-auto [scrollbar-width:none]" : "flex-wrap"}`}>
           {/* The views are the tabs; "+" beside them is no tab. */}

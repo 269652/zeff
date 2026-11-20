@@ -14,6 +14,7 @@ import {
   type WeekdayKey,
 } from "./schedule-shared";
 import { isoDate, type WeekInfo } from "./week";
+import { getPref, setPref } from "./prefs";
 
 const { workSchedule, absences } = schema;
 
@@ -216,12 +217,48 @@ export type DayTarget = {
   absence: Absence | undefined;
 };
 
+/**
+ * The jobs absences are booked on (Settings → Time tracking), by absence type: vacation, sick, holiday, other — none: an absence only lowers
+ * the day's target. With a job, the weekly table offers the absence's hours as a shadow row on it (book them, as flex time is booked), and what is
+ * booked there on the absence's days counts towards the day's target as well, so the day is neither missing nor over.
+ */
+export type AbsenceJobs = Partial<Record<AbsenceType, string>>;
+const ABSENCE_JOBS = "time.absenceJobs";
+export function getAbsenceJobs(): AbsenceJobs {
+  const v = getPref<AbsenceJobs>(ABSENCE_JOBS, {});
+  return v && typeof v === "object" ? v : {};
+}
+export function setAbsenceJobs(next: AbsenceJobs): AbsenceJobs {
+  const clean = Object.fromEntries(Object.entries(next).filter(([k, v]) => ABSENCE_TYPES.includes(k as AbsenceType) && typeof v === "string" && v.trim()).map(([k, v]) => [k, String(v).trim()])) as AbsenceJobs;
+  setPref(ABSENCE_JOBS, clean);
+  return clean;
+}
+/** The hours an absence takes off a day: its own (a half day) or the whole of the day's schedule. */
+export const absenceHoursOn = (a: Pick<Absence, "hours">, base: number): number => round2(a.hours == null ? base : Math.min(base, a.hours));
+
+/** Hours booked per day on a job (by number) between two days — what an absence's job already holds. */
+export function bookedOnJob(jobNumber: string, from: string, to: string): Map<string, number> {
+  const db = getDb();
+  const job = db.select({ id: schema.jobs.id }).from(schema.jobs).where(eq(schema.jobs.number, jobNumber)).get();
+  const out = new Map<string, number>();
+  if (!job) return out;
+  const rows = db
+    .select({ date: schema.timeEntries.date, hours: schema.timeEntries.hours })
+    .from(schema.timeEntries)
+    .where(and(eq(schema.timeEntries.jobId, job.id), gte(schema.timeEntries.date, from), lte(schema.timeEntries.date, to)))
+    .all();
+  for (const r of rows) out.set(r.date, round2((out.get(r.date) ?? 0) + r.hours));
+  return out;
+}
+
 /** The targets of consecutive days (a week, a month). */
 export function getDayTargets(days: Date[]): DayTarget[] {
   if (days.length === 0) return [];
   const base = scheduleHours(getWorkSchedule());
   const isos = days.map(isoDate);
   const covering = listAbsences({ from: isos[0], to: isos[isos.length - 1] });
+  const absenceJobs = getAbsenceJobs();
+  const onJob = new Map((covering.length ? [...new Set(Object.values(absenceJobs))] : []).map((j) => [j!, bookedOnJob(j!, isos[0], isos[isos.length - 1])]));
   return days.map((day, i) => {
     const iso = isos[i];
     const weekday = (day.getDay() + 6) % 7; // 0 = Monday
@@ -233,6 +270,9 @@ export function getDayTargets(days: Date[]): DayTarget[] {
         target = a.hours == null ? 0 : Math.max(0, target - a.hours);
       }
     }
+    // (An absence booked on its job — Settings: absence jobs —: those hours are part of the day's target again, up to the absence's hours.)
+    const job = absence ? absenceJobs[absence.type as AbsenceType] : undefined;
+    if (absence && job) target += Math.min(absenceHoursOn(absence, base[weekday]), (onJob.get(job) ?? new Map<string, number>()).get(iso) ?? 0);
     return { date: iso, target: round2(target), base: base[weekday], absence };
   });
 }

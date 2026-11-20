@@ -4,6 +4,9 @@ const PORT = "zeiterfassung-ext";
 const PREF = "time.reportPage";
 const HOME_PREF = "time.reportHome";
 
+/** The report's page as last found (reportPage keeps it): cheap and synchronous — for the header to light the Report tab there. */
+export const reportPageKnown = (): number | null => getPref<number | null>(PREF, null);
+
 async function ensureHome(dbId: number): Promise<void> {
   const { surfaceApp } = await import("@/plugins/workspace/package-home");
   surfaceApp(dbId, { name: "Time tracking", holder: "Time tracking — the actions behind its buttons", done: HOME_PREF });

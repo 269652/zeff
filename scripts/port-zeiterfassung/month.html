@@ -1,4 +1,5 @@
 <data name="m" lambda="zeiterfassung.month" with="month={{ state.month }}, by={{ state.by }}" when="{{ state.view == 'month' }}"/>
+<on event="time-changed" action="reload"/>
 <split width=288 side=left gap=6 sticky=true>
 <col gap=3>
   <report-tabs/>
@@ -109,9 +110,9 @@
       <sbody>
         {{#each data.m.entryList}}
         <srow hover=true>
-          <scell><mono size=sm>{{ date }}</mono>{{#if start}}<small tone=muted><mono>{{ start }}</mono></small>{{/if}}</scell>
-          <scell>{{ jobName }}</scell>
-          <scell num=true bold=true>{{ hours }}</scell>
+          <scell><col gap=0><mono size=sm><edit type=date value="{{ date }}" label="Date" tip="Click to change the day" run="zeiterfassung.entry-op" with="op=date, id={{ id }}, date=$value" emit="time-changed" done="Saved."/></mono>{{#if start}}<small tone=muted><mono>{{ start }}</mono></small>{{/if}}</col></scell>
+          <scell><col width=150><truncate tip="{{ job }}">{{ jobName }}</truncate></col></scell>
+          <scell num=true bold=true><edit type=number value="{{ hoursValue }}" text="{{ hours }}" min=0.25 max=24 step=0.25 label="Hours" tip="Click to change the hours" run="zeiterfassung.entry-hours" with="id={{ id }}, hours=$value" emit="time-changed" done="Saved."/></scell>
           <scell>{{#if mark}}<small tip="{{ markTitle }}">{{ mark }}</small> {{/if}}{{ description }}</scell>
           <scell>{{#if ticket}}{{#if ticketUrl}}<button action="url" href="{{ ticketUrl }}" label="{{ ticket }}" tip="{{ ticketTip }}" variant=link/>{{#else}}<mono size=sm>{{ ticket }}</mono>{{/if}}{{/if}}</scell>
           <scell><col gap=1 align=start><badge tint="{{ color }}">{{ type }}</badge>{{#each tagNames}}<badge color=teal>{{ this }}</badge>{{/each}}</col></scell>

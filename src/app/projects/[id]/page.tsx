@@ -12,5 +12,5 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   await connection();
   const { id } = await params;
-  return redirect(await reportLink({ view: "jobs", jd: `project:${id}` }));
+  return redirect(await reportLink({ view: "projects", jd: `project:${id}` }));
 }

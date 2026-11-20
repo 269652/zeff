@@ -320,6 +320,7 @@ export async function monthScreen(input: { month?: string; by?: string } = {}) {
       type: typeMap[e.type]?.label ?? e.type,
       color: typeMap[e.type]?.color ?? FALLBACK_TYPE_COLOR,
       hours: h(e.hours),
+      hoursValue: e.hours,
       by: e.reportedBy,
     })),
     entriesHead: t("Entries in {month}", { month: formatMonth(month) }),

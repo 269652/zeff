@@ -69,7 +69,7 @@ export function jobDetail(input: { kind?: string; id?: unknown }) {
   const isProject = input.kind === "project";
   const types = typeMapOf(listEntryTypes());
   const entries = (list: ReturnType<typeof listEntries>) =>
-    list.map((e) => ({ id: e.id, date: e.date, dateText: formatDate(e.date), description: e.description, ticket: e.ticket ?? "", type: types[e.type]?.label ?? e.type, hours: formatHours(e.hours) }));
+    list.map((e) => ({ id: e.id, date: e.date, dateText: formatDate(e.date), description: e.description, ticket: e.ticket ?? "", type: types[e.type]?.label ?? e.type, color: types[e.type]?.color ?? "#71717a", hours: formatHours(e.hours), hoursValue: e.hours }));
   if (isProject) {
     const p = getProject(id);
     if (!p) return { found: false };

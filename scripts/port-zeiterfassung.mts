@@ -15,15 +15,22 @@ const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
 // Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
-const PLUGIN_VERSION = "0.5.0";
-const PACKAGE_VERSION = "1.4.0";
+const PLUGIN_VERSION = "0.7.2";
+const PACKAGE_VERSION = "1.6.2";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
   fs.writeFileSync(f, text);
 };
 // The report's tabs stand where a part puts <report-tabs/>: at the top of its side column, as the old pages had the Week | Month switch there.
-const TABS_TAG = '<tabs bind="view" look=line options="week:Week, month:Month, analysis:Analysis, day:End of day, jobs:Jobs, settings:Settings"/>';
+const TABS_TAG = [
+  '<nav inline=true>',
+  ...[["week", "Week", "📅"], ["month", "Month", "🗓️"], ["analysis", "Analysis", "📊"], ["day", "End of day", "🌙"], ["jobs", "Jobs", "💼"], ["projects", "Projects", "📁"], ["settings", "Settings", "⚙️"]].map(
+    ([v, label, icon]) => `<entry id="${v}" label="${label}" icon="${icon}" state="view" value="${v}"/>`,
+  ),
+  "</nav>",
+  "<hr/>",
+].join("");
 const part = (name: string) => (fs.existsSync(path.join(SRC, name)) ? fs.readFileSync(path.join(SRC, name), "utf8").replaceAll("<report-tabs/>", TABS_TAG) : "");
 fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
@@ -47,10 +54,11 @@ for (const [name, l] of Object.entries(LAMBDAS)) {
 const TABS = ["month", "analysis", "day", "jobs", "settings"];
 // The report: the week and the month, one screen, a tab apart (as the built-in's report has them).
 const report = [
-  '<state name="view" value="week" keep=url/><state name="week" value=""/><state name="month" value=""/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/><state name="jpart" value="jobs" keep=url/>',
+  '<state name="view" value="week" keep=url/><state name="by" value=""/><state name="aweeks" value="8"/><state name="atickets" value=""/><state name="asplit" value=""/>',
   '<on event="openweek" action="state" state="view" value="week"/>',
   // one branch per tab, the week the one left over
-  ...TABS.flatMap((tab) => [`{{#if state.view == '${tab}'}}`, part(`${tab}.html`) + (tab === "settings" ? part("rules.html") : ""), "{{#else}}"]),
+  // (Jobs and Projects: one part, the page picked by the menu)
+  ...TABS.flatMap((tab) => [tab === "jobs" ? "{{#if state.view == 'jobs' or state.view == 'projects'}}" : `{{#if state.view == '${tab}'}}`, part(`${tab}.html`) + (tab === "settings" ? part("rules.html") : ""), "{{#else}}"]),
   part("week.html"),
   ...TABS.map(() => "{{/if}}"),
 ].join("\n");
@@ -85,7 +93,8 @@ const FLOWS = [
   flow("f13", "zeiterfassung.rule-op", "Change a list of rules", "One change of a list of rules or of the entry types (input what types|report|meetings|exclude|entry-type, op add|remove|up|down|default|update|none, index, apply, and the rule's fields). Run by the Settings tab.", "time.rule-op", i("what", "op", "index", "apply", "jobNumber", "description", "type", "f1", "v1", "f2", "v2", "f3", "v3", "template", "tags", "match", "group", "value", "label", "color", "key", "name", "id", "mode")),
   flow("f11", "zeiterfassung.day-book", "Book the day", "The day's lines booked as you took them over (input date, state: the view's state as JSON). Run by the End of day tab.", "time.day-book", i("date", "state")),
   flow("f12", "zeiterfassung.day-undo", "Take the day's booking back", "Takes back what a booking of the day created, as far as it is still as booked (input created). Run by the End of day tab.", "time.day-undo", i("created")),
-  flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment", "punch")),
+  flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment", "punch", "vacation", "sick", "holiday", "other")),
+  flow("f17", "zeiterfassung.absence-book", "Book absences on their jobs", "The absence hours of the given days (input dates) booked on the job of their kind of absence. Run by the report's absence rows.", "time.absence-book", i("dates")),
   flow("f9", "zeiterfassung.flex-book", "Book the missing hours on the flex-time job", "The missing hours of the given days (input dates) booked on the flex-time job. Run by the report.", "time.flex-book", i("dates")),
   flow("f10", "zeiterfassung.absence", "Add or delete an absence", "An absence added (startDate, endDate, type, hours, note, repeatUntil) or deleted (input delete: its id). Run by the Settings tab.", "time.absence", i("delete", "startDate", "endDate", "type", "hours", "note", "repeatUntil")),
   flow("f6", "zeiterfassung.job-save", "Create or change a job", "A job: without id created, with id changed (number, name, customer, description, defaultTags, active). Run by the Jobs tab.", "time.job-save", i("id", "number", "name", "customer", "description", "defaultTags", "active", "full")),

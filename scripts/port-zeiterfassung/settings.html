@@ -28,6 +28,20 @@
     </col>
   </section>
 
+  <section card=true title="Absence jobs">
+    <col gap=3>
+      <text tone=muted>The job each kind of absence is booked on. With one, the weekly table gets a greyed-out row for it under the booked jobs: the absence's hours on its days — a click books them there (for Chrono and Punch), and what is booked there counts towards the day. Without one, an absence only lowers the day's target.</text>
+      <grid cols=4 gap=3 min=160>
+        {{#each data.s.absenceJobs}}<select stack=true bind="aj_{{ key }}" value="{{ job }}" options="{{ data.s.absenceJobOptions | tojson }}" label="{{ label }}"/>{{/each}}
+      </grid>
+      <let name="aj_vacation" value="state | get('aj_vacation') | default(data.s.aj.vacation)"/>
+      <let name="aj_sick" value="state | get('aj_sick') | default(data.s.aj.sick)"/>
+      <let name="aj_holiday" value="state | get('aj_holiday') | default(data.s.aj.holiday)"/>
+      <let name="aj_other" value="state | get('aj_other') | default(data.s.aj.other)"/>
+      <row gap=2><button run="zeiterfassung.schedule-save" with="what=absence-jobs, vacation={{ state.aj_vacation == '' ? '~' : aj_vacation }}, sick={{ state.aj_sick == '' ? '~' : aj_sick }}, holiday={{ state.aj_holiday == '' ? '~' : aj_holiday }}, other={{ state.aj_other == '' ? '~' : aj_other }}" into="ssaved" emit="settings-changed" label="Save absence jobs" variant=primary/></row>
+    </col>
+  </section>
+
   <section card=true title="Flex time">
     <col gap=2>
       <text tone=muted>The job for hours you take off your overtime. In the weekly table, days that aren't fully booked get a greyed-out row for it under the booked jobs.</text>

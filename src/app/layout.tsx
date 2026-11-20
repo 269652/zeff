@@ -66,7 +66,7 @@ const pluginGroups = (): MenuGroup[] => {
 const headerTabs = () => {
   const withMenu = tabsWithMenu();
   // (A tab whose screens are now a Workspace page — Todos, Code — stays lit on that page, as it was on its old address.)
-  const appPage: Record<string, number | null> = { "/todos": todosApp(), "/work": workCodePage() };
+  const appPage: Record<string, number | null> = { "/todos": todosApp(), "/work": workCodePage(), "/": reportPageKnown(), "/month": reportPageKnown() };
   return appTabs().map((tab) => {
     const page = appPage[tab.href];
     const also = page ? [...(tab.also ?? []), `/workspace/${page}`] : tab.also;
@@ -101,6 +101,7 @@ import { applyLanguage, t } from "@/lib/i18n/server";
 import "./globals.css";
 import { todosApp } from "@/plugins/workspace/todos-app";
 import { workCodePage } from "@/plugins/work/to-plugin";
+import { reportPageKnown } from "@/plugins/zeiterfassung/to-plugin";
 
 // The fonts are files of the repository (Geist, SIL Open Font License): Zeff builds and runs without a connection.
 const geistSans = localFont({ src: "./fonts/Geist-latin.woff2", variable: "--font-geist-sans", weight: "100 900", fallback: ["system-ui", "Arial"] });
