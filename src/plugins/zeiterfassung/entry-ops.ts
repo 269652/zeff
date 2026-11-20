@@ -40,6 +40,11 @@ export async function entryOp(i: Record<string, unknown>): Promise<{ message: st
   const op = text(i.op);
   const id = Number(i.id);
 
+  // One field of an entry changed where it is shown (the entries' tables: the day edited in its cell).
+  if (op === "date") {
+    updateEntry(id, { date: text(i.date) });
+    return { message: t("Saved.") };
+  }
   if (op === "update") {
     const hours = Number(text(i.hours).replace(",", "."));
     if (!has(i.hours) || !Number.isFinite(hours)) throw new Error(t("Hours is required (e.g. 1.5)."));

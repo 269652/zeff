@@ -1,11 +1,10 @@
-<data name="j" lambda="zeiterfassung.jobs" with="n={{ state.jn }}" when="{{ state.view == 'jobs' }}"/>
+<data name="j" lambda="zeiterfassung.jobs" with="n={{ state.jn }}" when="{{ state.view == 'jobs' or state.view == 'projects' }}"/>
 <on event="jobs-changed" action="reload"/>
 <data name="d" lambda="zeiterfassung.job-detail" with="ref={{ state.jd }}" when="{{ state.jd }}"/>
 <split width=288 side=left gap=6 sticky=true>
 <col gap=3>
   <report-tabs/>
-  <tabs bind="jpart" options="jobs:Jobs, projects:Projects"/>
-  {{#if state.jpart == 'projects'}}
+  {{#if state.view == 'projects'}}
   <col gap=1><heading level=2>Projects</heading><text tone=muted>Book time on a project instead of a job — e.g. a training. The hours land on the project's job, and setting or changing that job later moves all its entries along.</text></col>
   {{#else}}
   <col gap=1><heading level=2>Jobs</heading><text tone=muted>Job numbers that time can be booked on — from the web UI or via the MCP report_time tool.</text></col>
@@ -38,17 +37,27 @@
         </col>
       </section>
       {{/if}}
-      <datatable source="data.d.entries" empty="No entries.">
-        <column label="Date">{{ dateText }}</column>
-        <column label="Description">{{ description }}{{#if ticket}} <small><muted>{{ ticket }}</muted></small>{{/if}}</column>
-        <column label="Type">{{ type }}</column>
-        <column label="Hours" align=right>{{ hours }}</column>
-      </datatable>
+      {{#if data.d.entries}}
+      <sheet compact=true caption="Entries">
+        <shead><srow><scell head=true>Date</scell><scell head=true num=true>Hours</scell><scell head=true>Report</scell><scell head=true>Ticket</scell><scell head=true>Type</scell></srow></shead>
+        <sbody>
+          {{#each data.d.entries}}
+          <srow hover=true>
+          <scell><mono size=sm><edit type=date value="{{ date }}" label="Date" tip="Click to change the day" run="zeiterfassung.entry-op" with="op=date, id={{ id }}, date=$value" emit="jobs-changed" done="Saved."/></mono></scell>
+            <scell num=true bold=true><edit type=number value="{{ hoursValue }}" text="{{ hours }}" min=0.25 max=24 step=0.25 label="Hours" tip="Click to change the hours" run="zeiterfassung.entry-hours" with="id={{ id }}, hours=$value" emit="jobs-changed" done="Saved."/></scell>
+            <scell>{{ description }}</scell>
+            <scell>{{#if ticket}}<mono size=sm>{{ ticket }}</mono>{{/if}}</scell>
+            <scell><badge tint="{{ color }}">{{ type }}</badge></scell>
+          </srow>
+          {{/each}}
+        </sbody>
+      </sheet>
+      {{#else}}<empty text="No entries."/>{{/if}}
     </col>
   </section>
   {{/if}}{{/if}}
   {{#if data.jsaved.jsaved.message}}<callout tone=good>{{ data.jsaved.jsaved.message }}</callout>{{/if}}
-  {{#if state.jpart == 'projects'}}
+  {{#if state.view == 'projects'}}
   <section card=true title="New project">
     <col gap=3>
       <grid cols=3 gap=3 min=180>

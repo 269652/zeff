@@ -83,6 +83,10 @@ body {
   html[data-focus] .page > * {
     grid-column: 1 / -1;
   }
+  /* …and an app with a screen of its own (DatabaseView data-app-screen) without the Workspace's bars: the path, the views, ⋯ — ⤡ in its corner or Escape leaves. */
+  html[data-focus] .page:has([data-app-screen]) :is(.ws-pagebar, .ws-viewbar) {
+    display: none !important; /* (over the bars' own flex: utilities win over this layer) */
+  }
   .card {
     @apply rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900;
   }

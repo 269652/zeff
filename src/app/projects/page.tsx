@@ -11,5 +11,5 @@ export async function generateMetadata(): Promise<Metadata> {
 /** The projects lives in the time report of the Time tracking plugin (zeff-plugins/plugins/zeiterfassung-ext): this is the way in the links have always used — it opens that tab. Without the plugin: the Plugins page. */
 export default async function ProjectsPage() {
   await connection();
-  return redirect(await reportLink({ view: "jobs" }));
+  return redirect(await reportLink({ view: "projects" }));
 }

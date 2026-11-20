@@ -236,6 +236,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     noJob: !s.project && !s.job,
     noJobText: s.ticket ? t("no job for {ticket} — set one on the Jira tab", { ticket: s.ticket }) : t("no job — set one on the Jira tab"),
     by: t("by {name}", { name: s.reportedBy }),
+    // (the state that unfolds its evidence, and how much there is)
+    evKey: `sev${s.id}`,
+    hKey: `sh${s.id}`,
+    evLabel: t("Evidence ({n})", { n: s.todos.length + s.runs.length + s.times.length }),
     evidence: [
       ...s.todos.map((td) => `${td.ref} ${td.text}`),
       ...s.times.map((r) => `${r.todo} ${formatMinutes(r.minutes)}${r.note ? ` · ${r.note}` : ""} — ${r.source === "hand" ? t("You") : r.by}`),
@@ -271,7 +275,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     linesText: d.lines.length === 1 ? t("1 line") : t("{n} lines", { n: d.lines.length }),
     open: d.date === today,
     total: `${h(d.total)} h`,
-    lines: d.lines.map((l) => ({
+    lines: d.lines.map((l, i) => ({
+      // (the state that opens a line of several entries)
+      key: `rl${d.date.replace(/-/g, "")}_${i}`,
       label: l.label,
       count: l.count > 1 ? `×${l.count}` : "",
       type: typeMap[l.type]?.label ?? l.type,

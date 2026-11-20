@@ -37,6 +37,18 @@ const set = (on: boolean) => {
 };
 const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l));
 
+/** Full screen without the page's bar (an app's own screen): a small ⤡ in the corner that leaves it (Escape does too). */
+export function FocusExit() {
+  const t = useT();
+  const on = useSyncExternalStore(subscribe, read, () => false);
+  if (!on) return null;
+  return (
+    <button type="button" className="icon-btn fixed right-3 bottom-3 z-40 border border-zinc-200 bg-white/90 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 print:hidden" onClick={() => set(false)} title={t("Leave full screen (Esc)")} aria-label={t("Leave full screen (Esc)")}>
+      ⤡
+    </button>
+  );
+}
+
 export function FocusToggle() {
   const t = useT();
   const on = useSyncExternalStore(subscribe, read, () => false);

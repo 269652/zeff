@@ -265,7 +265,7 @@ export function PageView({ page, row, database, form, app }: { page: PageViewDat
   return (
     <div className="space-y-3">
       {/* A phone: one row — the tree's ☰, the path (cut short), ★, focus and ⋯ (the history and the save state go in there). */}
-      <div className="flex items-center gap-2 text-sm max-sm:gap-1 sm:flex-wrap">
+      <div className="ws-pagebar flex items-center gap-2 text-sm max-sm:gap-1 sm:flex-wrap">
         <button type="button" className="icon-btn shrink-0 lg:hidden" title={t("Pages")} aria-label={t("Pages")} onClick={() => window.dispatchEvent(new Event("ws:pages"))}>
           ☰
         </button>
