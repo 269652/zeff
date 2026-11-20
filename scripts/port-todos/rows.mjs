@@ -73,6 +73,7 @@ export function rowTools(t, lang) {
       qReply: `reply-${r.id}`,
       qPay: `pay-${r.id}`,
       qRepeat: `repeat-${r.id}`,
+      qDue: `due-${r.id}`,
       canReply: !!r.canReply && !closed,
       canPay: !!r.canPay && !closed,
       flagTip: r.flagged ? t("Important — moves to the top, urgent for the briefing. Click: remove the flag") : t("Flag as important — moves to the top, urgent for the briefing"),

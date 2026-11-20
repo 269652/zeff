@@ -309,7 +309,13 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         case "hide":
           return void (rowId && props.rowOps?.hide(rowId));
         case "state":
-          return void (a.state && setState(a.state, a.value ?? ""));
+          if (a.state) setState(a.state, a.value ?? "");
+          // (then="a=1; b=": more states set with it — a field filled as its editor opens)
+          for (const pair of (a.then ?? "").split(";")) {
+            const i = pair.indexOf("=");
+            if (i > 0) setState(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+          }
+          return;
         case "pop": {
           if (!a.state) return;
           let list: unknown[] = [];
