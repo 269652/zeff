@@ -38,6 +38,9 @@ type Tone = "plain" | "good" | "warn" | "bad";
 const h = (n: number) => formatHours(n);
 
 /** A status card's sign by its tone (cross: hours missing, info: a heads-up, check: all booked). */
+/** What a row offers to book with a click: the flow, its days, the button's words. */
+type Offer = { run: string; dates: string; label: string; tip: string };
+
 function statusMark(tone: string): string {
   return ({ bad: "cross", warn: "info", good: "check" } as Record<string, string>)[tone] ?? "";
 }
@@ -155,9 +158,10 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     noJob: row.job.number === NO_JOB_NUMBER,
     days: row.hoursByDay.map((x, i) => {
       const cell = x ? joinMarks(report.entries.filter((e) => e.jobId === row.job.id && (e.projectId ?? null) === (row.project?.id ?? null) && e.date === isoDays[i]).flatMap((e) => marksOf(e.id))) : joinMarks([]);
-      return { text: x ? h(x) : "·", tone: cell.approved ? "good" : dayTone(i), dim: i >= 5, mark: cell.mark, markTitle: cell.markTitle };
+      return { text: x ? h(x) : "·", has: !!x, tone: cell.approved ? "good" : dayTone(i), dim: i >= 5, mark: cell.mark, markTitle: cell.markTitle, offer: null as Offer | null };
     }),
     total: h(row.total),
+    offerAll: null as Offer | null,
   }));
   const missingTotal = round2(shortfall.reduce((a, s) => a + (s.state === "missing" ? s.gap : 0), 0));
   const pauses = listPausesByDate(week.startIso, week.endIso);
@@ -193,7 +197,25 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     const openTotal = round2(cells.reduce((s, c) => s + c.openN, 0));
     // (all of it booked: no shadow row — the job shows once, as its own row)
     if (!openTotal) return [];
-    return [{ type, job: `${job.number} ${job.name}`, label: t("Absence · {kind}", { kind: labels[type] }), cells, openDates: cells.filter((c) => c.open).map((c) => c.iso).join(","), openTotal: openTotal ? h(openTotal) : "" }];
+    return [{ type, jobId: job.id, job: `${job.number} ${job.name}`, label: t("Absence · {kind}", { kind: labels[type] }), cells, openDates: cells.filter((c) => c.open).map((c) => c.iso).join(","), openTotal: openTotal ? h(openTotal) : "" }];
+  });
+  // A job the flex time or an absence goes to that is booked this week already has its row: what would be its shadow row's offers go into that
+  // row (the days still to book get the small "+N" there, the total cell the week's) — a shadow row only for a job not booked this week.
+  const ownRow = (jobId: number) => rows.find((r) => r.jobId === jobId && !r.project);
+  const flexCells = flexJob && !filtered ? week.days.map((d, i) => ({ iso: isoDays[i], label: formatDay(d, "EEE d MMM"), gap: shortfall[i].state === "ok" ? 0 : shortfall[i].gap, tone: dayTone(i), dim: i >= 5 })) : [];
+  const flexOpen = flexCells.filter((c) => c.gap > 0);
+  const flexTotal = round2(flexOpen.reduce((s, c) => s + c.gap, 0));
+  const flexRow = flexJob ? ownRow(flexJob.id) : undefined;
+  if (flexRow && flexOpen.length) {
+    flexCells.forEach((c, i) => c.gap > 0 && (flexRow.days[i].offer = { run: "zeiterfassung.flex-book", dates: c.iso, label: `+${h(c.gap)}`, tip: t("Flex time · “{comment}” · {day}", { comment: flex.comment, day: c.label }) }));
+    if (flexOpen.length > 1) flexRow.offerAll = { run: "zeiterfassung.flex-book", dates: flexOpen.map((c) => c.iso).join(","), label: `+${h(flexTotal)}`, tip: t("Flex time · “{comment}”", { comment: flex.comment }) };
+  }
+  const shadowAbsences = absenceRows.filter((a) => {
+    const own = ownRow(a.jobId);
+    if (!own) return true;
+    a.cells.forEach((c, i) => c.open && (own.days[i].offer = { run: "zeiterfassung.absence-book", dates: c.iso, label: `+${c.open}`, tip: `${a.label} · ${c.label}` }));
+    if (a.cells.filter((c) => c.open).length > 1) own.offerAll = { run: "zeiterfassung.absence-book", dates: a.openDates, label: `+${a.openTotal}`, tip: a.label };
+    return false;
   });
   const table = {
     heads: dayHeads,
@@ -216,8 +238,9 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
       pauseTotal: (() => { const x = round2(isoDays.reduce((a, d) => a + totalPauseHours(pauses[d] ?? []), 0)); return x ? h(x) : ""; })(),
     },
     empty: by ? t("No time booked in this week by {name} yet.", { name: by }) : t("No time booked in this week yet."),
-    absences: absenceRows,
-    flex: flexJob && !filtered ? { job: `${flexJob.number} ${flexJob.name}`, comment: flex.comment, cells: week.days.map((d, i) => ({ iso: isoDays[i], label: formatDay(d, "EEE d MMM"), gap: shortfall[i].state === "ok" ? 0 : shortfall[i].gap, tone: dayTone(i), dim: i >= 5 })), any: shortfall.some((x) => x.state !== "ok" && x.gap > 0) } : null,
+    absences: shadowAbsences,
+    // (the flex shadow row: only while the flex job has no row of its own this week)
+    flex: flexJob && !filtered && !flexRow ? { job: `${flexJob.number} ${flexJob.name}`, comment: flex.comment, cells: flexCells, any: flexOpen.length > 0, total: flexOpen.length > 1 ? `+${h(flexTotal)}` : "", dates: flexOpen.map((c) => c.iso).join(",") } : null,
   };
 
   // --- the form to book
