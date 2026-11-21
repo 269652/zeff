@@ -20,6 +20,8 @@ export async function setPluginInstalledAction(id: string, installed: boolean): 
     const ids = setInstalled(id, !!installed);
     // Knowledge in or out: the launcher starts or stops this account's knowledge server.
     (await import("@/plugins/knowledge/instances")).writeKnowledgeInstances();
+    // The programs it needs and lacks, installed along with it (Poppler with Documents).
+    const programs = installed ? await (await import("@/lib/programs-with-plugin")).installProgramsFor(ids) : [];
     revalidateAll();
     const names = (list: string[]) => list.map((x) => (isPluginId(x) ? pluginById(x).name : x)).join(", ");
     return {
@@ -27,7 +29,8 @@ export async function setPluginInstalledAction(id: string, installed: boolean): 
       message:
         (installed ? t("{name} installed.", { name: pluginById(id).name }) : t("{name} uninstalled.", { name: pluginById(id).name })) +
         (ids.length > 1 ? ` ${t("Installed along with it: {names}.", { names: names(ids.slice(1)) })}` : "") +
-        (along.length ? ` ${t("Not available without it: {names}.", { names: names(along) })}` : ""),
+        (along.length ? ` ${t("Not available without it: {names}.", { names: names(along) })}` : "") +
+        (programs.length ? ` ${t("Installing what it needs on this PC: {names} (This PC shows how far).", { names: programs.join(", ") })}` : ""),
     };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };

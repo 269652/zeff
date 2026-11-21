@@ -19,7 +19,7 @@ export const PREREQ_PLUGINS: Record<PrereqId, string[]> = {
   claude: ["claude-cli"],
   codex: ["codex-cli"],
   copilot: ["copilot-cli"],
-  poppler: ["documents"],
+  poppler: ["documents", "documents-ext"], // (installed along with it: lib/programs-with-plugin.ts)
 };
 
 export type FindWhere = {

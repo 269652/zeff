@@ -79,7 +79,7 @@ export function prerequisites(): Prerequisite[] {
     },
     {
       id: "poppler",
-      label: "Poppler (pdftoppm)",
+      label: "Poppler (pdftotext, pdftoppm)",
       neededFor: t("Reading scanned or complex PDFs (Documents); Zeff installs it by itself where winget or Homebrew is there"),
       found: poppler ? path.join(poppler, process.platform === "win32" ? "pdftoppm.exe" : "pdftoppm") : null,
       howToGet: t("Install Poppler: {command}", { command: manualInstall() }),

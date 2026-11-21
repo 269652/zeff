@@ -18,6 +18,7 @@ export async function switchDocumentsToPlugin(): Promise<{ flows: string[]; view
   (await import("./seen")).ensureSeen();
   const minutes = (await import("@/lib/sync/intervals")).stepMinutes("localdocs");
   reg.setEnabled(PORT, true);
+  await (await import("@/lib/programs-with-plugin")).installProgramsFor([PORT]); // (Poppler along with it)
   const flows = await import("@/plugins/workspace/flows/store");
   if (!flows.flowByName("documents.folders")) {
     const life = await import("@/plugins/workspace/package-life");

@@ -8,7 +8,7 @@ export default definePlugin({
   description: "A store for your documents: drop text files, Office files, PDFs, pictures or audio — Zeff reads the text out of them (pictures and scanned PDFs through the Claude CLI; audio through a transcriber you set, e.g. Whisper) and, with the Knowledge plugin, the knowledge server compiles them: an abstract on hover, searchable, context for your todos. Attach a document to a todo by hand to give it as context.",
   category: "app",
   defaultInstalled: false,
-  requires: "For pictures and scanned PDFs: the Claude CLI (scanned PDFs also Poppler's pdftoppm). For audio: a transcriber command.",
+  requires: "Poppler (pdftotext, pdftoppm — installed along with it). For pictures and scanned PDFs: the Claude CLI. For audio: a transcriber command.",
   settings: { href: "/settings/documents", what: "Local folders read in by themselves, the audio transcriber" },
   syncSteps: ["localdocs"],
   apps: [

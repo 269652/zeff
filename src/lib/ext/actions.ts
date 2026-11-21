@@ -14,6 +14,8 @@ export async function setExtPluginEnabledAction(id: string, on: boolean): Promis
     const plugin = getPlugin(String(id));
     if (!plugin) return { ok: false, error: t("This plugin isn't in the plugins folder any more.") };
     setEnabled(plugin.id, !!on);
+    // The programs it needs and lacks, installed along with it (Poppler with documents-ext).
+    if (on) await (await import("@/lib/programs-with-plugin")).installProgramsFor([plugin.id]);
     // Work's sidebar, the message box's commands, the panels: the whole app may change.
     revalidatePath("/", "layout");
     return { ok: true, message: on ? t("{name} on.", { name: plugin.manifest.name }) : t("{name} off.", { name: plugin.manifest.name }) };

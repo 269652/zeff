@@ -46,6 +46,7 @@ export async function ensureDocumentsAction(): Promise<ActionState> {
     const { isInstalled, setInstalled } = await import("@/plugins/state");
     if (isInstalled("documents")) return { ok: true };
     setInstalled("documents", true);
+    await (await import("@/lib/programs-with-plugin")).installProgramsFor(["documents"]);
     revalidateAll();
     return { ok: true, message: t("The Documents plugin is installed — it keeps the pictures of your notes.") };
   } catch (e) {
