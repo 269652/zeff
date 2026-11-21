@@ -35,14 +35,19 @@ async function serviceUrl(id: ServiceId): Promise<string | null> {
   return base ? `${base.replace(/\/+$/, "")}/` : null;
 }
 
+export { signInHref } from "./sign-in-href";
+import { signInHref } from "./sign-in-href";
+
 /**
  * A service's page in the automation Chrome, at the front — the tab it has (or the sign-in page
  * it was sent to), else a new one; Chrome started if it isn't running. Signing in is yours: Zeff
  * never types anything there.
  */
-export async function openServiceLogin(id: ServiceId): Promise<{ ok: boolean; message: string }> {
+export async function openServiceLogin(id: ServiceId): Promise<{ ok: boolean; message: string; /** a page in Zeff to go to instead (signInHref) */ href?: string }> {
   // Signal has no web app: Signal Desktop started (with its debug port) — you link it there.
   if (id === "signal") return (await import("@/plugins/signal/open")).openSignal();
+  const href = signInHref(id);
+  if (href) return { ok: true, message: t("{service}: enter its address and your token on Settings → Secrets.", { service: serviceLabel(id) ?? id }), href };
   const url = await serviceUrl(id);
   if (!url) return { ok: false, message: t("No address is set for {service}.", { service: serviceLabel(id) }) };
   return openInAutomationChrome(url, serviceLabel(id) ?? id);

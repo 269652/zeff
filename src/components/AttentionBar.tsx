@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { signInHref } from "@/lib/sign-in-href";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { dismissAttentionAction, openServiceLoginAction, retryServiceAction, runSyncAction } from "@/app/actions";
 import type { Attention } from "@/lib/attention";
@@ -58,6 +60,7 @@ export function AttentionBar({ items }: { items: Attention[] }) {
   useEffect(() => notifyNew(items), [items, perm]);
   // A sync that asks for a sign-in: a toast right where you are (once per request), with the button that brings the page up.
   const toasted = useRef<Set<string> | null>(null);
+  const router = useRouter();
   useEffect(() => {
     const logins = items.filter((a) => a.kind === "login" && a.service);
     const seen = (toasted.current ??= new Set());
@@ -68,10 +71,18 @@ export function AttentionBar({ items }: { items: Attention[] }) {
       toast(a.title, {
         tone: "error",
         ms: 20000,
-        action: { label: t("Open sign-in"), run: () => void runSaid(t, t("Opening the sign-in on the computer (automation Chrome) …"), () => openServiceLoginAction(a.service!)) },
+        action: {
+          label: t("Open sign-in"),
+          // (Jira's sign-in is its token on Settings → Secrets: that page)
+          run: () => {
+            const href = signInHref(a.service!);
+            if (href) router.push(href);
+            else void runSaid(t, t("Opening the sign-in on the computer (automation Chrome) …"), () => openServiceLoginAction(a.service!));
+          },
+        },
       });
     }
-  }, [items, t]);
+  }, [items, t, router]);
   // A source that isn't well (silent, not running, failing, its app changed): a toast once per incident — in any tab, across reloads.
   useEffect(() => {
     const sources = items.filter((a) => a.kind === "source" && a.step);
@@ -155,9 +166,15 @@ function AttentionRow({ a }: { a: Attention }) {
       </div>
       {a.kind === "login" && a.service && (
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" className="btn btn-sm btn-primary" disabled={pending} onClick={() => act("open", t("Opening the sign-in on the computer (automation Chrome) …"), () => openServiceLoginAction(a.service!))} title={t("Bring the page to the front in the automation Chrome (or open it) — you sign in there yourself")}>
-            {label("open", t("Open sign-in"))}
-          </button>
+          {signInHref(a.service) ? (
+            <Link href={signInHref(a.service)!} className="btn btn-sm btn-primary" title={t("Enter the address and your token on Settings → Secrets")}>
+              {t("Open sign-in")}
+            </Link>
+          ) : (
+            <button type="button" className="btn btn-sm btn-primary" disabled={pending} onClick={() => act("open", t("Opening the sign-in on the computer (automation Chrome) …"), () => openServiceLoginAction(a.service!))} title={t("Bring the page to the front in the automation Chrome (or open it) — you sign in there yourself")}>
+              {label("open", t("Open sign-in"))}
+            </button>
+          )}
           <button type="button" className="btn btn-sm" disabled={pending} onClick={() => act("retry", t("Checking again — this can take a minute …"), () => retryServiceAction(a.service!))} title={t("Signed in? Then try again now")}>
             {label("retry", t("Check again"))}
           </button>

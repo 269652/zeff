@@ -5,7 +5,7 @@ import { integrationServer } from "@/lib/integrations/server";
 import { automationUp, runDriver, type DriverId } from "@/plugins/drivers";
 import { PLUGINS } from "@/plugins/catalog";
 import { installedPlugins, stepAvailable } from "@/plugins/state";
-import { listAttention, serviceLabel, type ServiceId } from "./attention";
+import { listAttention, serviceLabel, signInHref, type ServiceId } from "./attention";
 import { syncOverview } from "./sync/registry";
 import type { SyncKey } from "./sync/shared";
 
@@ -23,8 +23,10 @@ export type LoginView = {
   source: "check" | "request" | "sync" | null;
   /** ISO. */
   at: string | null;
-  /** It has a check of its own (its driver's status). */
+  /** It has a check of its own (its driver's status; Jira's: its REST API asked who the token is). */
   checkable: boolean;
+  /** Its sign-in is a page in Zeff (Jira: its token on Settings → Secrets), not a login in the automation Chrome. */
+  href?: string;
 };
 
 /** The driver and its status tool, per service — GitLab and Jira have none (their last sync tells). A mounted integration's service has the driver of its id and the tool "<id>_status". */
@@ -99,6 +101,11 @@ async function chromeUp(): Promise<boolean> {
 
 /** Ask a service's driver whether it's signed in — read-only: no tab opened, Chrome not started. */
 export async function checkLogin(service: ServiceId): Promise<{ state: LoginState; detail: string }> {
+  if (service === "jira") {
+    const r = await jiraCheck();
+    checks().set(`${currentAccountId()}:${service}`, { ...r, at: new Date().toISOString() });
+    return r;
+  }
   const tool = statusTool(service);
   if (!tool) return { state: "unknown", detail: t("No check of its own — the last sync tells.") };
   let r: { state: LoginState; detail: string };
@@ -125,6 +132,15 @@ export async function checkLogin(service: ServiceId): Promise<{ state: LoginStat
   return r;
 }
 
+/** Jira: its REST API asked who the token signs in as (/rest/api/2/myself) — "login" when no token is set or Jira turns it away. */
+async function jiraCheck(): Promise<{ state: LoginState; detail: string }> {
+  const { checkJiraRest } = await import("@/lib/jira/connection");
+  const r = await checkJiraRest();
+  if (!r) return { state: "login", detail: t("No token set — enter Jira's address and your Personal Access Token on Settings → Secrets.") };
+  if (r.ok) return { state: "ok", detail: t("Connected as {user}.", { user: r.user }) };
+  return { state: r.status === 401 || r.status === 403 ? "login" : "unknown", detail: r.error.slice(0, 300) };
+}
+
 /** The services the installed plugins sign in to, each with what's known of its sign-in. */
 export async function listLogins(): Promise<{ chrome: { endpoint: string; running: boolean }; logins: LoginView[] }> {
   const on = installedPlugins();
@@ -134,7 +150,8 @@ export async function listLogins(): Promise<{ chrome: { endpoint: string; runnin
   const steps = new Map(syncOverview().steps.map((s) => [s.key, s]));
   const account = currentAccountId();
   const logins = [...services].map(([service, plugins]): LoginView => {
-    const base = { service, label: serviceLabel(service) ?? service, plugins, checkable: !!statusTool(service) };
+    const href = signInHref(service) ?? undefined;
+    const base = { service, label: serviceLabel(service) ?? service, plugins, checkable: !!statusTool(service) || service === "jira", ...(href ? { href } : {}) };
     const check = checks().get(`${account}:${service}`);
     const request = requests.get(service);
     const step = steps.get(stepOf(service));

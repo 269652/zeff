@@ -9,7 +9,7 @@ export default definePlugin({
   description: "Your tickets and those of the chosen boards — the basis of the todos, the context sync and the entries per ticket.",
   category: "connector",
   defaultInstalled: false,
-  requires: "The Jira MCP server (mcp-atlassian) with your access.",
+  requires: "Jira's address and your Personal Access Token (Settings → Secrets).",
   settings: { href: "/settings/jira", what: "Address, access, chosen boards" },
   nav: [
     { href: "/jira", label: "Jira", hint: "Boards, tickets & sync" },

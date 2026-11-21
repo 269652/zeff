@@ -52,7 +52,7 @@ export async function openAllSignInsAction(): Promise<ActionState> {
     const { listLogins } = await import("@/lib/logins");
     const { openServiceLogin } = await import("@/lib/attention");
     const { logins } = await listLogins();
-    const open = logins.filter((l) => l.state !== "ok");
+    const open = logins.filter((l) => l.state !== "ok" && !l.href); // (Jira: its token on Settings → Secrets — no page to open)
     if (!open.length) return { ok: true, message: t("Everything is signed in.") };
     const failed: string[] = [];
     for (const l of open) if (!(await openServiceLogin(l.service)).ok) failed.push(l.label);
