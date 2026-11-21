@@ -9,7 +9,7 @@
 export function LoadingScreen({ label, size = "screen" }: { label: string; size?: "screen" | "view" | "block" }) {
   return (
     <div className={`zeff-loading zeff-loading-${size} flex w-full flex-col items-center justify-center gap-3`} role="status" aria-live="polite">
-      <svg viewBox="0 0 48 48" className={`${size === "block" ? "size-6" : "size-10"} animate-spin text-indigo-600 [animation-duration:900ms] dark:text-indigo-400`} aria-hidden>
+      <svg viewBox="0 0 48 48" className={`${size === "block" ? "size-6" : "size-10"} zeff-spinner animate-spin text-indigo-600 [animation-duration:900ms] dark:text-indigo-400`} aria-hidden>
         <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-15" />
         <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="40 126" />
       </svg>

@@ -582,4 +582,9 @@ html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
   .main-body:empty::before {
     animation-duration: 2.5s;
   }
+  /* A loading spinner keeps turning, slowly: still, it would read as a progress ring that is stuck. */
+  .zeff-spinner {
+    animation-duration: 2.5s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
