@@ -1,5 +1,6 @@
 "use client";
 
+import { forgetShared, shareCall } from "./share-call";
 import { confirmAction } from "@/components/confirm";
 import { ComputeData } from "./compute-data";
 import { GiroCode } from "@/components/GiroCode";
@@ -190,7 +191,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   const [settingsIn, setSettingsIn] = useState(false);
   useEffect(() => {
     let live = true;
-    void loadViewSettingsAction(props.data.id).then((x) => live && (setSettingsIn(true), x.ok && setSettings(x.values)));
+    // (Shared: a page of many blocks reads its settings once — share-call.ts.)
+    void shareCall(`settings:${props.data.id}`, () => loadViewSettingsAction(props.data.id)).then((x) => live && (setSettingsIn(true), x.ok && setSettings(x.values)));
     return () => {
       live = false;
     };
@@ -866,6 +868,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       case "settings":
         return <SettingsForm key={key} title={a.title} decls={json<SettingDecl[]>(a.decls, [])} values={json<Record<string, string>>(a.values, {})} onSave={async (name, value, decl) => {
           const x = await saveViewSettingAction(props.data.id, name, value, { type: decl.type, options: decl.options });
+          forgetShared(`settings:${props.data.id}`);
           if (!x.ok) return void toast(x.error, { tone: "error" });
           setSettings(x.values);
         }} />;

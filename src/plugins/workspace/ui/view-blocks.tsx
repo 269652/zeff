@@ -529,6 +529,9 @@ function FillHeight({ className, style, children, wide = 768 }: { className: str
           return void el.style.removeProperty("height");
         }
         const box = el.getBoundingClientRect();
+        // (Not drawn — behind a view's loading screen, folded away: nothing to measure; a height worked out from nothing would make
+        // the page far longer than it is while it loads. It is measured once it is drawn: the observer below.)
+        if (!box.width && !box.height) return void el.style.removeProperty("height");
         // (Its bottom with the panes as they are — and the window's own margin.)
         const end = page.getBoundingClientRect().bottom;
         const below = Math.max(0, end - box.bottom) + 16;
@@ -551,6 +554,9 @@ function FillHeight({ className, style, children, wide = 768 }: { className: str
     window.addEventListener("resize", fit);
     const ro = new ResizeObserver(fit);
     if (el.parentElement) ro.observe(el.parentElement);
+    // (…and the page it stands in: what is below it growing as its blocks load leaves it less room — else measured once, too high.)
+    const page = el.closest(".ws-editor");
+    if (page) ro.observe(page);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", fit);

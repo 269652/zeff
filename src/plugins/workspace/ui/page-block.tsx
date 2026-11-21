@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useT } from "@/components/I18nProvider";
@@ -47,7 +48,8 @@ export function PageBlock({ block, params, pageId, title, draft, onErrors }: { b
   );
   const view: View = useMemo(() => ({ id: `block-${block}`, name: block, type: "app", app: "template", template: src, filter: { op: "and", rules: [] }, sorts: [], hidden: [] }), [block, src]);
   const drafts = useMemo(() => (draft ? [draft] : undefined), [draft]);
-  if (defs === null) return <p className="text-sm text-zinc-400">…</p>;
+  // (The blocks not read yet: the block's loading screen — the same it shows while its own data comes.)
+  if (defs === null) return <LoadingScreen label={t("Loading")} size="block" />;
   if (!draft && !defs.some((d) => d.name === block)) return <p className="rounded-lg border border-dashed border-zinc-300 p-3 text-sm text-zinc-500 dark:border-zinc-700">{t("There is no block “{name}” (Studio → Blocks lists them).", { name: block })}</p>;
   if (!meta) return null;
   return (
