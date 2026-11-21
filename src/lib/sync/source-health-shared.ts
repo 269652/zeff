@@ -233,6 +233,9 @@ export function judgeStep(s: StepInput, ctx: { now: number; upSince: number; qui
   const ok = (): SourceHealth => ({ ...base, state: "ok", since: null, detail: { kind: "ok" } });
   // Running right now: its run may be fixing it.
   if (s.running) return ok();
+  // Never synced through once (never set up: no sign-in, no token, its plugin just turned on): nothing to attend to — only a source that
+  // worked and stopped does. (A sign-in it lacks is asked for on its own: the login attention.)
+  if (!Number.isFinite(ms(s.lastOkAt ?? (s.lastOk ? s.lastAt : null))) && !s.drift) return ok();
 
   if (s.failures > 0 && s.failingSince && (s.failures >= FAIL_RUNS || now - ms(s.failingSince) >= FAIL_HOURS * 3600e3))
     return { ...base, state: "failing", since: s.failingSince, detail: { kind: "failing", failures: s.failures, message: s.lastMessage ?? "" } };

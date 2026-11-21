@@ -113,9 +113,14 @@ test("too little history: never silent", () => {
 });
 
 test("failing beats everything; stale when no run came though one was due; a server that just started isn't stale", () => {
-  const failing = judgeStep(step({ lastAt: new Date(at(21, 10)).toISOString(), lastOk: false, lastMessage: "Failed to fetch", failures: 3, failingSince: new Date(at(21, 8)).toISOString() }), { now: at(21, 12), upSince: at(1, 0) });
+  const failing = judgeStep(step({ lastAt: new Date(at(21, 10)).toISOString(), lastOk: false, lastOkAt: new Date(at(20, 16)).toISOString(), lastMessage: "Failed to fetch", failures: 3, failingSince: new Date(at(21, 8)).toISOString() }), { now: at(21, 12), upSince: at(1, 0) });
   assert.equal(failing.state, "failing");
   assert.equal(failing.since, new Date(at(21, 8)).toISOString());
+
+  // Never synced through once (never set up — no sign-in, no token): neither failing nor stale, nothing to attend to.
+  const neverSetUp = judgeStep(step({ lastAt: new Date(at(21, 10)).toISOString(), lastOk: false, lastMessage: "Jira isn't set up", failures: 9, failingSince: new Date(at(1, 8)).toISOString() }), { now: at(21, 12), upSince: at(1, 0) });
+  assert.equal(neverSetUp.state, "ok");
+  assert.equal(judgeStep(step({ lastAt: null, lastOk: null }), { now: at(21, 12), upSince: at(1, 0) }).state, "ok", "never ran: not stale");
 
   const blip = judgeStep(step({ lastAt: new Date(at(21, 11, 50)).toISOString(), lastOk: false, failures: 1, failingSince: new Date(at(21, 11, 50)).toISOString() }), { now: at(21, 12), upSince: at(1, 0) });
   assert.equal(blip.state, "ok", "failed once: a blip");

@@ -13,6 +13,7 @@ test("source_health tells agents which sources aren't well, and why", async () =
   const { noteSyncResult } = await import("@/lib/sync/health");
   const { getDb, schema } = await import("@/db");
   const failed = new Date(Date.now() - 3 * 3600e3).toISOString();
+  noteSyncResult("jira", true, "ok", new Date(Date.now() - 30 * 3600e3).toISOString()); // (it worked once: set up)
   getDb().insert(schema.syncState).values({ key: "jira", lastAt: failed, lastOk: false, lastMessage: "Jira: 401 unauthorized" }).run();
   noteSyncResult("jira", false, "Jira: 401 unauthorized", failed);
   noteSyncResult("jira", false, "Jira: 401 unauthorized", failed);

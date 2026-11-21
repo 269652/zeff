@@ -82,6 +82,7 @@ test("stale counts only since the account syncs: a switch to it (or the server's
 test("a failure recorded once doesn't outlive a later good run the step reports itself (a briefing run outside the sync)", async () => {
   const { noteSyncResult } = await import("@/lib/sync/health");
   const { computeSourceHealth } = await import("@/lib/sync/source-health");
+  noteSyncResult("boards", true, "ok", at(1, 7).toISOString());
   noteSyncResult("boards", false, "docker not running", at(2, 7).toISOString());
   const step = { key: "boards", label: "Briefing", href: "/todos", running: false, lastOk: true, lastMessage: "ok", everyMinutes: 0, workdays: false };
   assert.equal(computeSourceHealth([{ ...step, lastOk: false, lastAt: at(2, 7).toISOString() }], { now: at(5, 8).getTime(), upSince: 0 })[0].state, "failing", "the failed run is the last");

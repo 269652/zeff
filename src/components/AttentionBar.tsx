@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signInHref } from "@/lib/sign-in-href";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { dismissAttentionAction, openServiceLoginAction, retryServiceAction, runSyncAction } from "@/app/actions";
@@ -61,6 +61,9 @@ export function AttentionBar({ items }: { items: Attention[] }) {
   // A sync that asks for a sign-in: a toast right where you are (once per request), with the button that brings the page up.
   const toasted = useRef<Set<string> | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
+  // (the setup wizard: sources are only being set up there — no "sources need attention" toasts)
+  const inSetup = /^(\/[^/]+)?\/setup(\/|$)/.test(pathname ?? "");
   useEffect(() => {
     const logins = items.filter((a) => a.kind === "login" && a.service);
     const seen = (toasted.current ??= new Set());
@@ -86,7 +89,7 @@ export function AttentionBar({ items }: { items: Attention[] }) {
   // A source that isn't well (silent, not running, failing, its app changed): a toast once per incident — in any tab, across reloads.
   useEffect(() => {
     const sources = items.filter((a) => a.kind === "source" && a.step);
-    if (!sources.length) return;
+    if (!sources.length || inSetup) return;
     let seen: string[] = [];
     try {
       seen = JSON.parse(localStorage.getItem(TOASTED_SOURCES_KEY) ?? "[]") as string[];
@@ -112,7 +115,7 @@ export function AttentionBar({ items }: { items: Attention[] }) {
     } catch {
       // toasted again next time, then
     }
-  }, [items, t]);
+  }, [items, t, inSetup]);
   const logins = items.filter((a) => a.kind === "login");
   if (!logins.length) return null;
   return (
