@@ -17,7 +17,7 @@ const clip = (s: string | null | undefined, n: number) => {
 export async function searchAll(raw: string, opts: SearchOptions = {}): Promise<SearchGroup[]> {
   const { words, commands, within } = parseQuery(raw);
   const asked = new Set<SearchSource>(commands ? ["commands"] : (opts.sources ?? []).filter((s) => s !== "nav"));
-  if (!opts.sources && !commands) for (const s of ["pages", "rows", "templates", "people", "todos", "tickets", "mails", "messages", "documents", "metrics", "commands"] as const) asked.add(s);
+  if (!opts.sources && !commands) for (const s of ["pages", "rows", "templates", "people", "todos", "tickets", "mails", "messages", "documents", "metrics", "plugins", "commands"] as const) asked.add(s);
   // Without words only the commands list (">" alone shows them all).
   if (words.length < 2 && !commands) return [];
   const per = opts.perGroup ?? (asked.size === 1 || within ? 12 : 5);
@@ -155,8 +155,16 @@ export async function searchAll(raw: string, opts: SearchOptions = {}): Promise<
       const found = (await SEARCHERS[rag](terms, words)).filter((c) => c.score >= need).sort((a, b) => b.score - a.score).slice(0, 30);
       add(source, found.map((c) => ({ id: c.ref, label: clip(c.title, 140), hint: [c.when, clip(c.text, 100)].filter(Boolean).join(" · ") || undefined, href: href(c.ref), group: SOURCE_LABELS[source], floor: 2 + c.score })));
     });
+  // Plugins not installed yet, from the sources' last check (no network; lib/ext/marketplace.ts): "Install …" opens it in Plugins → Browse.
+  const pluginsStep = guarded("plugins", async () => {
+    const { notInstalledForSearch } = await import("@/lib/ext/marketplace");
+    const want = words.toLowerCase().split(" ").filter(Boolean);
+    const found = notInstalledForSearch().filter((p) => want.every((w) => p.text.includes(w)));
+    add("plugins", found.map((p) => ({ id: `plugin:${p.id}`, label: `${p.icon ? `${p.icon} ` : "🧩 "}${t("Install {name}", { name: p.name })}`, hint: `${clip(p.description, 110)} · ${p.source}`, href: `/plugins?view=browse&plugin=${encodeURIComponent(p.id)}`, group: SOURCE_LABELS.plugins, keywords: p.text, floor: 4 })));
+  });
   const q = encodeURIComponent(words);
   await Promise.all([
+    pluginsStep,
     commandsStep,
     workspaceStep,
     metricsStep,

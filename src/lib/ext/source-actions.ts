@@ -37,8 +37,7 @@ export async function checkSourcesAction(fresh = false): Promise<Res<{ states: i
     const states = await (await import("./sources")).checkAll({ fresh: !!fresh });
     // (checked now: the update notes follow at once — not only at the half-hourly check)
     if (fresh) await (await import("./packages-sync")).checkForUpdates().catch(() => {});
-    // (what goes to the page: no manifests in full)
-    return { ok: true, states: states.map((s) => ({ ...s, plugins: s.plugins.map((p) => ({ ...p, manifest: { ...p.manifest, contributes: undefined } as never })) })) };
+    return { ok: true, states };
   } catch (e) {
     return { ok: false, error: errorMessage(e) };
   }
@@ -52,7 +51,9 @@ function told(r: import("./sources").InstallReport): string {
   const app = r.app ? ` · ${t("its app {from} → {to}", { from: r.app.from, to: r.app.to })}` : "";
   const merged = r.merged.length ? ` · ${t("merged with your changes: {files}", { files: r.merged.join(", ") })}` : "";
   const kept = r.kept.length ? ` · ${t("kept as you changed them: {files}", { files: r.kept.join(", ") })}` : "";
-  return what + app + merged + kept;
+  const signed = r.verified?.signed ? ` · ${t("signed ({key})", { key: r.verified.signed })}` : "";
+  const stale = r.verified?.catalog === false ? ` · ${t("the repository's catalog.json is out of date for it")}` : "";
+  return what + app + merged + kept + signed + stale;
 }
 
 export async function installFromSourceAction(sourceId: string, pluginId: string): Promise<Res<{ message: string; conflicts: string[] }>> {
@@ -190,6 +191,103 @@ export async function applyPackagesAction(): Promise<Res<{ state: import("./pack
     const state = await (await import("./packages-sync")).applyPackagesFile({ force: true });
     done();
     return { ok: true, state };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The marketplace (Plugins → Browse; marketplace.ts)
+// ---------------------------------------------------------------------------
+
+/** Every plugin of every source with how it stands here. `cached`: the last check's (at once, no network); `check`: checked (10 minutes cached); `fresh`: checked now. */
+export async function marketplaceAction(mode: "cached" | "check" | "fresh" = "cached"): Promise<Res<{ view: import("./marketplace").MarketView; permissions: Record<string, string> }>> {
+  try {
+    const m = String(mode);
+    const view = await (await import("./marketplace")).marketplace(m === "fresh" ? "fresh" : m === "check" ? "check" : "cached");
+    if (m === "fresh") await (await import("./packages-sync")).checkForUpdates().catch(() => {});
+    return { ok: true, view, permissions: (await import("./permission-texts")).permissionTexts() };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/** The detail panel's README, screenshots and changelog (the commits that touched the plugin's folder). */
+export async function pluginDetailAction(sourceId: string, pluginId: string): Promise<Res<{ detail: import("./sources").PluginDetail }>> {
+  try {
+    return { ok: true, detail: await (await import("./sources")).pluginDetail(String(sourceId), String(pluginId)) };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/**
+ * Switched on from Browse: what it asks for granted (the person said yes to the list), and its app installed when it brings one and it
+ * isn't there yet. A built-in's port (plugins/ports.ts) is switched the port's way instead — its settings carried over, the built-in off.
+ */
+export async function switchOnPluginAction(pluginId: string): Promise<Res<{ message: string }>> {
+  try {
+    const id = String(pluginId);
+    const reg = await import("./registry");
+    const plugin = reg.getPlugin(id);
+    if (!plugin) throw new Error(t("This plugin isn't in the plugins folder any more."));
+    const sync = await import("./packages-sync");
+    const { PORTS } = await import("@/plugins/ports");
+    const port = PORTS.find((p) => p.plugin === id);
+    if (port) {
+      await port.switch();
+      await sync.rememberPort(id).catch(() => false);
+      revalidatePath("/", "layout");
+      return { ok: true, message: t("It runs as a plugin now; your settings came along.") };
+    }
+    reg.setEnabled(id, true);
+    let app = "";
+    if (plugin.manifest.contributes.workspacePackages.length) {
+      try {
+        const life = await import("@/plugins/workspace/package-life");
+        const pkg = !life.getInstalled(id) ? await life.offeredPackage(id) : null;
+        if (pkg) {
+          await life.installTracked(pkg, null, { allow: true });
+          app = ` · ${t("its app “{name}” is in the Workspace", { name: pkg.name ?? id })}`;
+        }
+      } catch (e) {
+        app = ` · ${t("its app wasn't installed: {error}", { error: errorMessage(e) })}`;
+      }
+    }
+    revalidatePath("/", "layout");
+    return { ok: true, message: t("{name} on.", { name: plugin.manifest.name }) + app };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/** Taken out from Browse: off, its folder moved aside (.removed), out of packages.json. A port the built-in runs through stays. */
+export async function removePluginAction(pluginId: string): Promise<Res<{ message: string }>> {
+  try {
+    const id = String(pluginId);
+    const { PORTS } = await import("@/plugins/ports");
+    const port = PORTS.find((p) => p.plugin === id);
+    if (port) {
+      const { isInstalled, onlyThroughPort } = await import("@/plugins/state");
+      const on = !!(await import("./registry")).getPlugin(id)?.enabled;
+      if (onlyThroughPort(port.builtin as never) || (on && !isInstalled(port.builtin as never))) throw new Error(t("Zeff's built-in {name} runs through this plugin — switch the built-in on again first (Plugins → Installed).", { name: port.builtin }));
+    }
+    await (await import("./sources")).removePlugin(id);
+    const sync = await import("./packages-sync");
+    sync.forgetInPackages(id);
+    await sync.checkForUpdates().catch(() => {});
+    revalidatePath("/", "layout");
+    return { ok: true, message: t("{id} removed — its folder is kept under .removed in the plugins folder; what it made in Zeff stays.", { id }) };
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) };
+  }
+}
+
+/** A token for a source (a private repository; GitHub's rate limit): kept in Zeff, never shown again, never written into packages.json. Empty: removed. */
+export async function setSourceTokenAction(url: string, token: string): Promise<Res> {
+  try {
+    (await import("./sources")).setSourceToken(String(url), String(token ?? ""));
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: errorMessage(e) };
   }

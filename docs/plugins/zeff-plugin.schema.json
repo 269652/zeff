@@ -23,8 +23,9 @@
     },
     "description": {
       "default": "",
+      "description": "One to three sentences (up to 600 characters).",
       "type": "string",
-      "maxLength": 300
+      "maxLength": 600
     },
     "author": {
       "type": "string",
@@ -33,6 +34,66 @@
     "homepage": {
       "type": "string",
       "format": "uri"
+    },
+    "keywords": {
+      "default": [],
+      "description": "Words the marketplace's search finds it by (up to 20).",
+      "maxItems": 20,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 40
+      }
+    },
+    "category": {
+      "description": "Where the marketplace files it: app, connector, communication, ai, time, finance, knowledge, language, developer or system.",
+      "type": "string",
+      "enum": [
+        "app",
+        "connector",
+        "communication",
+        "ai",
+        "time",
+        "finance",
+        "knowledge",
+        "language",
+        "developer",
+        "system"
+      ]
+    },
+    "icon": {
+      "description": "An emoji, or the path of a small image in the folder (png, svg, jpg, webp; up to 32 kB) — the marketplace's card.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "screenshots": {
+      "default": [],
+      "description": "Images in the folder shown in the marketplace's details (up to 8).",
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "requires": {
+      "description": "What it needs besides this Zeff's extension API (apiVersion).",
+      "type": "object",
+      "properties": {
+        "plugins": {
+          "default": [],
+          "description": "The ids of other plugins it needs (the marketplace says so).",
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,39}$"
+          }
+        }
+      }
     },
     "repository": {
       "description": "Where newer versions of it are: a GitHub repository (one repository may hold many plugins, each in a folder with its own zeff-plugin.json and version). Plugins → Sources checks it and updates on a click.",

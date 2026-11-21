@@ -43,6 +43,8 @@ export async function switchToPortAction(builtin: string): Promise<{ ok: boolean
     const port = await portOf(String(builtin));
     if (!port) return { ok: false, error: t("Its plugin isn't in the plugins folder — install it first under Sources.") };
     await port.switch();
+    // (packages.json says what this Zeff has: the port and where it comes from — its updates follow)
+    await (await import("@/lib/ext/packages-sync")).rememberPort(port.plugin).catch(() => false);
     revalidatePath("/", "layout");
     return { ok: true, message: t("It runs as a plugin now; your settings came along.") };
   } catch (err) {

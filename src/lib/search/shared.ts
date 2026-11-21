@@ -5,7 +5,7 @@
 import { scoreItem, type PaletteItem } from "@/lib/palette";
 
 /** Where a hit comes from. "nav" (the menu's pages and settings) is found in the browser, the rest by /api/search. */
-export const SEARCH_SOURCES = ["nav", "pages", "rows", "templates", "people", "todos", "tickets", "mails", "messages", "documents", "metrics", "commands"] as const;
+export const SEARCH_SOURCES = ["nav", "pages", "rows", "templates", "people", "todos", "tickets", "mails", "messages", "documents", "metrics", "plugins", "commands"] as const;
 export type SearchSource = (typeof SEARCH_SOURCES)[number];
 
 /** The overlay's filter: everything, the Workspace (its sidebar opens the search on it), or one source. */
@@ -33,6 +33,7 @@ export const SOURCE_LABELS: Record<SearchSource, string> = {
   messages: "Messages",
   documents: "Documents",
   metrics: "Metrics",
+  plugins: "Plugins to install",
   commands: "Commands",
 };
 
