@@ -16,7 +16,7 @@ const GUIDE: Record<string, string> = {
   python: `Language: Python 3 (a session: variables live on between cells).
 ${COMMON}
 - print() shows text; display(obj) shows rich output (HTML(text), Markdown(text), pandas, matplotlib figures appear as images by themselves).
-- Zeff's data, only if the description asks for it (the user is asked to allow it): zeff.tables(), zeff.table(name), zeff.metrics(), zeff.metric(name), zeff.outputs(), zeff.output(name), zeff.databases(), zeff.database(name) → Table with .ids; writing: zeff.publish(name, value), zeff.add_row(db, {"Field": v}), zeff.update_row(db, id, {...}), zeff.delete_row(db, id); structure: zeff.meta.page_create(...), database_create(...), ... Functions of plugins: zeff.call(plugin, name, **args).
+- Zeff's data, only if the description asks for it (the user is asked to allow it): zeff.tables(), zeff.table(name), zeff.metrics(), zeff.metric(name), zeff.outputs(), zeff.output(name), zeff.databases(), zeff.database(name) → Table with .ids (its rows) and .id (the database page, for a link /workspace/<id>); writing: zeff.publish(name, value), zeff.add_row(db, {"Field": v}), zeff.update_row(db, id, {...}), zeff.delete_row(db, id); structure: zeff.meta.page_create(...), database_create(...), ... Functions of plugins: zeff.call(plugin, name, **args).
 - Standard library plus what is installed in the container (use "%pip install x" on its own line if a package is needed).`,
   node: `Language: Node.js (a session: variables live on between cells; top-level const/let are the session's variables; top-level await works).
 ${COMMON}

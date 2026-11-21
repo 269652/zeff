@@ -49,7 +49,7 @@ const call = (op, args) => new Promise((resolve, reject) => {
 });
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 class Table {
-  constructor(cols, rows, title, ids) { this.cols = cols; this.rows = rows; this.title = title; this.ids = ids || null; }
+  constructor(cols, rows, title, ids, id) { this.cols = cols; this.rows = rows; this.title = title; this.ids = ids || null; this.id = id ?? null; }
   get length() { return this.rows.length; }
   records() { return this.rows.map((r) => Object.fromEntries(this.cols.map((c, i) => [c, r[i]]))); }
   column(name) { const i = this.cols.indexOf(name); return this.rows.map((r) => r[i]); }
@@ -70,7 +70,7 @@ const zeff = {
   ai: (prompt, json, opts) => call("ai", { prompt: String(prompt), json: !!json, ...(opts && opts.schema ? { schema: jsonable(opts.schema) } : {}), ...(opts && opts.minutes ? { minutes: Number(opts.minutes) } : {}) }),
   call: (plugin, name, args) => call("call", { plugin, name, fargs: jsonable(args || {}) }),
   databases: () => call("databases"),
-  database: async (nameOrId) => { const r = await call("database", { name: nameOrId }); return new Table(r.cols, r.rows, r.title, r.ids); },
+  database: async (nameOrId) => { const r = await call("database", { name: nameOrId }); return new Table(r.cols, r.rows, r.title, r.ids, r.id); },
   // Writing into Zeff: each needs its own permission, asked when the code first does it.
   publish: (name, value, unit) => call("publish", { name, value: jsonable(value), unit }),
   addRow: (database, fields) => call("add_row", { database, fields: jsonable(fields) }),
