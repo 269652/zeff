@@ -42,6 +42,23 @@ API), but nothing stops it from reading Zeff's data folder directly. `exec` mean
 - **Tokens** (`ZEFF_EXT_TOKEN`) are HMACs made with a secret in your Zeff data folder (`ext-secret`, owner-only); each
   one is for one plugin.
 
+## Zeff Secrets (Settings → Secrets)
+
+The tokens and logins Zeff's own plugins need — Jira's address, login and Personal Access Token (or Cloud's API token), your own Microsoft
+or Google app, the knowledge server's token — are entered on **Settings → Secrets**, not in `.env` or in chat.
+
+- **Declared by the plugin:** each plugin that needs one lists it in `src/plugins/<id>/secrets.ts` (name, label, what it is, whether it is a
+  secret or just an address/login); `src/plugins/secrets-modules.ts` collects those of the installed plugins. The page shows them per plugin
+  (`/settings/secrets#jira` is Jira's section — its "Sign in" buttons link there).
+- **Stored encrypted** (AES-256-GCM, the key in `<data>/.secret-key`, never in the database), per account — in the account's own database
+  (table `secrets`), or, if you choose, in a database of its own beside it (`secrets.db`), so a copied `zeff.db` carries none.
+- **Never sent back:** once saved, a secret is shown only as *set* / *not set*; you can replace or clear it. Addresses and logins
+  (`secret: false`) are shown. Values never go into logs, error messages or a program's whole environment — each plugin reads the names it
+  declared with `getSecret(name)` (`src/lib/secrets/store.ts`), which still finds a value only in `.env` until you move it over ("Copy from .env").
+- **Jira** uses them for its REST API (`src/lib/jira/connection.ts`, `rest.ts`): Server / Data Center with `Authorization: Bearer <PAT>`,
+  Cloud with your e-mail and an API token (basic auth). "Test connection" asks `/rest/api/2/myself`. Without a token the Jira MCP server
+  (mcp-atlassian, from `JIRA_MCP_COMMAND` or `.mcp.json`) is the fallback, and only the Jira names are handed to it.
+
 ## What Zeff does not do
 
 - It doesn't check who wrote a plugin or sign anything: **you** decide to trust it.

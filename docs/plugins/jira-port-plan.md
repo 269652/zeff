@@ -18,6 +18,14 @@ Jira is the biggest of the connectors, because it is not a scraper but the base 
 - **`lib/jira/mcp-client.ts` is not Jira's:** 26 other files (mail, Teams, GitLab, Keep, Signal, calendar, the drivers …) use it as *the*
   stdio MCP client. It only carries Jira's name.
 
+## Update 2026-11-21: the REST API with a token
+
+Jira is now reached over its **REST API** when a token is set in Zeff Secrets (Settings → Secrets → Jira: `JIRA_URL`, `JIRA_PERSONAL_TOKEN`,
+or `JIRA_USERNAME` + `JIRA_API_TOKEN` for Cloud). `src/lib/jira/rest.ts` answers the same tool names (`jira_search`, `jira_get_board_issues`, …)
+in mcp-atlassian's shapes, so every `runJiraSession` caller kept its code; the MCP server (or the plugin's driver) is only the fallback.
+The jira-ext driver bundles the same file and uses its own settings `TOKEN` / `EMAIL` / `BASE_URL` (carried over at the switch).
+Tested with a mocked fetch (`tests/jira-rest.test.ts`), not yet against a real Jira.
+
 ## The line
 
 | Stays in the kernel (generic) | Moves into the plugin `jira-ext` |
