@@ -11,7 +11,7 @@ export const syncSettings: PluginSyncSettings = {
         return t("Briefing");
       },
       get what() {
-        return t("Your tickets read by the AI: what happened, what to do — then the mail and WhatsApp review, mail matching and the auto actions.");
+        return t("The regular AI run over your tickets from your JQL filter: what happened, what to do — then the mail and WhatsApp review, mail matching and the auto actions.");
       },
       get: () => getBoardSettings().autoMinutes,
       set: (m) => updateBoardSettings({ autoMinutes: m }),

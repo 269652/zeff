@@ -450,7 +450,7 @@ const CORE_STEPS: Partial<Record<SyncKey, Step>> & Record<(typeof CONNECTOR_STEP
     schedule: () => ({ everyMinutes: getBoardSettings().autoMinutes, lastAt: recorded("tododupes").lastAt, window: t("workdays, with the briefing"), workdays: true }),
   },
   boardlage: {
-    get label() { return t("Board briefing"); },
+    get label() { return t("Board analysis"); },
     href: "/workspace",
     get what() { return t("The briefing on every relevant card of your boards — the Jira boards' tickets (not only yours) and your own boards' cards — shown on the cards (only what changed)"); },
     run: async () => {

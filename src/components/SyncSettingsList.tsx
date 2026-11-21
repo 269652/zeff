@@ -47,6 +47,7 @@ export function SyncSettingsList() {
               <div key={f.key} className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-4 py-2.5 text-sm">
                 <span className="font-medium text-zinc-600 dark:text-zinc-300">{f.label}</span>
                 <span className="text-zinc-500">{f.follows}</span>
+                {f.what && <p className="basis-full text-xs text-zinc-500">{f.what}</p>}
               </div>
             ))}
           </section>

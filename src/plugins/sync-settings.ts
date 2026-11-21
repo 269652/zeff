@@ -21,7 +21,7 @@ export type SyncInterval = {
 };
 
 /** A step without an interval of its own: it runs with (after) another. */
-export type SyncFollower = { key: string; label: string; follows: string };
+export type SyncFollower = { key: string; label: string; follows: string; /** What it is, in one short line (shown under it). */ what?: string };
 
 export type PluginSyncSettings = { intervals?: SyncInterval[]; follows?: SyncFollower[] };
 
