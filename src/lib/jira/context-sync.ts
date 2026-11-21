@@ -1,4 +1,3 @@
-import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { contextFileOnDisk, getContextItem, markContextSynced, markFilesSynced } from "@/lib/contexts";
 import { resolveLinks } from "@/lib/context-links";
 import { contextHeadline, jiraCommentMarkdown, jiraSyncHash, jiraSyncState, type ContextItem } from "@/lib/contexts-shared";
@@ -6,7 +5,8 @@ import { entitySourceLabel, entityText, entityWhoWhen } from "@/lib/entities-sha
 import { gitlabHeadline, gitlabMarkdown } from "@/lib/gitlab/shared";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "./mcp-client";
+import { resultToPayload } from "./mcp-client";
+import { runJiraSession } from "./port-ops";
 import { getJiraSyncConfig } from "./sync";
 
 export type ContextSyncResult = {
@@ -115,10 +115,9 @@ export async function syncContextsToJira(ids: number[], opts: { dryRun?: boolean
     return res;
   }
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new Error(t("Jira isn't set up — see the Jira tab."));
+  if (!cfg.configured) throw new Error(t("Jira isn't set up — see the Jira tab."));
 
-  await runStdioSession(
-    { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
+  await runJiraSession("Jira",
     async (call) => {
       for (const c of todo) {
         const where = `${c.ticket} · ${contextHeadline(c, t)}`;

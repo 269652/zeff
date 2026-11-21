@@ -1,4 +1,3 @@
-import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import path from "node:path";
 import { jiraCommentUrl } from "@/lib/todos/shared";
 import { documentFile } from "@/plugins/documents/store";
@@ -8,7 +7,8 @@ import { ValidationError, errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
 import { jiraNoteBody, linkJiraAccounts, resolveJiraAccounts } from "@/plugins/people/accounts";
 import { listPeople } from "@/plugins/people/store";
-import { resultToPayload, runStdioSession } from "./mcp-client";
+import { resultToPayload } from "./mcp-client";
+import { runJiraSession } from "./port-ops";
 import { getJiraTicket } from "./store";
 import { getJiraSyncConfig } from "./sync";
 
@@ -75,10 +75,9 @@ async function viaJira<T>(fn: (deps: NoteSyncDeps) => Promise<T>): Promise<T> {
     });
   }
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
+  if (!cfg.configured) throw new ValidationError(t("Jira isn't set up — see the Jira tab."));
   let out!: T;
-  await runStdioSession(
-    { command: cfg.command!, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
+  await runJiraSession("Jira",
     async (call) => {
       out = await fn({
         post: async (ticket, body) => commentIdOf(resultToPayload(await call("jira_add_comment", { issue_key: ticket, body }))),

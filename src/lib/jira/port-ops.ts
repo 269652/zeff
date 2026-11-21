@@ -13,9 +13,13 @@ export type PortOp =
   | { type: "comment"; ticket: string; body: string }
   | { type: "create"; ticket: string; summary: string; body: string; assignee?: string; issueTypes: string[]; browseUrl?: string };
 
-/** Whether the plugin does the changes now: it is on and its driver is there. */
+/**
+ * Whether the plugin does the changes now: it is on and its driver is there — and no token is set in Zeff Secrets (with one, Zeff talks to
+ * Jira's REST API itself: lib/jira/connection.ts).
+ */
 export async function jiraPortOn(): Promise<boolean> {
   if (!getPlugin("jira-ext")?.enabled) return false;
+  if ((await import("./connection")).jiraRestOn()) return false;
   const { getLambda } = await import("@/plugins/workspace/lambdas/store");
   return getLambda("jira.driver")?.manifest.kind === "driver";
 }
@@ -75,6 +79,12 @@ export async function runJiraPortTool(tool: string, event: Record<string, unknow
  * `call(tool, args)` as the MCP client gives it — resultToPayload reads the answer.
  */
 export async function runJiraSession<T>(label: string, body: (call: (tool: string, args: Record<string, unknown>) => Promise<unknown>) => Promise<T>, timeoutMs = 150000): Promise<T> {
+  // A token in Zeff Secrets: Jira's REST API, answered as the MCP server's tools (lib/jira/rest.ts) — no program started.
+  const rest = (await import("./connection")).jiraRestClient();
+  if (rest) {
+    const { withTimeout } = await import("./connection");
+    return withTimeout(body(rest.call), timeoutMs, label);
+  }
   if (await jiraPortOn()) {
     const { openLambdaSession } = await import("@/plugins/workspace/lambdas/session");
     return openLambdaSession("jira.driver", {}, body, timeoutMs);
@@ -83,6 +93,14 @@ export async function runJiraSession<T>(label: string, body: (call: (tool: strin
   const { jiraNotFoundHint } = await import("./mcp-client");
   const { runStdioSession } = await import("@/lib/mcp/stdio");
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new Error("Jira isn't set up — see the Jira tab.");
+  if (!cfg.command) throw new Error("Jira isn't set up — enter its address and token on Settings → Secrets.");
   return runStdioSession({ command: cfg.command, args: cfg.args, env: cfg.env, label, notFoundHint: jiraNotFoundHint }, body, timeoutMs);
+}
+
+/** Whether Zeff can reach Jira at all: a token in Zeff Secrets, the Jira MCP server named, or the plugin's driver. */
+export async function jiraReachable(): Promise<boolean> {
+  if ((await import("./connection")).jiraRestOn()) return true;
+  const { getJiraSyncConfig } = await import("./sync");
+  const cfg = getJiraSyncConfig();
+  return (cfg.configured && !!cfg.command) || (await jiraPortOn());
 }

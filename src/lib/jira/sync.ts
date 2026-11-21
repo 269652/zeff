@@ -1,10 +1,10 @@
-import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import fs from "node:fs";
 import path from "node:path";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession, type McpStdioConfig } from "./mcp-client";
+import { resultToPayload } from "./mcp-client";
 import { extractIssues, normalizeIssue, type NormalizedTicket } from "./normalize";
-import { secretEnv } from "@/lib/secrets/store";
+import { getSecret } from "@/lib/secrets/store";
+import { jiraRestAuth } from "./connection";
 import {
   assignTicketBoards,
   bookedTicketKeysMissingTitle,
@@ -17,8 +17,8 @@ import {
 
 export type JiraSyncConfig = {
   configured: boolean;
-  /** Where the server config came from. */
-  source: "env" | "mcp.json" | "none";
+  /** Where the connection comes from: Zeff Secrets (the REST API with your token), or the Jira MCP server's config (env / .mcp.json). */
+  source: "secrets" | "env" | "mcp.json" | "none";
   command?: string;
   args: string[];
   env: Record<string, string>;
@@ -30,6 +30,12 @@ export type JiraSyncConfig = {
 };
 
 const DEFAULT_FIELDS = "summary,description,status,created,updated,resolutiondate,issuetype,priority,assignee";
+
+/** The Jira values of Zeff Secrets, for the Jira MCP server's environment (mcp-atlassian reads the same names) — only these, none of the others. */
+const JIRA_SECRET_NAMES = ["JIRA_URL", "JIRA_USERNAME", "JIRA_PERSONAL_TOKEN", "JIRA_API_TOKEN"];
+function jiraSecretEnv(): Record<string, string> {
+  return Object.fromEntries(JIRA_SECRET_NAMES.map((n) => [n, getSecret(n)]).filter(([, v]) => v));
+}
 
 /** Parse a dotenv-style file into a plain object (used for the MCP server's envFile). */
 function loadEnvFile(file: string): Record<string, string> {
@@ -102,15 +108,20 @@ function parseEnv(raw?: string): Record<string, string> {
  * server uses.
  */
 export function getJiraSyncConfig(): JiraSyncConfig {
-  const tool = process.env.JIRA_MCP_TOOL?.trim() || "jira_search";
+  let tool = process.env.JIRA_MCP_TOOL?.trim() || "jira_search";
   const jql = process.env.JIRA_JQL?.trim() || "assignee = currentUser() ORDER BY updated DESC";
   const fields = process.env.JIRA_FIELDS?.trim() || DEFAULT_FIELDS;
   const limit = Number(process.env.JIRA_MCP_LIMIT) > 0 ? Number(process.env.JIRA_MCP_LIMIT) : 100;
 
+  // A token in Zeff Secrets: the REST API (lib/jira/rest.ts answers as jira_search); the MCP server's config, if any, stays the fallback.
+  const rest = jiraRestAuth();
+  if (rest) tool = "jira_search";
+  const viaRest = (cfg: JiraSyncConfig): JiraSyncConfig => (rest ? { ...cfg, configured: true, source: "secrets", baseUrl: process.env.JIRA_BASE_URL?.trim() || rest.base } : cfg);
+
   const envCommand = process.env.JIRA_MCP_COMMAND?.trim();
   if (envCommand) {
-    const env = { ...parseEnv(process.env.JIRA_MCP_ENV), ...secretEnv() };
-    return {
+    const env = { ...parseEnv(process.env.JIRA_MCP_ENV), ...jiraSecretEnv() };
+    return viaRest({
       configured: true,
       source: "env",
       command: envCommand,
@@ -121,26 +132,27 @@ export function getJiraSyncConfig(): JiraSyncConfig {
       fields,
       limit,
       baseUrl: process.env.JIRA_BASE_URL?.trim() || env.JIRA_URL || undefined,
-    };
+    });
   }
 
   const fromJson = configFromMcpJson();
   if (fromJson) {
-    return {
+    const secrets = jiraSecretEnv();
+    return viaRest({
       configured: true,
       source: "mcp.json",
       command: fromJson.command,
       args: fromJson.args,
-      env: { ...fromJson.env, ...secretEnv() },
+      env: { ...fromJson.env, ...secrets },
       tool,
       jql,
       fields,
       limit,
-      baseUrl: process.env.JIRA_BASE_URL?.trim() || secretEnv().JIRA_URL || fromJson.env.JIRA_URL || undefined,
-    };
+      baseUrl: process.env.JIRA_BASE_URL?.trim() || secrets.JIRA_URL || fromJson.env.JIRA_URL || undefined,
+    });
   }
 
-  return { configured: false, source: "none", args: [], env: {}, tool, jql, fields, limit, baseUrl: process.env.JIRA_BASE_URL?.trim() || undefined };
+  return viaRest({ configured: false, source: "none", args: [], env: {}, tool, jql, fields, limit, baseUrl: process.env.JIRA_BASE_URL?.trim() || undefined });
 }
 
 /**
@@ -203,18 +215,18 @@ export async function syncFromJira(): Promise<SyncResult> {
 
 async function readFromJira(): Promise<SyncResult> {
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) {
+  if (!cfg.configured) {
     throw new Error(
-      t("Jira MCP sync is not configured. Set JIRA_MCP_COMMAND (and optionally JIRA_MCP_ARGS/JIRA_MCP_ENV/JIRA_JQL) in .env.local, or use Paste import."),
+      t("Jira isn't set up: enter its address and your Personal Access Token on Settings → Secrets (or name a Jira MCP server in JIRA_MCP_COMMAND), or use Paste import."),
     );
   }
-  const config: McpStdioConfig = { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira MCP", notFoundHint: jiraNotFoundHint };
   const normalize = (issues: unknown[]) =>
     issues.map((i) => normalizeIssue(i, cfg.baseUrl)).filter((x): x is NormalizedTicket => x !== null);
 
-  // mcp-atlassian cold-starts in ~30s; do every fetch over ONE session.
-  return runStdioSession(
-    config,
+  // Every fetch in ONE session: the REST API with your token (Zeff Secrets), else the Jira MCP server (it cold-starts in ~30 s).
+  const { runJiraSession } = await import("./port-ops");
+  return runJiraSession(
+    "Jira MCP",
     async (call) => {
       // 1. My assigned tickets (expand=changelog brings history for time-to-respond).
       const myRaw = extractIssues(resultToPayload(await call(cfg.tool, { jql: cfg.jql, limit: cfg.limit, fields: cfg.fields, expand: "changelog" })));

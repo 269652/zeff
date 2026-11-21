@@ -2,14 +2,14 @@
  * The Jira plugin's actions, run: in one session of Zeff's Jira connection (the Jira MCP server)
  * for the ones in a row — afterwards the tickets read anew. Server only.
  */
-import { jiraNotFoundHint } from "@/lib/jira/mcp-client";
 import { sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { norm, transitionsOf } from "@/lib/runs/actions";
 import type { TodoOp } from "@/lib/todos/shared";
 import { errorMessage } from "@/lib/errors";
 import { t } from "@/lib/i18n/server";
-import { resultToPayload, runStdioSession } from "@/lib/mcp/stdio";
+import { resultToPayload } from "@/lib/mcp/stdio";
+import { runJiraSession } from "@/lib/jira/port-ops";
 import { extractIssues, normalizeIssue, type NormalizedTicket } from "@/lib/jira/normalize";
 import { getJiraTicket, upsertTickets } from "@/lib/jira/store";
 import { getJiraSyncConfig } from "@/lib/jira/sync";
@@ -153,11 +153,10 @@ export async function runJiraOps(run: JiraOp[], note: (line: string) => void): P
     return done;
   }
   const cfg = getJiraSyncConfig();
-  if (!cfg.configured || !cfg.command) throw new Error(t("Zeff's Jira connection isn't set up (Jira tab)."));
+  if (!cfg.configured) throw new Error(t("Zeff's Jira connection isn't set up (Jira tab)."));
   const results: string[] = [];
   try {
-    await runStdioSession(
-      { command: cfg.command, args: cfg.args, env: cfg.env, label: "Jira", notFoundHint: jiraNotFoundHint },
+    await runJiraSession("Jira",
       async (call) => {
         for (const o of run) {
           results.push(await jiraOp(call, o));
