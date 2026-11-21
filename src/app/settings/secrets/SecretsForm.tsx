@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "@/components/Toaster";
 import { useT } from "@/components/I18nProvider";
+import { checkLoginAction } from "@/app/actions";
 import { importEnvAction, moveSecretsAction, removeSecretAction, saveSecretAction } from "./actions";
 
-export type Row = { name: string; plugin: string; label: string; what: string; secret: boolean; stored: boolean; inEnv: boolean; value: string | null };
+export type Row = { name: string; pluginId?: string; plugin: string; updatedAt: string | null; label: string; what: string; secret: boolean; stored: boolean; inEnv: boolean; value: string | null };
 
 /** Settings → Secrets: per plugin, what it needs. A saved secret is never shown again — only that it is set. */
 export function SecretsForm({ rows, mode }: { rows: Row[]; mode: "account" | "separate" }) {
@@ -19,24 +20,35 @@ export function SecretsForm({ rows, mode }: { rows: Row[]; mode: "account" | "se
       const r = await f();
       if (r?.ok) toast(r.message ?? t("Saved."));
       else toast(r?.error ?? t("Failed."), { tone: "error" });
+      // (what was typed is gone from the page once saved: the fields come back empty, "set" beside them)
+      if (r?.ok) setDraft({});
       router.refresh();
     });
   const plugins = [...new Set(rows.map((r) => r.plugin))];
   return (
     <div className="space-y-4">
-      {plugins.map((p) => (
-        <section key={p} className="card space-y-3 p-4">
-          <h2 className="text-sm font-semibold text-zinc-500 uppercase">{p || t("Other")}</h2>
+      {plugins.map((p) => {
+        const id = rows.find((r) => r.plugin === p)?.pluginId;
+        return (
+        <section key={p} id={id} className="card scroll-mt-16 space-y-3 p-4 target:ring-2 target:ring-indigo-400">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-500 uppercase">{p || t("Other")}</h2>
+            {id === "jira" && (
+              <button className="btn btn-sm" disabled={pending} onClick={() => run(() => checkLoginAction("jira"))} title={t("Asks Jira who this token signs in as")}>
+                {t("Test connection")}
+              </button>
+            )}
+          </div>
           {rows
             .filter((r) => r.plugin === p)
             .map((r) => (
-              <div key={r.name} className="space-y-1">
+              <div key={`${r.name}:${r.updatedAt ?? ""}`} className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <label htmlFor={`s-${r.name}`} className="font-medium">
                     {r.label}
                   </label>
                   <code className="code text-xs">{r.name}</code>
-                  <span className="text-xs text-zinc-500">{r.stored ? t("stored") : r.inEnv ? t("from .env (not moved yet)") : t("not set")}</span>
+                  <span className="text-xs text-zinc-500">{r.stored ? t("set") : r.inEnv ? t("from .env (not moved yet)") : t("not set")}</span>
                 </div>
                 {r.what && <p className="text-xs text-zinc-500">{r.what}</p>}
                 <div className="flex gap-2">
@@ -61,7 +73,8 @@ export function SecretsForm({ rows, mode }: { rows: Row[]; mode: "account" | "se
               </div>
             ))}
         </section>
-      ))}
+        );
+      })}
       <section className="card space-y-2 p-4 text-sm">
         <h2 className="text-sm font-semibold text-zinc-500 uppercase">{t("Move over")}</h2>
         <p className="text-xs text-zinc-500">{t("Copy what .env holds of these into the store. The file stays as it is — remove the lines yourself afterwards.")}</p>

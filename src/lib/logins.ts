@@ -137,7 +137,10 @@ async function jiraCheck(): Promise<{ state: LoginState; detail: string }> {
   const { checkJiraRest } = await import("@/lib/jira/connection");
   const r = await checkJiraRest();
   if (!r) return { state: "login", detail: t("No token set — enter Jira's address and your Personal Access Token on Settings → Secrets.") };
-  if (r.ok) return { state: "ok", detail: t("Connected as {user}.", { user: r.user }) };
+  if (r.ok) {
+    (await import("./attention")).clearAttention("login:jira");
+    return { state: "ok", detail: t("Connected as {user}.", { user: r.user }) };
+  }
   return { state: r.status === 401 || r.status === 403 ? "login" : "unknown", detail: r.error.slice(0, 300) };
 }
 

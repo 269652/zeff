@@ -8,13 +8,12 @@ setupTempData();
 const DEF = [{ name: "JIRA_PERSONAL_TOKEN", plugin: "Jira", label: "Token", what: "", secret: true }];
 
 test("a secret is stored encrypted and read back; .env is the fallback; empty removes it", async () => {
-  const { getSecret, setSecret, listSecrets, secretEnv, deleteSecret } = await import("@/lib/secrets/store");
+  const { getSecret, setSecret, listSecrets, deleteSecret } = await import("@/lib/secrets/store");
   assert.equal(getSecret("JIRA_PERSONAL_TOKEN"), "");
   process.env.JIRA_PERSONAL_TOKEN = "from-env";
   assert.equal(getSecret("JIRA_PERSONAL_TOKEN"), "from-env");
   setSecret("JIRA_PERSONAL_TOKEN", "  abc123  ");
   assert.equal(getSecret("JIRA_PERSONAL_TOKEN"), "abc123");
-  assert.equal(secretEnv().JIRA_PERSONAL_TOKEN, "abc123");
   const row = listSecrets(DEF)[0];
   assert.ok(row.stored && row.value === null, "a secret's value is never listed");
   const { getSqlite } = await import("@/db");

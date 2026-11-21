@@ -14,13 +14,14 @@ import { seal, unseal } from "@/lib/ext/plugin-settings";
  *  - "separate": a database of its own beside it (`<account folder>/secrets.db`), so a copied or shared zeff.db carries none.
  *
  * `getSecret(name)` asks the store first and falls back to the environment (`.env`), so moving over is safe, one value at a time.
- * A value is never given back to the page — only whether it is set. Server only.
+ * A value is never given back to the page — only whether it is set (an address or a login, `secret: false`, is shown). Never logged, never
+ * put into a program's environment wholesale: each plugin reads the names it declared (src/plugins/<id>/secrets.ts). Server only.
  */
 
 export type SecretMode = "account" | "separate";
 
 /** One entry on the Secrets page: the name it is stored under (the environment variable it replaces), which plugin brings it, what it is. */
-export type SecretDef = { name: string; plugin: string; label: string; what: string; /** false: an address or a login, shown on the page. Default true. */ secret: boolean };
+export type SecretDef = { name: string; /** the plugin's id (the page's anchor: /settings/secrets#jira) */ pluginId?: string; plugin: string; label: string; what: string; /** false: an address or a login, shown on the page. Default true. */ secret: boolean };
 
 const NAME = /^[A-Z][A-Z0-9_]{1,63}$/;
 const MODES_FILE = () => path.join(/*turbopackIgnore: true*/ BASE_DIR, "secrets-mode.json");
@@ -89,23 +90,6 @@ export function setSecret(name: string, value: string): void {
 
 export function deleteSecret(name: string): void {
   store().prepare("delete from secrets where name = ?").run(name);
-}
-
-/** Every stored value, as environment variables — for a program Zeff starts that wants them there (the Jira connection). */
-export function secretEnv(): Record<string, string> {
-  const out: Record<string, string> = {};
-  try {
-    for (const r of store().prepare("select name, value from secrets").all() as { name: string; value: string }[]) {
-      try {
-        out[r.name] = unseal(r.value);
-      } catch {
-        /* (skipped) */
-      }
-    }
-  } catch {
-    /* (none) */
-  }
-  return out;
 }
 
 export type SecretRow = SecretDef & { stored: boolean; inEnv: boolean; updatedAt: string | null; /** The value, when it isn't a secret (an address, a login). */ value: string | null };

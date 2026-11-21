@@ -27,6 +27,6 @@ export function pluginSecretDefs(): SecretDef[] {
   const on = installedPlugins();
   const MODULES = modules();
   return PLUGINS.filter((p) => on.has(p.id) && MODULES[p.id]).flatMap((p) =>
-    MODULES[p.id]!().map((s) => ({ name: s.name, plugin: catalogText(t, p.name), label: s.label, what: s.what, secret: s.secret !== false })),
+    MODULES[p.id]!().map((s) => ({ name: s.name, pluginId: p.id, plugin: catalogText(t, p.name), label: s.label, what: s.what, secret: s.secret !== false })),
   );
 }
