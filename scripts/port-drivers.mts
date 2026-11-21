@@ -11,6 +11,7 @@
  *   npx tsx scripts/port-drivers.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 import { swapPlugin } from "./lib/swap-reads.mts";
 
@@ -269,7 +270,7 @@ export async function handler(event, context) {
   );
   fs.writeFileSync(
     path.join(dir, "zeff-plugin.json"),
-    JSON.stringify({ $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json", id, name: c.name, version, description: c.description, author: "Zeff", apiVersion: 1, permissions: ["exec"], contributes: { lambdas: "lambdas", workspacePackages: [`${c.id}.package.json`] } }, null, 2) + "\n",
+    JSON.stringify({ ...keepCatalogFields(had), $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json", id, name: c.name, version, description: c.description, author: "Zeff", apiVersion: 1, permissions: ["exec"], contributes: { lambdas: "lambdas", workspacePackages: [`${c.id}.package.json`] } }, null, 2) + "\n",
   );
   fs.writeFileSync(
     path.join(dir, "README.md"),

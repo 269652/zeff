@@ -14,6 +14,7 @@
  *   npx tsx scripts/port-google-drive.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 
 const ROOT = process.cwd();
@@ -243,6 +244,7 @@ const col = (name: string, type: "text" | "integer" = "text") => ({ name, type }
 write(
   "zeff-plugin.json",
   json({
+    ...keepCatalogFields(old),
     $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
     id: "google-drive-ext",
     name: "Google Drive",

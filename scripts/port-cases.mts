@@ -9,6 +9,7 @@
  *   npx tsx scripts/port-cases.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 import { swapPlugin } from "./lib/swap-reads.mts";
 import { build } from "esbuild";
@@ -519,6 +520,7 @@ fs.writeFileSync(
   manifestFile,
   JSON.stringify(
     {
+      ...keepCatalogFields(had),
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "cases-ext",
       name: "Cases",
