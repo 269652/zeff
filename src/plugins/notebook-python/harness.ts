@@ -289,11 +289,12 @@ import html as _htmllib
 
 class Table:
     """Rows of a table of Zeff: .cols, .rows, .records() (a list of dicts), .column(name), .df() (pandas)."""
-    def __init__(self, cols, rows, title=None, ids=None):
+    def __init__(self, cols, rows, title=None, ids=None, id=None):
         self.cols = list(cols)
         self.rows = [list(r) for r in rows]
         self.title = title
         self.ids = list(ids) if ids else None
+        self.id = id
     def __len__(self):
         return len(self.rows)
     def __iter__(self):
@@ -356,7 +357,7 @@ class _Zeff:
         return _call("databases")
     def database(self, name_or_id):
         r = _call("database", name=name_or_id)
-        return Table(r["cols"], r["rows"], r.get("title"), r.get("ids"))
+        return Table(r["cols"], r["rows"], r.get("title"), r.get("ids"), r.get("id"))
 
     # --- Writing into Zeff: each needs its own permission, asked when the code first does it ---
     def publish(self, name, value, unit=None):
