@@ -145,7 +145,7 @@ async function withJiraLookup<T>(fn: (lookup: JiraLookup) => Promise<T>): Promis
   const { getJiraSyncConfig } = await import("@/lib/jira/sync");
   const { resultToPayload } = await import("@/lib/mcp/stdio");
   const cfg = getJiraSyncConfig();
-  if ((!cfg.configured || !cfg.command) && !(await jiraPortOn())) throw new Error("Jira isn't set up.");
+  if (!cfg.configured && !(await jiraPortOn())) throw new Error("Jira isn't set up.");
   let out!: T;
   await runJiraSession("Jira",
     async (call) => {

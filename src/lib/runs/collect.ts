@@ -632,7 +632,7 @@ export async function collectBoard(
   const { isInstalled } = await import("@/plugins/state");
   // The sources: Jira (its plugin, set up, with boards chosen) and your Workspace boards in the Lage —
   // either is enough.
-  const jiraOn = isInstalled("jira") && ((cfg.configured && !!cfg.command) || (await jiraPortOn()));
+  const jiraOn = isInstalled("jira") && (cfg.configured || (await jiraPortOn()));
   const boards = jiraOn ? listJiraBoards().filter((b) => b.enabled) : [];
   const ownBoardsOn = isInstalled("workspace");
   if (!boards.length && !ownBoardsOn)
@@ -935,7 +935,7 @@ export async function refreshTicketComments(keys: string[]): Promise<number> {
     ),
   ];
   const cfg = getJiraSyncConfig();
-  if (!list.length || ((!cfg.configured || !cfg.command) && !(await jiraPortOn()))) return 0;
+  if (!list.length || (!cfg.configured && !(await jiraPortOn()))) return 0;
   const issues = await runJiraSession("Jira",
     async (call) => {
       const p = resultToPayload(

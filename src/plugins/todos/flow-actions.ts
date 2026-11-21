@@ -1009,7 +1009,7 @@ export const TODO_FLOW_ACTIONS: FlowAction[] = [
       const { getJiraSyncConfig } = await import("@/lib/jira/sync");
       const { runJiraSession, jiraPortOn } = await import("@/lib/jira/port-ops");
       const cfg = getJiraSyncConfig();
-      if (!keys.length || ((!cfg.configured || !cfg.command) && !(await jiraPortOn()))) return { read: 0, comments: [] };
+      if (!keys.length || (!cfg.configured && !(await jiraPortOn()))) return { read: 0, comments: [] };
       const { FIELDS, dateOf, plain, who } = await import("@/lib/runs/collect");
       type Issue = import("@/lib/runs/collect").Issue;
       const { resultToPayload } = await import("@/lib/mcp/stdio");

@@ -7,7 +7,7 @@ import { t } from "@/lib/i18n/server";
  * stats of all synced tickets, and what the job and tags pickers of a ticket need — as Jira's own page had them.
  */
 export async function jiraScreenAction() {
-  const { getJiraSyncConfig } = await import("@/lib/jira/sync");
+  const { getJiraSyncConfig, jiraConnectionLine } = await import("@/lib/jira/sync");
   const { jiraStats, listJiraBoards, listJiraTickets } = await import("@/lib/jira/store");
   const { listJobs } = await import("@/lib/jobs");
   const { listTags } = await import("@/lib/tags");
@@ -29,7 +29,7 @@ export async function jiraScreenAction() {
   return {
     configured: cfg.configured,
     syncLine: [
-      cfg.configured ? t("via {source}: {command} · {tool}", { source: cfg.source === "mcp.json" ? ".mcp.json" : "env", command: `${cfg.command} ${cfg.args.join(" ")}`, tool: cfg.tool }) : t("no Jira MCP server configured"),
+      jiraConnectionLine(cfg),
       stats.lastSyncedAt ? t("last synced {at}", { at: stats.lastSyncedAt.replace("T", " ").slice(0, 16) }) : "",
     ]
       .filter(Boolean)

@@ -127,7 +127,7 @@ export async function gather(day: string): Promise<{ facts: RecapFacts; notes: s
 
   // Jira: your comments and changes on the tickets updated since then.
   const cfg = getJiraSyncConfig();
-  if (((cfg.configured && cfg.command) || (await jiraPortOn())) && me) {
+  if ((cfg.configured || (await jiraPortOn())) && me) {
     try {
       const issues = await runJiraSession("Jira",
         async (call) => {

@@ -614,10 +614,11 @@ async function start(id: number): Promise<void> {
       let extra: Record<string, unknown> = {};
       if (mode === "send") {
         const jira = getJiraSyncConfig();
-        if (!jira.configured || !jira.command) {
+        if (!jira.configured) {
           throw new Error(t("Zeff's Jira connection isn't set up (Jira tab) — nothing can be posted without it."));
         }
-        extra = { "zeff-jira": { type: "stdio", command: jira.command, args: jira.args, env: jira.env } };
+        // (only a token in Zeff Secrets: the agent gets mcp-atlassian with it — it reads the same JIRA_URL / JIRA_PERSONAL_TOKEN names)
+        extra = { "zeff-jira": jira.command ? { type: "stdio", command: jira.command, args: jira.args, env: jira.env } : { type: "stdio", command: "uvx", args: ["mcp-atlassian"], env: jira.env } };
       }
       fs.writeFileSync(/*turbopackIgnore: true*/ jiraConfigPath(id), JSON.stringify(workerMcpServers(currentAccountId(), extra)), { mode: 0o600 });
       args.push("--mcp-config", jiraConfigPath(id));

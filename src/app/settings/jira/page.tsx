@@ -7,7 +7,7 @@ import { BoardSyncControls } from "@/components/BoardSyncControls";
 import { PluginNotInstalled } from "@/components/PluginNotInstalled";
 import { rich } from "@/lib/i18n/rich";
 import { t } from "@/lib/i18n/server";
-import { getJiraSyncConfig } from "@/lib/jira/sync";
+import { getJiraSyncConfig, jiraConnectionLine } from "@/lib/jira/sync";
 import { listJiraBoards } from "@/lib/jira/store";
 import { listJobs } from "@/lib/jobs";
 import { isInstalled } from "@/plugins/state";
@@ -38,13 +38,10 @@ export default async function JiraSettingsPage() {
       <section className="card space-y-1 p-4 text-sm">
         <h2 className="text-sm font-semibold text-zinc-500 uppercase">{t("Connection")}</h2>
         <p className="text-xs text-zinc-500">
-          {cfg.configured
-            ? t("via {source}: {command} · {tool}", {
-                source: cfg.source === "mcp.json" ? ".mcp.json" : "env",
-                command: `${cfg.command} ${cfg.args.join(" ")}`,
-                tool: cfg.tool,
-              })
-            : t("no Jira MCP server configured")}
+          {jiraConnectionLine(cfg)}{" "}
+          <Link href="/settings/secrets#jira" className="text-indigo-600 hover:underline dark:text-indigo-400">
+            {t("Address and token: Settings → Secrets")}
+          </Link>
         </p>
         {cfg.configured && (
           <p className="text-xs text-zinc-400">

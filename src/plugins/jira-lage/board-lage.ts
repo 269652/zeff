@@ -41,7 +41,7 @@ export function relevantKeys(all: boolean): string[] {
 /** The relevant Jira tickets read fresh from Jira: their comments kept (the review reads them). The number read. */
 async function freshFromJira(keys: string[]): Promise<number> {
   const cfg = getJiraSyncConfig();
-  if (!keys.length || ((!cfg.configured || !cfg.command) && !(await jiraPortOn()))) return 0;
+  if (!keys.length || (!cfg.configured && !(await jiraPortOn()))) return 0;
   const issues: Issue[] = await runJiraSession("Jira (board briefing)",
     async (call) => {
       const out: Issue[] = [];

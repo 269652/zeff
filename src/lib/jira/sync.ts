@@ -152,7 +152,7 @@ export function getJiraSyncConfig(): JiraSyncConfig {
     });
   }
 
-  return viaRest({ configured: false, source: "none", args: [], env: {}, tool, jql, fields, limit, baseUrl: process.env.JIRA_BASE_URL?.trim() || undefined });
+  return viaRest({ configured: false, source: "none", args: [], env: rest ? jiraSecretEnv() : {}, tool, jql, fields, limit, baseUrl: process.env.JIRA_BASE_URL?.trim() || undefined });
 }
 
 /**
@@ -309,4 +309,11 @@ export function importPastedTickets(text: string, baseUrl?: string): SyncResult 
   }
   const upserted = upsertTickets(tickets);
   return { ...upserted, fetched: issues.length, titlesAdded: 0, boardTickets: 0, mine: 0 };
+}
+
+/** How Zeff reaches Jira, in one line (the Jira screen, the Jira settings). */
+export function jiraConnectionLine(cfg: JiraSyncConfig): string {
+  if (cfg.source === "secrets") return t("Jira's REST API with your token (Settings → Secrets){fallback}", { fallback: cfg.command ? ` · ${t("fallback: {command}", { command: `${cfg.command} ${cfg.args.join(" ")}` })}` : "" });
+  if (!cfg.configured) return t("not set up — enter Jira's address and your token on Settings → Secrets");
+  return t("via {source}: {command} · {tool}", { source: cfg.source === "mcp.json" ? ".mcp.json" : "env", command: `${cfg.command} ${cfg.args.join(" ")}`, tool: cfg.tool });
 }
