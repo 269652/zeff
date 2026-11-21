@@ -9,6 +9,7 @@
  *   npx tsx scripts/port-todos.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 import { build } from "esbuild";
 import { todosViewTemplate } from "./port-todos/todos-view.mjs";
@@ -175,6 +176,7 @@ write(
   "zeff-plugin.json",
   JSON.stringify(
     {
+      ...keepCatalogFields(old),
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "todos-ext",
       name: "Todos (screens)",

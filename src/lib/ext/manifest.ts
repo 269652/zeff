@@ -1,5 +1,8 @@
 import path from "node:path";
 import { z } from "zod";
+import { PLUGIN_CATEGORIES } from "./categories";
+
+export { PLUGIN_CATEGORIES, type PluginCategoryId } from "./categories";
 
 /**
  * External plugins: a folder in <data>/plugins/<id>/ with a zeff-plugin.json — loaded when Zeff
@@ -414,9 +417,18 @@ export const manifestSchema = z
     id: slug.describe("Also the plugin folder's name."),
     name: z.string().min(1).max(60),
     version: z.string().max(30).default("0.0.0"),
-    description: z.string().max(300).default(""),
+    description: z.string().max(600).default("").describe("One to three sentences (up to 600 characters)."),
     author: z.string().max(100).optional(),
     homepage: z.url().optional(),
+    // What the marketplace (Plugins → Browse, the repository's catalog.json) shows and searches — informational, nothing runs from it.
+    keywords: z.array(z.string().trim().min(1).max(40)).max(20).default([]).describe("Words the marketplace's search finds it by (up to 20)."),
+    category: z.enum(PLUGIN_CATEGORIES).optional().describe("Where the marketplace files it: app, connector, communication, ai, time, finance, knowledge, language, developer or system."),
+    icon: z.string().trim().min(1).max(200).optional().describe("An emoji, or the path of a small image in the folder (png, svg, jpg, webp; up to 32 kB) — the marketplace's card."),
+    screenshots: z.array(relPath).max(8).default([]).describe("Images in the folder shown in the marketplace's details (up to 8)."),
+    requires: z
+      .object({ plugins: z.array(z.string().regex(/^[a-z][a-z0-9-]{1,39}$/)).max(20).default([]).describe("The ids of other plugins it needs (the marketplace says so).") })
+      .optional()
+      .describe("What it needs besides this Zeff's extension API (apiVersion)."),
     repository: z
       .object({
         url: z.string().regex(/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/, "a GitHub repository: https://github.com/owner/repo"),

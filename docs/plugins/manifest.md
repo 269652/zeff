@@ -28,8 +28,13 @@ on the Plugins page (*Not loaded: …*). A manifest is JSON (a BOM is fine). The
 | `name` | string | yes | What the Plugins page shows, up to 60 characters. |
 | `apiVersion` | integer | yes | The extension API version the plugin was written for. This Zeff speaks **1**. A higher number is refused. |
 | `version` | string | no | Free text (`1.2.0`), shown on the Plugins page. Default `0.0.0`. |
-| `description` | string | no | One or two sentences, up to 300 characters. |
+| `description` | string | no | One to three sentences, up to 600 characters (the marketplace shows the start on its card). |
 | `author`, `homepage` | string | no | Shown / informational. `homepage` must be a URL. |
+| `keywords` | string[] | no | Up to 20 words the marketplace (**Plugins → Browse**, the header's search) finds it by. |
+| `category` | string | no | Where the marketplace files it: `app`, `connector`, `communication`, `ai`, `time`, `finance`, `knowledge`, `language`, `developer` or `system`. |
+| `icon` | string | no | An emoji, or the path of a small image in the folder (png, svg, jpg, webp; up to 32 kB) — the marketplace's card. |
+| `screenshots` | string[] | no | Up to 8 images in the folder, shown in the marketplace's details. |
+| `requires` | object | no | `{ "plugins": ["other-plugin"] }` — other plugins it needs (shown in the marketplace). The extension API it needs is `apiVersion`. |
 | `repository` | object | no | Where newer versions are: `{ "url": "https://github.com/owner/repo", "path": "apps/notes", "branch": "main" }` — a GitHub repository, the plugin's folder in it (empty: its top), the branch (default: the repository's). Plugins → *Sources* then checks it and updates on a click. |
 | `permissions` | string[] | no | What the plugin may do, see below. Default none. |
 | `contributes` | object | no | What it adds, see below. |
@@ -50,7 +55,7 @@ zeff-apps/
 ```
 
 In Zeff, **Plugins → Sources → Add a repository** (a private one with a token you enter there). Zeff reads the repository's tree and
-every manifest in it (up to four folders deep), shows each plugin with the version there against the one installed, and offers
+its `catalog.json` (or, without one, every manifest in it, up to four folders deep — see [the marketplace](repository.md#the-marketplace-and-catalogjson)), shows each plugin with the version there against the one installed, and offers
 **Install** or **Update to x.y.z** (and *Update all*). A click fetches exactly that folder at the commit it read and writes it into the
 plugins folder (the folder is named by the `id`). What happens then:
 

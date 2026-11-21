@@ -191,3 +191,14 @@ export function startPackagesWatch(): void {
 }
 
 export const stopPackagesWatch = () => g.__zeffPackagesWatch?.stop();
+
+/**
+ * A built-in switched to its port (plugins/ports.ts): the port written into packages.json, so its updates come as notes — also when its
+ * folder was put there by hand (tied to the source whose catalog has exactly its files: sources.ts adoptOrigin). True when it is recorded.
+ */
+export async function rememberPort(id: string): Promise<boolean> {
+  const { adoptOrigin } = await import("./sources");
+  if (!(await adoptOrigin(id).catch(() => null))) return false;
+  rememberInPackages(id);
+  return true;
+}

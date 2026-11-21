@@ -8,6 +8,7 @@
  *   npx tsx scripts/port-mail-client.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 import { build } from "esbuild";
 
@@ -80,6 +81,7 @@ for (const v of views) fs.writeFileSync(path.join(dir, "views", `${v.id}.html`),
 const manifestFile = path.join(dir, "zeff-plugin.json");
 const had = fs.existsSync(manifestFile) ? (JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { version?: string }) : {};
 const manifest = {
+  ...keepCatalogFields(had),
   $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
   id: "mail-client-ext",
   name: "Mail & Chat",

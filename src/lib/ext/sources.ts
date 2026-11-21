@@ -1,13 +1,16 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { BASE_DIR } from "@/db/accounts";
 import { getPref, setPref } from "@/lib/prefs";
 import * as git from "./git";
-import { parseManifest, type Manifest } from "./manifest";
+import { parseManifest } from "./manifest";
 import { allPending, applyPlan, dropPending, openConflicts, pending, planFile, savePending, type FilePlan, type PendingMerge } from "./merge3";
 import { readPackagesFile } from "./packages-file";
 import { isEnabled, pluginsRoot, scanPlugins } from "./registry";
 import { checkRelease } from "@/lib/kernel/release";
+import { entryFromManifest, parseCatalog, type CatalogEntry } from "./catalog";
+import { contentHash } from "./catalog-hash";
 
 /**
  * Where plugins and apps come from, and newer versions of them: repositories — on GitHub (read through its web API), or any git
@@ -23,6 +26,10 @@ import { checkRelease } from "@/lib/kernel/release";
  */
 
 const SOURCES = "ext.sources";
+/** The repository's index of its plugins (catalog.ts; generated in the repository by scripts/catalog.mjs). */
+export const CATALOG_FILE = "catalog.json";
+/** Manifests read one by one when there is no catalog (each is a request). */
+const MAX_READ = 120;
 const ORIGIN_PREF = (id: string) => `ext.origin:${id}`;
 const MAX_FILES = 400;
 const MAX_BYTES = 15_000_000;
@@ -39,7 +46,8 @@ export type Remote = {
   version: string;
   description: string;
   path: string;
-  manifest: Manifest;
+  /** What the marketplace shows of it: its entry in the repository's catalog.json, or (no catalog, or a folder it doesn't name) made from its manifest. */
+  listing: CatalogEntry;
   /** Commits since the one it was installed at changed its folder (asked only when the version stayed the same). */
   touched?: boolean;
 };
@@ -47,7 +55,9 @@ export type RemoteState = Remote & { installed: string | null; fromHere: boolean
 /** A patch to Zeff itself in a source (a folder with zeff-mod.json): installed only signed (lib/mods/feed.ts). */
 export type RemoteMod = { id: string; name: string; version: string; description: string; path: string };
 export type RemoteModState = RemoteMod & { installed: string | null; fromHere: boolean; updateAvailable: boolean };
-export type SourceState = { source: SourceView; branch: string; sha: string; plugins: RemoteState[]; mods?: RemoteModState[]; problems: string[]; error?: string; checkedAt: string };
+/** How the plugins of a source were listed: from its catalog.json (one file), or by reading every manifest; `unlisted`: folders the catalog doesn't name (read one by one — the catalog is out of date). */
+export type ListedBy = { catalog: boolean; unlisted: string[] };
+export type SourceState = { source: SourceView; branch: string; sha: string; plugins: RemoteState[]; mods?: RemoteModState[]; problems: string[]; error?: string; checkedAt: string; listedBy?: ListedBy };
 
 // ---------------------------------------------------------------------------
 // Fetching (one place: tests put a stand-in for GitHub here)
@@ -78,7 +88,13 @@ async function getJson(url: string, token?: string): Promise<unknown> {
 type Tree = { sha: string; branch: string; files: { path: string; size: number }[] };
 type Note = { sha: string; subject: string; at: string; author: string };
 /** How a repository is read: its newest commit's files, one file of any commit, what changed between two commits. */
-type Backend = { tree(): Promise<Tree>; file(sha: string, file: string): Promise<Buffer | null>; notes(from: string | null, to: string, under: string): Promise<Note[]> };
+type Backend = {
+  tree(): Promise<Tree>;
+  file(sha: string, file: string): Promise<Buffer | null>;
+  notes(from: string | null, to: string, under: string): Promise<Note[]>;
+  /** The last commits up to `sha` that touched the folder (its changelog), newest first. */
+  history(sha: string, under: string, max: number): Promise<Note[]>;
+};
 
 function githubBackend(s: Source): Backend {
   const o = parseGithub(s.url);
@@ -109,6 +125,10 @@ function githubBackend(s: Source): Backend {
         return [];
       }
     },
+    async history(sha, under, max) {
+      const c = (await getJson(`https://api.github.com/repos/${o.owner}/${o.repo}/commits?sha=${encodeURIComponent(sha)}&per_page=${max}${under ? `&path=${encodeURIComponent(under)}` : ""}`, s.token)) as { sha: string; commit: { message: string; author?: { date?: string; name?: string } } }[];
+      return (Array.isArray(c) ? c : []).slice(0, max).map((x) => ({ sha: x.sha, subject: x.commit.message.split("\n")[0], at: x.commit.author?.date ?? "", author: x.commit.author?.name ?? "" }));
+    },
   };
 }
 
@@ -126,6 +146,7 @@ function gitBackend(s: Source): Backend {
       return buf;
     },
     notes: (from, to, under) => git.commitsBetween(git.mirrorDir(pluginsRoot(), s.url), from, to, under),
+    history: async (sha, under, max) => (await fetched(), git.commitsBetween(git.mirrorDir(pluginsRoot(), s.url), null, sha, under, max)),
   };
 }
 
@@ -204,6 +225,9 @@ export function setSourceToken(url: string, token: string): void {
   if (token.trim()) all[norm(url)] = token.trim();
   else delete all[norm(url)];
   setPref(`${SOURCES}.tokens`, all);
+  // (a source added here keeps its token with it)
+  const own = stored();
+  if (own.some((s) => norm(s.url) === norm(url))) setPref(SOURCES, own.map((s) => (norm(s.url) === norm(url) ? { ...s, token: token.trim() || undefined } : s)));
   cache().clear();
 }
 
@@ -240,16 +264,44 @@ export async function checkSource(id: string, opts: { fresh?: boolean } = {}): P
   try {
     const b = backendFor(s);
     const tree = await b.tree();
-    const manifests = tree.files.filter((f) => /(^|\/)zeff-plugin\.json$/.test(f.path) && f.path.split("/").length <= 5).slice(0, 80);
+    const manifests = tree.files.filter((f) => /(^|\/)zeff-plugin\.json$/.test(f.path) && f.path.split("/").length <= 5);
     const plugins: Remote[] = [];
     const problems: string[] = [];
+    // The repository's catalog.json first: one file lists them all (catalog.ts). A folder it doesn't name — and every folder of a
+    // repository without one — is read from its manifest (up to MAX_READ of them: each is a request).
+    const listedBy: ListedBy = { catalog: false, unlisted: [] };
+    const listed = new Map<string, CatalogEntry>();
+    if (tree.files.some((f) => f.path === CATALOG_FILE)) {
+      try {
+        const c = parseCatalog(((await b.file(tree.sha, CATALOG_FILE)) ?? Buffer.from("")).toString("utf8"));
+        if (!c.ok) problems.push(c.error);
+        else {
+          listedBy.catalog = true;
+          problems.push(...c.problems);
+          for (const e of c.plugins) listed.set(e.path, e);
+        }
+      } catch (e) {
+        problems.push(`${CATALOG_FILE}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    let read = 0;
     for (const m of manifests) {
       const dir = m.path.replace(/\/?zeff-plugin\.json$/, "");
+      const listing = listed.get(dir);
+      if (listing) {
+        plugins.push({ id: listing.id, name: listing.name, version: listing.version, description: listing.description, path: dir, listing });
+        continue;
+      }
+      if (listedBy.catalog) listedBy.unlisted.push(dir);
+      if (read++ >= MAX_READ) {
+        problems.push(`${dir || "(top)"}: not read — more than ${MAX_READ} plugins without a catalog.json (the repository should have one: scripts/catalog.mjs).`);
+        continue;
+      }
       try {
         const buf = await b.file(tree.sha, m.path);
         const r = parseManifest((buf ?? Buffer.from("")).toString("utf8"));
         if (!r.ok) problems.push(`${dir || "(top)"}: ${r.error}`);
-        else plugins.push({ id: r.manifest.id, name: r.manifest.name, version: r.manifest.version, description: r.manifest.description, path: dir, manifest: r.manifest });
+        else plugins.push({ id: r.manifest.id, name: r.manifest.name, version: r.manifest.version, description: r.manifest.description, path: dir, listing: entryFromManifest(r.manifest, dir) });
       } catch (e) {
         problems.push(`${dir || "(top)"}: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -273,12 +325,45 @@ export async function checkSource(id: string, opts: { fresh?: boolean } = {}): P
         problems.push(`${dir || "(top)"}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
-    state = { source: viewOf(s), branch: tree.branch, sha: tree.sha, plugins: plugins.map((p) => ({ ...p, installed: null, fromHere: false, updateAvailable: false, enabled: false, conflicts: 0 })), mods: mods.map((m) => ({ ...m, installed: null, fromHere: false, updateAvailable: false })), problems, checkedAt: new Date().toISOString() };
+    state = { source: viewOf(s), branch: tree.branch, sha: tree.sha, plugins: plugins.map((p) => ({ ...p, installed: null, fromHere: false, updateAvailable: false, enabled: false, conflicts: 0 })), mods: mods.map((m) => ({ ...m, installed: null, fromHere: false, updateAvailable: false })), problems, checkedAt: new Date().toISOString(), listedBy };
   } catch (e) {
     state = { source: viewOf(s), branch: s.branch ?? "", sha: "", plugins: [], problems: [], error: e instanceof Error ? e.message : String(e), checkedAt: new Date().toISOString() };
   }
   cache().set(id, { at: Date.now(), state });
+  if (!state.error) keepOnDisk(s, state);
   return withInstalled(state);
+}
+
+// The last listing of every source, kept beside the plugins: the marketplace and the header's search show it at once (also after a
+// restart) without asking the network; Browse's "Check now" and the half-hourly check renew it.
+const diskDir = () => path.join(pluginsRoot(), ".catalog");
+const diskFile = (url: string) => path.join(diskDir(), `${crypto.createHash("sha1").update(norm(url)).digest("hex").slice(0, 16)}.json`);
+function keepOnDisk(s: Source, state: SourceState): void {
+  try {
+    fs.mkdirSync(diskDir(), { recursive: true });
+    fs.writeFileSync(diskFile(s.url), JSON.stringify(state));
+  } catch {
+    /* (only a cache) */
+  }
+}
+
+/** What every source had when it was last checked — no network (a source never checked is left out). */
+export function lastKnown(): SourceState[] {
+  const out: SourceState[] = [];
+  for (const s of listSources()) {
+    const hit = cache().get(s.id);
+    if (hit && !hit.state.error) {
+      out.push(withInstalled(hit.state));
+      continue;
+    }
+    try {
+      const st = JSON.parse(fs.readFileSync(diskFile(s.url), "utf8")) as SourceState;
+      if (Array.isArray(st.plugins) && st.plugins.every((p) => p.listing)) out.push(withInstalled({ ...st, source: viewOf(s) }));
+    } catch {
+      /* (never checked) */
+    }
+  }
+  return out;
 }
 
 function withInstalled(state: SourceState): SourceState {
@@ -394,6 +479,8 @@ export type InstallReport = {
   /** Conflicts waiting for the person — then nothing was written yet. */
   conflicts: string[];
   app?: { from: string; to: string; changes: number; kept: number } | null;
+  /** What was checked of the download: its content hash, whether the repository's catalog says the same (null: it names none), the signature's key. */
+  verified?: { hash: string; catalog: boolean | null; signed: string | null; files: number; bytes: number };
 };
 
 /** The files of the plugin's folder here, by their path in it (none of the dot folders: .versions, .git …). */
@@ -452,6 +539,10 @@ export async function installFromSource(sourceId: string, pluginId: string): Pro
   const release = checkRelease(theirs, { id: pluginId, version: parsed.manifest.version });
   if (release.status === "bad") throw new Error(`Not installed — the release doesn't hold: ${release.reason}`);
   if (before?.signed && release.status !== "signed") throw new Error(`“${pluginId}” was installed from a signed release; ${parsed.manifest.version} is not signed, so it is not installed.`);
+  // The download against the catalog (catalog.ts contentHash): the same files the repository's index describes — otherwise the index is
+  // out of date (not refused: the manifest and the signature above are what count; the report says so).
+  // (a manifest for a newer extension API than this Zeff speaks doesn't parse: refused above)
+  const hash = contentHash(theirs);
 
   // Base: the version installed before — read where it came from (this source, or the one it came from before it moved: packages.json
   // naming another repository); none when that isn't known — then every difference is a conflict.
@@ -478,6 +569,7 @@ export async function installFromSource(sourceId: string, pluginId: string): Pro
     kept: plans.filter((p) => p.outcome === "keep" && mine.has(p.rel) && theirs.has(p.rel) && !mine.get(p.rel)!.equals(theirs.get(p.rel)!)).map((p) => p.rel),
     merged: plans.filter((p) => p.outcome === "merged").map((p) => p.rel),
     conflicts: conflicts.map((p) => p.rel),
+    verified: { hash, catalog: remote.listing.hash ? remote.listing.hash === hash : null, signed: release.status === "signed" ? release.key : null, files: theirs.size, bytes: [...theirs.values()].reduce((a, x) => a + x.length, 0) },
   };
   if (conflicts.length) {
     savePending(pluginsRoot(), { pluginId, to, from: { version: had?.manifest.version ?? null, sha: before?.sha ?? null }, files: plans, at: new Date().toISOString() });
@@ -544,4 +636,82 @@ export async function updateAll(): Promise<InstallReport[]> {
   const out: InstallReport[] = [];
   for (const st of await checkAll({ fresh: true })) for (const p of st.plugins) if (p.updateAvailable && p.fromHere) out.push(await installFromSource(st.source.id, p.id));
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// The marketplace's details of one plugin, and taking one out again
+// ---------------------------------------------------------------------------
+
+export type PluginDetail = { readme: string | null; screenshots: { path: string; url: string }[]; history: Note[]; sha: string };
+const detailCache = () => ((globalThis as { __zeffPluginDetail?: Map<string, PluginDetail> }).__zeffPluginDetail ??= new Map());
+const IMAGE_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml" };
+
+/** What Browse's detail panel shows beyond the catalog: the README in full, the screenshots, the commits that touched the folder (its changelog). */
+export async function pluginDetail(sourceId: string, pluginId: string): Promise<PluginDetail> {
+  const s = sourceById(sourceId);
+  const st = await checkSource(sourceId);
+  if (st.error) throw new Error(st.error);
+  const p = st.plugins.find((x) => x.id === pluginId);
+  if (!p) throw new Error(`The source has no plugin “${pluginId}”.`);
+  const key = `${norm(s.url)}|${st.sha}|${p.path}`;
+  const hit = detailCache().get(key);
+  if (hit) return hit;
+  const b = backendFor(s);
+  const prefix = p.path ? `${p.path}/` : "";
+  const readmeFile = (await b.tree()).files.find((f) => f.path.startsWith(prefix) && /^readme\.md$/i.test(f.path.slice(prefix.length)));
+  const readmeBuf = readmeFile && readmeFile.size <= 300_000 ? await b.file(st.sha, readmeFile.path).catch(() => null) : null;
+  const screenshots: PluginDetail["screenshots"] = [];
+  for (const rel of p.listing.screenshots.slice(0, 4)) {
+    const type = IMAGE_TYPES[rel.split(".").pop()?.toLowerCase() ?? ""];
+    if (!type || !safeRel(rel)) continue;
+    const buf = await b.file(st.sha, `${prefix}${rel}`).catch(() => null);
+    if (buf && buf.length <= 1_500_000) screenshots.push({ path: rel, url: `data:${type};base64,${buf.toString("base64")}` });
+  }
+  const detail: PluginDetail = { readme: readmeBuf ? readmeBuf.toString("utf8").replace(/^﻿/, "") : null, screenshots, history: await b.history(st.sha, p.path, 15).catch(() => []), sha: st.sha };
+  detailCache().set(key, detail);
+  return detail;
+}
+
+/**
+ * A plugin taken out of the plugins folder: switched off, its folder moved aside (<plugins>/.removed/<id>-<time> — nothing is deleted, and
+ * a dot folder isn't loaded), where it came from forgotten. Its data in Zeff (settings, its app's pages) stays. Not for a built-in's port
+ * that the built-in runs through (plugins/ports.ts) — switch the built-in back first.
+ */
+export async function removePlugin(pluginId: string): Promise<{ movedTo: string }> {
+  const found = scanPlugins(true).plugins.find((p) => p.id === pluginId);
+  if (!found) throw new Error(`No plugin “${pluginId}” in the plugins folder.`);
+  const { setEnabled } = await import("./registry");
+  setEnabled(pluginId, false);
+  const to = path.join(pluginsRoot(), ".removed", `${pluginId}-${new Date().toISOString().replace(/[:.]/g, "-")}`);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  fs.renameSync(found.dir, to);
+  fs.rmSync(path.join(pluginsRoot(), ".origin", `${pluginId}.json`), { force: true });
+  dropPending(pluginsRoot(), pluginId);
+  scanPlugins(true);
+  cache().clear();
+  return { movedTo: to };
+}
+
+/**
+ * A plugin put into the plugins folder by hand (or by an older Zeff) tied to the source that has exactly its files: when its folder's content
+ * hash is the one a source's catalog names for it, that source and commit become its origin — so packages.json can name it and its updates
+ * come as notes, merged as usual. Changed here, or in no catalog: left as it is (null).
+ */
+export async function adoptOrigin(pluginId: string): Promise<Origin | null> {
+  if (origin(pluginId)) return origin(pluginId);
+  const dest = path.join(pluginsRoot(), pluginId);
+  if (!fs.existsSync(dest)) return null;
+  const mine = contentHash(localFiles(dest));
+  for (const st of await checkAll()) {
+    const p = st.plugins.find((x) => x.id === pluginId && x.listing.hash === mine);
+    if (!p || !st.sha) continue;
+    const prefix = p.path ? `${p.path}/` : "";
+    const tree = await backendFor(sourceById(st.source.id)).tree();
+    if (tree.sha !== st.sha) continue;
+    const o: Origin = { url: st.source.url, path: p.path, branch: st.branch, sha: st.sha, version: p.version, at: new Date().toISOString(), files: tree.files.filter((f) => f.path.startsWith(prefix) && safeRel(f.path.slice(prefix.length))).map((f) => f.path.slice(prefix.length)) };
+    setOrigin(pluginId, o);
+    cache().clear();
+    return o;
+  }
+  return null;
 }

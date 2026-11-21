@@ -5,6 +5,7 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "./schema";
 import { accountDbPath, accountDir, currentAccountId } from "./accounts";
+import { ensureWorkspaceTables } from "@/plugins/workspace/ddl";
 
 export type Db = BetterSQLite3Database<typeof schema>;
 
@@ -76,6 +77,8 @@ function createDb(dbPath: string): { db: Db; sqlite: Database.Database } {
   // Apply the SQL migrations in ./drizzle on first use so the app is
   // zero-setup: `npm run dev` creates data/zeff.db with the current schema.
   migrateOnce(db);
+  // The Workspace's tables too: many readers query them directly (a fresh account — the demo — has none yet).
+  ensureWorkspaceTables(sqlite);
   return { db, sqlite };
 }
 

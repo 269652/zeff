@@ -7,6 +7,7 @@
  *   npx tsx scripts/port-connectors.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 
 const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
@@ -48,7 +49,7 @@ for (const c of CONNECTORS) {
   const version = had.version ?? "1.0.0";
   fs.writeFileSync(
     manifestFile,
-    JSON.stringify({ $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json", id, name: c.name, version, description: c.description, author: "Zeff", apiVersion: 1, permissions: [], contributes: { workspacePackages: [`${c.builtin}.package.json`] } }, null, 2) + "\n",
+    JSON.stringify({ ...keepCatalogFields(had), $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json", id, name: c.name, version, description: c.description, author: "Zeff", apiVersion: 1, permissions: [], contributes: { workspacePackages: [`${c.builtin}.package.json`] } }, null, 2) + "\n",
   );
   const flow = {
     name: `${c.builtin}.sync`,

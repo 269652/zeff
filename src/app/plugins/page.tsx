@@ -11,6 +11,7 @@ import { findClaudeCli } from "@/plugins/claude-cli/cli";
 import { PLUGIN_CATEGORY_LABELS, featuresOf, listedPlugins, pluginById, type PluginCategory, type PluginManifest } from "@/plugins/catalog";
 import { findCopilotCli } from "@/plugins/copilot-cli/cli";
 import { ExternalPlugins } from "@/components/ext/ExternalPlugins";
+import { Marketplace } from "@/components/ext/Marketplace";
 import { SwitchToPort } from "@/components/ext/SwitchToPort";
 import { PORTS, portOf } from "@/plugins/ports";
 import { extensionStates } from "@/plugins/extension-state";
@@ -34,20 +35,10 @@ function foundOn(p: PluginManifest): string | null | undefined {
  * and the AI tools (Copilot CLI, Claude CLI): each installed or not. Uninstalled, what it brings
  * (menu entries, pages, syncs, sign-ins, the AI provider) is gone; its data stays.
  */
-export default async function PluginsPage() {
+export default async function PluginsPage({ searchParams }: { searchParams: Promise<{ view?: string; plugin?: string }> }) {
   await connection();
-  const on = installedPlugins();
-  const set = chosenPlugins();
-  // The built-ins whose port is in the plugins folder (plugins/ports.ts): their cards offer the switch.
-  const ported = new Set((await Promise.all(PORTS.map(async (p) => ((await portOf(p.builtin)) ? p.builtin : null)))).filter((x): x is string => !!x));
-  // Extensions: under the plugin they extend; the plugin bringing them names where they go.
-  const exts = extensionStates();
-  const extRows = (host: string): ExtensionRow[] =>
-    exts
-      .filter((s) => s.ext.for === host)
-      .map((s) => ({ id: s.ext.id, name: catalogText(t, s.ext.name), description: catalogText(t, s.ext.description), origin: extensionOrigin(s.ext, t), available: s.available, missing: s.missing.map((m) => catalogText(t, pluginById(m).name)), chosen: s.chosen, installed: s.installed, defaultInstalled: s.ext.defaultInstalled }));
-  const brings = (by: string) => [...new Set(exts.filter((s) => s.ext.by === by).map((s) => catalogText(t, pluginById(s.ext.for).name)))];
-  const groups = (Object.keys(PLUGIN_CATEGORY_LABELS) as PluginCategory[]).map((c) => [c, listedPlugins().filter((p) => p.category === c)] as const);
+  const sp = await searchParams;
+  const browse = sp.view === "browse";
   return (
     <div className="page">
       <div className="page-aside">
@@ -61,6 +52,35 @@ export default async function PluginsPage() {
           )}
         </p>
       </div>
+      <nav className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800" aria-label={t("Plugins")}>
+        {[
+          { href: "/plugins", label: t("Installed"), on: !browse },
+          { href: "/plugins?view=browse", label: `🧩 ${t("Browse")}`, on: browse },
+        ].map((x) => (
+          <Link key={x.href} href={x.href} aria-current={x.on ? "page" : undefined} className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${x.on ? "border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300" : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"}`}>
+            {x.label}
+          </Link>
+        ))}
+      </nav>
+      {browse ? <Marketplace initialPlugin={sp.plugin} /> : <InstalledView />}
+    </div>
+  );
+}
+
+/** The Installed tab: the built-in plugins by group, the mods, the external plugins and their sources. */
+async function InstalledView() {
+  const on = installedPlugins();
+  const set = chosenPlugins();
+  const ported = new Set((await Promise.all(PORTS.map(async (p) => ((await portOf(p.builtin)) ? p.builtin : null)))).filter((x): x is string => !!x));
+  const exts = extensionStates();
+  const extRows = (host: string): ExtensionRow[] =>
+    exts
+      .filter((s) => s.ext.for === host)
+      .map((s) => ({ id: s.ext.id, name: catalogText(t, s.ext.name), description: catalogText(t, s.ext.description), origin: extensionOrigin(s.ext, t), available: s.available, missing: s.missing.map((m) => catalogText(t, pluginById(m).name)), chosen: s.chosen, installed: s.installed, defaultInstalled: s.ext.defaultInstalled }));
+  const brings = (by: string) => [...new Set(exts.filter((s) => s.ext.by === by).map((s) => catalogText(t, pluginById(s.ext.for).name)))];
+  const groups = (Object.keys(PLUGIN_CATEGORY_LABELS) as PluginCategory[]).map((c) => [c, listedPlugins().filter((p) => p.category === c)] as const);
+  return (
+    <>
       <PluginSearch />
       <ThisPc />
       {groups.map(([category, list]) => (
@@ -176,6 +196,6 @@ export default async function PluginsPage() {
         </Link>
       </section>
       <ExternalPlugins />
-    </div>
+    </>
   );
 }

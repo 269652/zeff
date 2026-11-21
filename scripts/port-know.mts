@@ -8,6 +8,7 @@
  *   npx tsx scripts/port-know.mts [<zeff-plugins folder>]     (default ../zeff-plugins)
  */
 import fs from "node:fs";
+import { keepCatalogFields } from "./lib/catalog-fields.mts";
 import path from "node:path";
 import { build } from "esbuild";
 
@@ -136,6 +137,7 @@ write(
   "zeff-plugin.json",
   JSON.stringify(
     {
+      ...keepCatalogFields(old),
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "know-ext",
       name: "What you should know",

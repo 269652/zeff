@@ -4,6 +4,41 @@ Zeff's runtime plugins (folders with a `zeff-plugin.json`, see [manifest](manife
 `zeff-plugins`, beside Zeff (`../zeff-plugins`), one folder per plugin under `plugins/`: Learn (`plugins/learn`) and the language packs
 (`plugins/lang-de`, `plugins/lang-es` — Zeff's German and Spanish). A Zeff installs them from there and keeps them up to date; nothing about a plugin is compiled into Zeff.
 
+## The marketplace and catalog.json
+
+**Plugins → Browse** lists every plugin of every source: a search (name, description, keywords, what it adds), filters (category;
+installed, not installed, updates, replacing a built-in; signed only), a card per plugin and a detail panel — its README, the
+permissions it asks for, what it adds (apps, pages, databases, flows, syncs, views, widgets, drivers, tools …), what it needs, the
+commits that touched its folder — with **Install**, **Update**, **Switch on** (a built-in's port: *Switch to the plugin*), **Turn off** and
+**Remove**. The header's search finds plugins not installed yet ("Install …", from the sources' last check, no network).
+
+A repository lists its plugins in **`catalog.json`** at its top, generated there (`node scripts/catalog.mjs`; `--check` fails when it is out
+of date). Zeff reads that one file per source (`src/lib/ext/catalog.ts`) instead of every `zeff-plugin.json`: three GitHub API requests
+(the repository, the branch's commit, the tree) and one raw file per check, however many plugins. A folder the catalog doesn't name —
+and every folder of a repository without a catalog — is read from its manifest as before (then the source says the catalog is out of
+date). The last listing of each source is kept in `<plugins>/.catalog/`, so Browse and the search show it at once.
+
+**Installing from GitHub**, step by step (`src/lib/ext/sources.ts` installFromSource; the same for a git address or a folder, read with git):
+
+1. The branch's newest commit and its tree are read (GitHub's web API; no git needed).
+2. Exactly the plugin's folder at that commit is downloaded, file by file (`raw.githubusercontent.com`, with the source's token for a
+   private repository) — within limits: 400 files, 15 MB, 5 MB a file; no path with `..` or a dot folder.
+3. It is checked: its `zeff-plugin.json` must hold (and keep its id; a newer extension API than this Zeff speaks is refused); a signed
+   release must match its signature, and a plugin installed signed is only updated signed; the download's content hash is compared with
+   the catalog's (a mismatch is said — the catalog is out of date — not refused).
+4. It is merged with what was changed here (below) and written into the plugins folder as `<id>/`; where it came from is kept
+   (`<plugins>/.origin/<id>.json`: repository, folder, commit, files).
+5. It is registered at once (the plugins folder is read on every look) and comes in **switched off**. *Switch on* names what it asks for
+   first, grants it, and installs its app (its workspace package) when it brings one; a built-in's port switches the port's way.
+6. It is written into **packages.json**, so the update notes follow it. A built-in switched to its port is recorded too — also a port put
+   into the plugins folder by hand, when its files are exactly what a source's catalog describes.
+
+**Remove** switches a plugin off, moves its folder to `<plugins>/.removed/` (nothing is deleted) and takes it out of packages.json; what it
+made in Zeff stays. A port the built-in runs through can't be removed until the built-in is switched back.
+
+A private repository needs a token — entered when the repository is added, or later (Browse → *Where they come from* → 🔑); a token also
+raises GitHub's limit of requests. It is kept in Zeff and never written into packages.json.
+
 ## packages.json
 
 `<data>/packages.json` (or `ZEFF_PACKAGES_FILE`) says which plugins this Zeff has and where each comes from:
