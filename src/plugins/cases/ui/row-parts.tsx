@@ -54,7 +54,7 @@ function useCaseData(props: AppViewProps) {
     [rowId, load],
   );
   const data = useMemo(() => (d ? { ...caseAppData(d, { t, busy, locale: typeof navigator !== "undefined" ? navigator.language : undefined }), run } : { loading: true, error }), [d, t, busy, run, error]);
-  return { data, reload: () => void load() };
+  return { data, reload: () => void load(), loading: !d && !error };
 }
 
 const bundleOf = (p: PartProps) => (p.app.bundle as CaseBundle | undefined) ?? null;

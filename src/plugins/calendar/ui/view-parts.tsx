@@ -45,7 +45,7 @@ function useCalendarData(_props: AppViewProps, state: Record<string, string>) {
   }, [load]);
   const [today] = useState(() => ymd(new Date()));
   const data = useMemo(() => calendarAppData(d, { state, t, today, error }), [d, state, t, today, error]);
-  return { data, reload: () => void load() };
+  return { data, reload: () => void load(), loading: !d && !error };
 }
 
 const dataOf = (p: PartProps) => (p.app.data as CalendarData | null | undefined) ?? null;

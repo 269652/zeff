@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { FocusExit } from "@/components/FocusToggle";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -176,7 +177,7 @@ export function DatabaseView({ initial, dbId, viewId, onView, embedded = false, 
   const appNew = useRef<(() => void) | null>(null);
   const setAppNew = useCallback((fn: (() => void) | null) => void (appNew.current = fn), []);
   if (api.error && !data) return <p className="alert-error text-sm">{api.error}</p>;
-  if (!data || !view) return <p className="py-6 text-sm text-zinc-500">{t("Loading …")}</p>;
+  if (!data || !view) return <LoadingScreen label={t("Loading")} size={embedded ? "block" : "view"} />;
 
   // (openCode: the app view picked starts with its code open — until it is closed.)
   const opened = code?.viewId === view.id ? code : openCode && view.type === "app" && dismissed !== view.id ? { viewId: view.id, draft: view.template ?? viewAppMeta(view.app ?? "")?.defaultTemplate(t) ?? "" } : code;
@@ -641,7 +642,7 @@ export function DatabaseView({ initial, dbId, viewId, onView, embedded = false, 
           }}
         />
       )}
-      {!dayTab && view.type === "app" && <AppViewHost view={view} data={data} rows={rows} openRow={openRow} reload={() => void api.reload()} onNew={setAppNew} ctx={ctx} rowOps={rowOps} src={opened?.viewId === view.id ? opened.draft : undefined} onErrors={opened?.viewId === view.id ? setCodeErrors : undefined} fallback={<TableView view={view} rows={rows} visible={visible} schema={schema} ctx={ctx} api={api} labels={labels} openRow={openRow} setView={setView} onSchema={() => setSchemaOpen(true)} justAdded={justAdded} onEdited={() => setJustAdded(null)} />} />}
+      {!dayTab && view.type === "app" && <AppViewHost loader={embedded ? "block" : "view"} view={view} data={data} rows={rows} openRow={openRow} reload={() => void api.reload()} onNew={setAppNew} ctx={ctx} rowOps={rowOps} src={opened?.viewId === view.id ? opened.draft : undefined} onErrors={opened?.viewId === view.id ? setCodeErrors : undefined} fallback={<TableView view={view} rows={rows} visible={visible} schema={schema} ctx={ctx} api={api} labels={labels} openRow={openRow} setView={setView} onSchema={() => setSchemaOpen(true)} justAdded={justAdded} onEdited={() => setJustAdded(null)} />} />}
       {!dayTab && view.type === "table" && picked.size > 0 && <BulkBar ids={[...picked]} schema={schema} dbId={dbId} onChanged={() => void api.reload()} onClear={() => setPicked(new Set())} onHide={(hide) => (api.changeSchema((s) => hideRows(s, [...picked], hide)), setPicked(new Set()))} />}
       {!dayTab && view.type === "table" && <TableView count={countInTable ? countText : undefined} onForm={onForm} fill={!embedded} sel={selection} view={view} rows={rows} visible={visible} schema={schema} ctx={ctx} api={api} labels={labels} openRow={openRow} setView={setView} onSchema={() => setSchemaOpen(true)} justAdded={justAdded} onEdited={() => setJustAdded(null)} />}
       {!dayTab && view.type === "board" && <BoardView view={view} rows={rows} visible={visible} schema={schema} ctx={ctx} api={api} labels={labels} openRow={openRow} newRow={newRow} onForm={onForm} />}

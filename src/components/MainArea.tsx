@@ -1,7 +1,8 @@
 "use client";
 
 import { usePagePathname } from "@/lib/use-page-pathname";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useT } from "@/components/I18nProvider";
 
 /** Pages that fill the window's height exactly (a Kanban board's columns side by side, the chat, the todos); the others scroll here. */
 const WIDE = [/^\/kanban\/(?!settings)[^/]+/, /^\/knowledge/, /^\/todos/, /^\/tickets/, /^\/work/, /^\/chat/, /^\/learn\/[^/]+\/step\//];
@@ -12,6 +13,7 @@ const WIDE = [/^\/kanban\/(?!settings)[^/]+/, /^\/knowledge/, /^\/todos/, /^\/ti
 const FLOW_ON_PHONE = [/^\/todos/];
 
 export function MainArea({ children }: { children: ReactNode }) {
+  const t = useT();
   const path = usePagePathname();
   const wide = WIDE.some((r) => r.test(path));
   // The Workspace (databases, views, lessons) uses the whole width of the window; the other pages keep a column of 1440 px, centred.
@@ -22,7 +24,8 @@ export function MainArea({ children }: { children: ReactNode }) {
   return (
     <main id="main" tabIndex={0} className="min-h-0 w-full flex-1 overflow-y-auto [container-type:size]">
       {/* At most 1440 px wide, centred — on a wide screen the pages and app views keep their shape (the header the same). */}
-      <div className={`mx-auto w-full ${full ? "" : "max-w-[1440px]"} px-4 pt-3 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-3 ${flow ? "min-h-full sm:h-full" : wide ? "h-full" : ""}`}>{children}</div>
+      {/* (main-body: nothing in it — a route on its way, a redirect being followed — shows the loading screen: globals.css) */}
+      <div style={{ "--zeff-loading-label": JSON.stringify(t("Loading")) } as CSSProperties} className={`main-body mx-auto w-full ${full ? "" : "max-w-[1440px]"} px-4 pt-3 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-3 ${flow ? "min-h-full sm:h-full" : wide ? "h-full" : ""}`}>{children}</div>
     </main>
   );
 }

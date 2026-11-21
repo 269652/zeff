@@ -1,5 +1,6 @@
 "use client";
 
+import { forgetShared, shareCall } from "./share-call";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toaster";
@@ -20,7 +21,8 @@ export function PackageUpdateNote({ dbId, reload }: { /** A page of the app (its
   const [brought, setBrought] = useState(0);
   useEffect(() => {
     let live = true;
-    void packageUpdateOfAction(dbId).then((x) => {
+    // (Shared: every block of a page asks this of the same page — once — share-call.ts.)
+    void shareCall(`package-update:${dbId}`, () => packageUpdateOfAction(dbId)).then((x) => {
       if (!live || !x.ok || !x.update) return;
       let later: string[] = [];
       try {
@@ -38,6 +40,8 @@ export function PackageUpdateNote({ dbId, reload }: { /** A page of the app (its
   const bring = async () => {
     setBusy(true);
     const r = await bringPackageUpdateAction(u.id);
+    forgetShared("package-update:");
+    forgetShared("app-merge:");
     setBusy(false);
     if (!r.ok) return void toast(r.error, { tone: "error" });
     const open = "open" in r && typeof r.open === "number" ? r.open : 0;

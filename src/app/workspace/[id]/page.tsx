@@ -8,6 +8,7 @@ import { backlinks, breadcrumbs, getDatabase, getPage, inTemplates, templateTree
 import { PageView } from "@/plugins/workspace/ui/PageView";
 import { ArchivedNotice } from "@/plugins/workspace/ui/Trash";
 import { LageStrip } from "@/plugins/jira-lage/LageStrip";
+import { BlockSeedProvider } from "@/plugins/workspace/ui/block-seed";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
@@ -71,12 +72,17 @@ export default async function WorkspacePage({ params }: { params: Promise<{ id: 
       app={app}
     />
   );
+  // A page that shows blocks of your own (a block in its text, a view using one): they come with it — drawn in its first HTML, not
+  // after a read that queues behind the page's others (ui/use-blocks.ts).
+  const usesBlocks = JSON.stringify(fresh.content ?? "").includes('"zeffBlock"') || (database?.ok && database.data.schema.views.some((v) => v.template?.includes("<use ")));
+  const blocks = usesBlocks ? (await import("@/plugins/workspace/block-store")).listBlocks() : null;
+  const seeded = blocks ? <BlockSeedProvider blocks={blocks}>{view}</BlockSeedProvider> : view;
   // The Jira briefing's run buttons over its databases (Meine Lage, a Jira board's).
-  if (page.kind !== "database") return view;
+  if (page.kind !== "database") return seeded;
   return (
     <>
       <LageStrip dbId={page.id} />
-      {view}
+      {seeded}
     </>
   );
 }

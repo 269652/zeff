@@ -21,7 +21,7 @@ function useGitlabData(props: AppViewProps) {
     };
     // (Read again when the rows change: a sync.)
   }, [tick, props.rows.length]);
-  return { data: (data ?? {}) as Record<string, unknown>, reload: useCallback(() => setTick((x) => x + 1), []) };
+  return { data: (data ?? {}) as Record<string, unknown>, reload: useCallback(() => setTick((x) => x + 1), []), loading: data === null };
 }
 
 const screen = (p: PartProps): GitlabScreen | null => (p.app.items ? (p.app as GitlabScreen) : null);

@@ -1605,7 +1605,8 @@ function drawTag(n: Extract<TNode, { k: "tag" }>, ctx: Ctx): VNode[] {
     case "data":
       if (!a.name || !/^[\p{L}_][\p{L}\p{N}_]*$/u.test(a.name)) return (err('<data> needs name="…" (a name: data.<name> holds the output).'), []);
       if (!a.flow && !a.lambda && !a.compute && !a.do) return (err('<data> needs flow="…" (the flow whose output it loads), lambda="…" (a function lambda) or compute="plugin.fn" (a pure function of a plugin, run in the browser).'), []);
-      return [{ t: "data", a, c: [] }];
+      // (when="{{ a == b }}" that is false is written "false": off, as an empty one — as <on when> reads it. It used to load anyway.)
+      return [{ t: "data", a: a.when !== undefined && (a.when.trim() === "false" || a.when.trim() === "0") ? { ...a, when: "" } : a, c: [] }];
     case "transitions":
       if (!ctx.row) return (err("<transitions/> shows a row's lifecycle — put it in <selected> or a row's own page."), []);
       return [{ t: "transitions", a: { ...a, row: String(ctx.row.id) }, c: [] }];

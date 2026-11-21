@@ -12,6 +12,7 @@ import { headers } from "next/headers";
 import { prefixOf, PREFIX_ATTR, PREFIX_HEADER } from "@/lib/account-routes";
 import { accountNavScript } from "@/lib/account-nav-script";
 import { InlineScript } from "@/components/InlineScript";
+import { focusScript } from "@/lib/focus-script";
 
 import { modsForPage } from "@/lib/mods/page";
 import localFont from "next/font/local";
@@ -136,17 +137,19 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       lang={lang}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       {...(prefix ? { [PREFIX_ATTR]: prefix } : {})}
+      // (data-focus is set by the head's script before the body is drawn — focus-script.ts — not by React)
+      suppressHydrationWarning
     >
-      {(prefix || mods.script || mods.css || stringsVersion) && (
-        <head>
-          {prefix && <InlineScript html={accountNavScript(prefix)} />}
-          {/* eslint-disable-next-line @next/next/no-sync-scripts -- the texts must be there before React draws the page (else it shows English first) */}
-          {stringsVersion && <script src={`/api/i18n/${lang}?v=${stringsVersion}`} />}
-          {/* The mods that are on (lib/mods): their browser parts, before React starts — and their styles. */}
-          {mods.script && <InlineScript html={mods.script} />}
-          {mods.css && <style data-zeff-mods="" dangerouslySetInnerHTML={{ __html: mods.css }} />}
-        </head>
-      )}
+      <head>
+        {/* Full screen (?focus=1, or kept in this browser) before the first paint: no Workspace sidebar drawn and taken away after. */}
+        <InlineScript html={focusScript()} />
+        {prefix && <InlineScript html={accountNavScript(prefix)} />}
+        {/* eslint-disable-next-line @next/next/no-sync-scripts -- the texts must be there before React draws the page (else it shows English first) */}
+        {stringsVersion && <script src={`/api/i18n/${lang}?v=${stringsVersion}`} />}
+        {/* The mods that are on (lib/mods): their browser parts, before React starts — and their styles. */}
+        {mods.script && <InlineScript html={mods.script} />}
+        {mods.css && <style data-zeff-mods="" dangerouslySetInnerHTML={{ __html: mods.css }} />}
+      </head>
       {/* An app shell: the window is the page — the body never scrolls; the content does, in itself. */}
       <body className="flex h-screen h-dvh flex-col overflow-hidden" suppressHydrationWarning>
         <I18nProvider lang={lang}>

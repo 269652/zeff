@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { Editor as TiptapEditor, EditorContent, useEditor, type JSONContent } from "@tiptap/react";
 import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
 import { DragHandle } from "@tiptap/extension-drag-handle-react";
@@ -537,7 +538,8 @@ export function Editor({ pageId, contextRowId, initial, rev, editable, smallText
     setProposal(null);
   };
 
-  if (!editor) return <div className="min-h-48" aria-busy="true" />;
+  // (The editor starts in the browser only: until then the loading screen where the page's text and blocks will be — not an empty page.)
+  if (!editor) return <div className="flex min-h-48 items-center" aria-busy="true"><LoadingScreen label={t("Loading")} size="block" /></div>;
   return (
     <div ref={box} className={`ws-editor ${smallText ? "ws-small" : ""}`}>
       {/* The sticky "Run all" of a page with code cells (not in a small editor, nor in a row's detail view). */}

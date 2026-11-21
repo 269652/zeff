@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { FocusToggle } from "@/components/FocusToggle";
 import { SystemPageBar } from "./system-page";
 import type { JSONContent } from "@tiptap/react";
@@ -90,7 +91,7 @@ function History({ pageId, onClose }: { pageId: number; onClose: () => void }) {
       {app && tab === "app" ? (
         <AppHistory app={app} pageId={pageId} onDone={onClose} />
       ) : versions === null ? (
-        <p className="text-sm text-zinc-500">{t("Loading …")}</p>
+        <LoadingScreen label={t("Loading")} size="block" />
       ) : !versions.length ? (
         <p className="text-sm text-zinc-500">{t("No earlier versions yet — one is kept every ten minutes you edit.")}</p>
       ) : (

@@ -56,7 +56,7 @@ function useDebtsData(props: AppViewProps, state: Record<string, string>) {
     () => (o && o.dir === dir ? debtsAppData(o, { t, withFixed, today, locale: typeof navigator !== "undefined" ? navigator.language : undefined }) : { loading: true, error, owe: dir === "owe" }),
     [o, dir, t, withFixed, today, error],
   );
-  return { data, reload: load };
+  return { data, reload: load, loading: !o && !error };
 }
 
 const overviewOf = (p: PartProps) => (p.app.overview as FinancesOverview | undefined) ?? null;

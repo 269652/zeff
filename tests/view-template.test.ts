@@ -220,3 +220,17 @@ test("a column of a fixed width (width=140): what follows starts at the same pla
   assert.deepEqual(r.errors, []);
   assert.deepEqual(find(r.nodes, "col").filter((c) => c.a.width).map((c) => c.a.width), ["140", "140"]);
 });
+
+test("the first screen waits for its <data> (a when= that is false is off, not loaded), not for those that answered, failed or show a kept answer", async () => {
+  const { dataAwaited } = await import("../src/plugins/workspace/view-awaited");
+  const r = renderView(
+    `<state name="part" value="todos"/><data name="x" lambda="a.x"/><data name="feed" lambda="a.feed" when="{{ state.part == 'feed' }}"/><data name="q" lambda="a.q" when="{{ state.q }}"/><section title="t"><data name="y" flow="a.y"/></section>`,
+    data(),
+    { parts },
+  );
+  const off = r.nodes.flatMap((n) => (typeof n !== "string" && n.t === "data" ? [[n.a.name, n.a.when]] : []));
+  assert.deepEqual(off.filter(([, w]) => w !== undefined), [["feed", ""], ["q", ""]]);
+  assert.deepEqual(dataAwaited(r.nodes, {}), ["x", "y"]);
+  assert.deepEqual(dataAwaited(r.nodes, { x: [1], x_status: "stale", y_status: "loading" }), ["y"]);
+  assert.deepEqual(dataAwaited(r.nodes, { x: [1], x_status: "loading", y_status: "error" }), []);
+});

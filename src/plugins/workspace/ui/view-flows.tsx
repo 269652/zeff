@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { shareCall } from "./share-call";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
 import { rowLifecycleAction, runFlowAction, runLambdaAction, runUserAction, takeTransitionAction } from "../actions";
@@ -56,8 +57,12 @@ function askData(kind: DataKind, name: string, inputs: Record<string, unknown>, 
 }
 
 /** The answer the server kept the last time (nothing computed): shown at once where this browser kept none. Null when there is none. */
-async function peekData(kind: DataKind, name: string, inputs: Record<string, unknown>, row?: number): Promise<unknown | null> {
-  if (kind === "do" || typeof fetch === "undefined") return null;
+function peekData(kind: DataKind, name: string, inputs: Record<string, unknown>, row?: number): Promise<unknown | null> {
+  if (kind === "do" || typeof fetch === "undefined") return Promise.resolve(null);
+  // (The blocks of a page asking the same thing peek once.)
+  return shareCall(`peek:${JSON.stringify([kind, name, inputs, row ?? null])}`, () => peekOnce(kind, name, inputs, row));
+}
+async function peekOnce(kind: DataKind, name: string, inputs: Record<string, unknown>, row?: number): Promise<unknown | null> {
   try {
     const r = await fetch("/api/workspace/data", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, name, input: inputs, peek: true, ...(row ? { row } : {}) }) });
     if (!r.ok) return null;
@@ -89,7 +94,9 @@ export function FlowData({ a, setData, row, reload }: { a: Record<string, string
     window.addEventListener(RELOAD_EVENT, again);
     return () => window.removeEventListener(RELOAD_EVENT, again);
   }, []);
-  useEffect(() => {
+  // (A layout effect: what this browser kept is in data.<name> before the view is painted — the view shows it at once, not its
+  // loading screen for a frame. The asking itself is on a timer anyway.)
+  useLayoutEffect(() => {
     const name = a.name;
     if (a.when !== undefined && !a.when.trim()) {
       setData(name, { [name]: null, [`${name}_status`]: "", [`${name}_error`]: null });

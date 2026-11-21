@@ -1,5 +1,6 @@
 "use client";
 
+import { shareCall } from "./share-call";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/Modal";
@@ -186,7 +187,8 @@ export function AppMergeNote({ pageId, reload, refresh = 0 }: { pageId: number; 
   }, [pageId]);
   useEffect(() => {
     let live = true;
-    void appMergeOfPageAction(pageId).then((r) => {
+    // (Shared: every block of a page asks this of the same page — once; after an update brought in, asked anew — share-call.ts.)
+    void (refresh ? appMergeOfPageAction(pageId) : shareCall(`app-merge:${pageId}`, () => appMergeOfPageAction(pageId))).then((r) => {
       if (!live || !r.ok) return;
       setMerge(r.merge);
       // (just brought in with spots open: the merge opens at once)
