@@ -1,6 +1,7 @@
 import { accountKnowledge } from "@/db/accounts";
 import { t } from "@/lib/i18n/server";
 import type { KnowledgeAnswer, KnowledgeEntity, KnowledgeEntityDetail, KnowledgePage, KnowledgePerson, KnowledgeStatus, KnowledgeTurn } from "./shared";
+import { getSecret } from "@/lib/secrets/store";
 
 /**
  * The knowledge server (knowledge/, its own Next app) of the account this runs for — each account
@@ -11,7 +12,7 @@ export const knowledgeUrl = () => accountKnowledge().url;
 
 /** The plugin's own address and token for the knowledge server (its settings serviceUrl, serviceToken), while it stands in for the built-in — else this account's. */
 async function connection(): Promise<{ url: string; token: string }> {
-  const own = { url: knowledgeUrl(), token: process.env.KNOWLEDGE_TOKEN ?? "" };
+  const own = { url: knowledgeUrl(), token: getSecret("KNOWLEDGE_TOKEN") };
   try {
     if (!(await import("@/plugins/state")).onlyThroughPort("knowledge")) return own;
     const p = (await import("@/lib/ext/registry")).getPlugin("knowledge-ext");

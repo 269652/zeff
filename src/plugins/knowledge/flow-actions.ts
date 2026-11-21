@@ -1,6 +1,7 @@
 import { extensionPoint } from "@/lib/plugin-kit/extension-point";
 import type { FlowAction } from "../workspace/flows/actions";
 import type { FieldSpec } from "../workspace/flows/types";
+import { getSecret } from "@/lib/secrets/store";
 
 /**
  * Generic reads and writes for plugins' lambdas and flows (docs/zeff-kernel.md): the services this account runs next to Zeff (a server of its own on
@@ -13,7 +14,7 @@ const text = (v: unknown): string => (v == null ? "" : String(v));
 
 /** The services an account runs beside Zeff (their address, and the token Zeff holds for them). The plugin's own settings win. */
 async function serviceOf(name: string): Promise<{ url: string; token: string }> {
-  if (name === "knowledge") return { url: (await import("@/db/accounts")).accountKnowledge().url, token: process.env.KNOWLEDGE_TOKEN ?? "" };
+  if (name === "knowledge") return { url: (await import("@/db/accounts")).accountKnowledge().url, token: getSecret("KNOWLEDGE_TOKEN") };
   throw new Error(`There is no service “${name}” on this account.`);
 }
 

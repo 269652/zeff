@@ -21,6 +21,7 @@ export function settingsAreas(): SettingsAreaGroup[] {
     { href: "/settings/about", label: t("About me"), what: t("What Zeff and its AI should know about you") },
     { href: "/settings/ai", label: t("AI"), what: t("Backends and models, your instructions, the prompts, how useful each step is") },
     ...(on.has("todos") ? [{ href: "/settings/todos", label: t("Todo settings"), what: t("The briefing, what a todo shows, which kinds of knowledge count") }] : []),
+    { href: "/settings/secrets", label: t("Secrets"), what: t("The tokens and logins each plugin needs (Jira, Microsoft, Google …), kept encrypted") },
     { href: "/settings/badges", label: t("Badges and dots"), what: t("The numbers and dots on tabs, in the Workspace tree and the header: which, what they count, their colours") },
   ];
   const time: SettingsArea[] = [

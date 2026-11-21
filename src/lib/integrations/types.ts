@@ -84,6 +84,8 @@ export type WeekCloseContext = { week: WeekInfo; now: Date; over: boolean; entri
 export type IntegrationServer = {
   /** Its sync settings (the Sync settings page) — the plugin's sync-settings module. */
   syncSettings?: PluginSyncSettings;
+  /** The secrets it needs (tokens, logins), set on Settings → Secrets. */
+  secrets?: import("@/plugins/secrets").PluginSecret[];
   /** Its step of the Sync menu and the scheduler (the key is the plugin's `syncSteps` entry). */
   syncStep?: { key: string; step: SyncStep };
   /** Its browser driver (an MCP server over stdio), as a path inside the mount: "chrono/driver.mjs". */

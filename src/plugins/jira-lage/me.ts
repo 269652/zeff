@@ -8,6 +8,7 @@ import { getJiraSyncConfig } from "@/lib/jira/sync";
 import { getSqlite } from "@/db";
 import { databaseSource } from "@/plugins/workspace/collections";
 import { getDatabase } from "@/plugins/workspace/store";
+import { getSecret } from "@/lib/secrets/store";
 
 /** The pref keeping the display name Jira gave back on "Assign to me". */
 const ME_NAME = "jira.meName";
@@ -16,7 +17,7 @@ const ME_NAME = "jira.meName";
 export function jiraUsername(): string | null {
   const cfg = getJiraSyncConfig();
   const env = (cfg as { env?: Record<string, string | undefined> }).env ?? {};
-  return env.JIRA_USERNAME?.trim() || process.env.JIRA_USERNAME?.trim() || null;
+  return env.JIRA_USERNAME?.trim() || getSecret("JIRA_USERNAME") || null;
 }
 
 /** Remember how Jira names you (what "Assign to me" read back). */

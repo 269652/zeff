@@ -4,6 +4,7 @@ import path from "node:path";
 import { t } from "@/lib/i18n/server";
 import { resultToPayload, runStdioSession, type McpStdioConfig } from "./mcp-client";
 import { extractIssues, normalizeIssue, type NormalizedTicket } from "./normalize";
+import { secretEnv } from "@/lib/secrets/store";
 import {
   assignTicketBoards,
   bookedTicketKeysMissingTitle,
@@ -108,7 +109,7 @@ export function getJiraSyncConfig(): JiraSyncConfig {
 
   const envCommand = process.env.JIRA_MCP_COMMAND?.trim();
   if (envCommand) {
-    const env = parseEnv(process.env.JIRA_MCP_ENV);
+    const env = { ...parseEnv(process.env.JIRA_MCP_ENV), ...secretEnv() };
     return {
       configured: true,
       source: "env",
@@ -130,12 +131,12 @@ export function getJiraSyncConfig(): JiraSyncConfig {
       source: "mcp.json",
       command: fromJson.command,
       args: fromJson.args,
-      env: fromJson.env,
+      env: { ...fromJson.env, ...secretEnv() },
       tool,
       jql,
       fields,
       limit,
-      baseUrl: process.env.JIRA_BASE_URL?.trim() || fromJson.env.JIRA_URL || undefined,
+      baseUrl: process.env.JIRA_BASE_URL?.trim() || secretEnv().JIRA_URL || fromJson.env.JIRA_URL || undefined,
     };
   }
 

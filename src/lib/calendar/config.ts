@@ -1,3 +1,4 @@
+import { getSecret } from "@/lib/secrets/store";
 /**
  * Microsoft-published "Microsoft Graph Command Line Tools" public client. It is a
  * pre-registered multi-tenant public client that supports the device-code flow, so
@@ -24,7 +25,7 @@ export type MicrosoftConfig = {
 
 /** True when a custom app registration is configured (enables the redirect flow). */
 export function hasCustomApp(): boolean {
-  return Boolean(process.env.MS_CLIENT_ID?.trim());
+  return Boolean(getSecret("MS_CLIENT_ID"));
 }
 
 /**
@@ -32,13 +33,13 @@ export function hasCustomApp(): boolean {
  * MS_CLIENT_ID is set, otherwise the shared public client for the device-code flow.
  */
 export function getMicrosoftConfig(): MicrosoftConfig {
-  const custom = process.env.MS_CLIENT_ID?.trim();
-  const tenantId = process.env.MS_TENANT_ID?.trim() || "organizations";
+  const custom = getSecret("MS_CLIENT_ID");
+  const tenantId = getSecret("MS_TENANT_ID") || "organizations";
   if (custom) {
     return {
       clientId: custom,
       tenantId,
-      clientSecret: process.env.MS_CLIENT_SECRET?.trim() || undefined,
+      clientSecret: getSecret("MS_CLIENT_SECRET")?.trim() || undefined,
       redirectUri: process.env.MS_REDIRECT_URI?.trim() || undefined,
       usesPublicClient: false,
     };

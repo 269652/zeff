@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { currentAccountId, DEFAULT_ACCOUNT } from "@/db/accounts";
 import type { GoogleDriveRow } from "@/db/schema";
+import { getSecret } from "@/lib/secrets/store";
 
 const { googleDrive, googleDriveFiles } = schema;
 
@@ -26,8 +27,8 @@ export function driveRow(): DriveRow {
     row = db.select().from(googleDrive).where(eq(googleDrive.id, 1)).get()!;
   }
   // No client saved on the page: the one in the environment (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
-  const envId = process.env.GOOGLE_CLIENT_ID?.trim();
-  return !row.clientId && envId ? { ...row, clientId: envId, clientSecret: process.env.GOOGLE_CLIENT_SECRET?.trim() ?? "" } : row;
+  const envId = getSecret("GOOGLE_CLIENT_ID");
+  return !row.clientId && envId ? { ...row, clientId: envId, clientSecret: getSecret("GOOGLE_CLIENT_SECRET") } : row;
 }
 
 export function updateDrive(patch: Partial<Omit<DriveRow, "id">>): DriveRow {

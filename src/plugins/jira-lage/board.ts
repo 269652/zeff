@@ -10,6 +10,7 @@ import { contextByTicket, lageByTicket, openTodosByTicket, type Lage, type Ticke
 import type { BoardSummary, RichBoard, RichCard, RichColumn } from "./shared";
 import { accountFlag } from "@/lib/sync/account-flags";
 import { jiraBoardHref } from "./to-workspace";
+import { getSecret } from "@/lib/secrets/store";
 
 /**
  * Jira Lage (built on Kanban): your Jira boards as Kanban boards — their columns as Jira has them
@@ -32,8 +33,8 @@ const columnsCache = (cache.__zeffJiraColumns ??= new Map());
 const HOUR = 3600000;
 
 function jiraRest(): { base: string; headers: Record<string, string> } | null {
-  const base = process.env.JIRA_URL?.replace(/\/+$/, "");
-  const token = process.env.JIRA_PERSONAL_TOKEN;
+  const base = getSecret("JIRA_URL").replace(/\/+$/, "");
+  const token = getSecret("JIRA_PERSONAL_TOKEN");
   return base && token ? { base, headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } } : null;
 }
 
@@ -198,7 +199,7 @@ export async function lageBoard(id: string): Promise<RichBoard | null> {
   const todos = openTodosByTicket();
   const context = contextByTicket(lageTickets);
   const chats = ticketChats([...lageTickets.map((x) => x.key), ...getDb().select({ key: jiraTickets.key }).from(jiraTickets).all().map((r) => r.key)]);
-  const base = process.env.JIRA_URL?.replace(/\/+$/, "") ?? null;
+  const base = getSecret("JIRA_URL").replace(/\/+$/, "") || null;
   if (id === "jira-lage") {
     const list: Ticket[] = lageTickets.filter((t) => !t.left).map((t) => ({ ...t }));
     // The columns of your Jira boards, merged (same name: one column, their statuses together) —
