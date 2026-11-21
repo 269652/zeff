@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useSyncExternalStore } from "react";
 import { useT } from "@/components/I18nProvider";
+import { FOCUS_KEY } from "@/lib/focus-script";
 
 /**
  * Full screen for an app (a database, a board): the page's sidebar goes, the page has the whole width under Zeff's
  * header (which stays, as on the apps' old pages). Kept in this browser; Escape (or the button again) brings them back. The CSS is html[data-focus] in globals.css.
  * A link opens a page so too: ?focus=1 (an app from the header menu) — for that visit, not kept.
+ * A page load gets it before its first paint from the head's script (lib/focus-script.ts); here it is kept up (a page opened in the app,
+ * the button, Escape) — before the paint too (a layout effect), and from what is asked (read()), not from the first render's value:
+ * that is the server's (off) until React has started, and would take full screen away for a moment.
  */
 
-const KEY = "zeff-focus";
+const KEY = FOCUS_KEY;
 const listeners = new Set<() => void>();
 const byLink = (): boolean => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("focus") === "1";
 const read = (): boolean => {
@@ -40,10 +44,9 @@ const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.del
 /** Full screen without the page's bar (an app's own screen): a small ⤡ in the corner that leaves it (Escape does too). */
 export function FocusExit() {
   const t = useT();
-  const on = useSyncExternalStore(subscribe, read, () => false);
-  if (!on) return null;
+  // (Always there, shown by html[data-focus] — globals.css: in the page's first paint already, not once React has started.)
   return (
-    <button type="button" className="icon-btn fixed right-3 bottom-3 z-40 border border-zinc-200 bg-white/90 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 print:hidden" onClick={() => set(false)} title={t("Leave full screen (Esc)")} aria-label={t("Leave full screen (Esc)")}>
+    <button type="button" className="focus-exit icon-btn fixed right-3 bottom-3 z-40 border border-zinc-200 bg-white/90 shadow-sm dark:border-zinc-700 dark:bg-zinc-900/90 print:hidden" onClick={() => set(false)} title={t("Leave full screen (Esc)")} aria-label={t("Leave full screen (Esc)")}>
       ⤡
     </button>
   );
@@ -52,10 +55,13 @@ export function FocusExit() {
 export function FocusToggle() {
   const t = useT();
   const on = useSyncExternalStore(subscribe, read, () => false);
-  // The page as it was left (full screen or not), and Escape to leave it.
+  // The page as it was left (full screen or not) — before it is painted.
+  useLayoutEffect(() => {
+    document.documentElement.toggleAttribute("data-focus", read());
+  }, [on]);
+  // Escape leaves it.
   useEffect(() => {
-    document.documentElement.toggleAttribute("data-focus", on);
-    if (!on) return;
+    if (!read()) return;
     // (Not while a modal is open — on screen: the menu drawer is always there, moved out of view — Escape is its.)
     const modalOpen = () =>
       [...document.querySelectorAll('[aria-modal="true"]')].some((el) => {
@@ -66,7 +72,8 @@ export function FocusToggle() {
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, [on]);
-  useEffect(() => () => document.documentElement.removeAttribute("data-focus"), []);
+  // (Left: off. A layout effect, so leaving one page for another runs this before the next one's layout effect above, not after it.)
+  useLayoutEffect(() => () => document.documentElement.removeAttribute("data-focus"), []);
   return (
     <button type="button" className="btn btn-sm" aria-pressed={on} onClick={() => set(!on)} title={on ? t("Leave full screen (Esc)") : t("Full screen")}>
       {on ? "⤡" : "⤢"}

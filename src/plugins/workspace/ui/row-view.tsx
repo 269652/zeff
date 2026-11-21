@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { useRouter } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type LazyExoticComponent } from "react";
 import { useT } from "@/components/I18nProvider";
@@ -23,7 +24,7 @@ const MODULES: Record<string, () => Promise<ViewAppModule>> = {
   detail: () => import("./app-view").then((m) => ({ parts: {}, useAppData: m.useNoAppData })),
 };
 
-type HostProps = AppViewProps & { src: string; current: Row; onErrors?: (errors: TplError[]) => void };
+type HostProps = AppViewProps & { src: string; current: Row; onErrors?: (errors: TplError[]) => void; loader?: "view" | "block" };
 const PAGES: Record<string, LazyExoticComponent<ComponentType<HostProps>>> = Object.fromEntries(
   Object.entries(MODULES).map(([id, load]) => [
     id,
@@ -68,7 +69,8 @@ export function RowViewHost({ rowId, openCode = false }: { rowId: number; /** Op
         : undefined,
     [got, set],
   );
-  if (got === undefined) return <p className="text-sm text-zinc-400">…</p>;
+  // (Read: the loading screen — the same one its view shows while its own data comes.)
+  if (got === undefined) return <LoadingScreen label={t("Loading")} size="block" />;
   const Page = got?.view ? PAGES[got.view] : undefined;
   const meta = got?.view ? rowViewMeta(got.view) : undefined;
   if (!got || !Page || !meta || !got.row || !got.schema || !got.dbId || !ctx) return null;
@@ -92,8 +94,8 @@ export function RowViewHost({ rowId, openCode = false }: { rowId: number; /** Op
         </button>
       </div>
       {draft !== null && <ViewCode view={view} dbId={got.dbId} meta={meta} draft={draft} setDraft={setCode} errors={errors} onClose={() => (setCode(null), setDismissed(true))} onSave={(tpl) => void save(tpl)} rowId={got.row.id} fields={[got.schema.titleName, ...got.schema.properties.filter((p) => !p.id.startsWith("src")).map((p) => p.name)]} />}
-      <Suspense fallback={<p className="text-sm text-zinc-400">…</p>}>
-        <Page {...props} current={got.row} src={draft ?? got.schema.rowTemplate ?? meta.defaultTemplate(t)} onErrors={draft !== null ? setErrors : undefined} />
+      <Suspense fallback={<LoadingScreen label={t("Loading")} size="block" />}>
+        <Page {...props} loader="block" current={got.row} src={draft ?? got.schema.rowTemplate ?? meta.defaultTemplate(t)} onErrors={draft !== null ? setErrors : undefined} />
       </Suspense>
     </div>
   );

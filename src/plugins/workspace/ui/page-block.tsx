@@ -64,7 +64,7 @@ export function PageBlock({ block, params, pageId, title, draft, onErrors }: { b
           </ul>
         </details>
       )}
-      <TemplateView src={src} onErrors={onErrors ?? setErrors} module={MODULE} meta={meta} view={view} data={data} rows={[]} draftBlocks={drafts} openRow={(id) => router.push(`/workspace/${id}`)} reload={() => router.refresh()} />
+      <TemplateView loader="block" src={src} onErrors={onErrors ?? setErrors} module={MODULE} meta={meta} view={view} data={data} rows={[]} draftBlocks={drafts} openRow={(id) => router.push(`/workspace/${id}`)} reload={() => router.refresh()} />
     </div>
   );
 }

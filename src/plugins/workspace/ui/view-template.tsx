@@ -10,11 +10,13 @@ import { KnowPanel } from "@/plugins/know/ui/KnowPanel";
 import { ExtFrame } from "@/components/ext/ExtFrame";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { useLang, useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
 import { formatNumber, type Labels, type Property, type Row } from "../model";
 import type { ViewAppMeta } from "../view-apps";
 import { navEntriesOf, navOf, renderView, viewDefaults, type ViewNavEntry, type VNode } from "../view-template";
+import { dataAwaited } from "../view-awaited";
 import type { ActionEnv, AppViewProps, ViewAppModule } from "./app-view";
 import { draw, Level, type DrawExt } from "./card-template";
 import { ChannelLogo } from "@/components/ChannelLogo";
@@ -58,7 +60,11 @@ type Props = AppViewProps & {
   meta: ViewAppMeta;
   /** A row's own page: the row it is. */ current?: Row;
   /** Blocks drawn as given here instead of as saved (the Studio's preview of a block being edited). */ draftBlocks?: BlockDef[];
+  /** The loading screen while the first data comes: an app's view on its page (default), or a block's inside a page. */ loader?: "view" | "block";
 };
+
+/** The longest a view waits for its first data behind the loading screen: a <data> that takes longer is drawn as it is (its own "loading"). */
+const FIRST_LOAD_MAX_MS = 15_000;
 
 const TONE: Record<string, string> = { faint: "text-zinc-400", good: "text-emerald-700 dark:text-emerald-400", warn: "text-amber-700 dark:text-amber-400", bad: "text-red-600 dark:text-red-400", muted: "text-zinc-500" };
 const BOX_TONE: Record<string, string> = { info: "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/40", ask: "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40", accent: "border-transparent bg-indigo-50 shadow-none dark:bg-indigo-950/40", muted: "border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/40", good: "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20", warn: "border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/20", bad: "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20" };
@@ -138,7 +144,7 @@ const json = <T,>(s: string | undefined, fallback: T): T => {
   }
 };
 
-export function TemplateView({ src, onErrors, module, meta, current, draftBlocks, ...props }: Props) {
+export function TemplateView({ src, onErrors, module, meta, current, draftBlocks, loader = "view", ...props }: Props) {
   const t = useT();
   // (The template is written in English: in English there is nothing to look up.)
   const lang = useLang();
@@ -181,9 +187,10 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   const outputs = useWidgetOutputs();
   // The app's settings (<setting>, <settings/>): saved per database.
   const [settings, setSettings] = useState<Record<string, string>>({});
+  const [settingsIn, setSettingsIn] = useState(false);
   useEffect(() => {
     let live = true;
-    void loadViewSettingsAction(props.data.id).then((x) => live && x.ok && setSettings(x.values));
+    void loadViewSettingsAction(props.data.id).then((x) => live && (setSettingsIn(true), x.ok && setSettings(x.values)));
     return () => {
       live = false;
     };
@@ -1263,13 +1270,31 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
     }
   };
 
+  // The first screen only when its data is there (dataAwaited; the app's own data, the settings it reads): until then the loading
+  // screen — the view is drawn behind it (hidden, so its <data> load), never its menus and headings around nothing. Once shown, it
+  // stays: a reload, an action's answer, another tab of it keep what is on screen (the thin line above says it loads).
+  const needsSettings = /<settings?\b|\bsettings\./.test(src);
+  const awaited = dataAwaited(r.nodes, flowData);
+  const ready = !awaited.length && !app.loading && (settingsIn || !needsSettings);
+  const [shown, setShown] = useState(false);
+  const [waitedLong, setWaitedLong] = useState(false);
+  // (Set while drawing — React's "state from what changed": the view's first ready render already counts, no extra round.)
+  if (ready && !shown) setShown(true);
+  useEffect(() => {
+    if (shown) return;
+    const timer = setTimeout(() => setWaitedLong(true), FIRST_LOAD_MAX_MS);
+    return () => clearTimeout(timer);
+  }, [shown]);
+  const firstLoad = !shown && !ready && !waitedLong;
+  const loading = firstLoad ? <LoadingScreen label={t("Loading")} size={loader} /> : null;
   const theme = themeStyle(findTheme(r.nodes) ?? {});
   // (A <data> showing its last answer while the new one is on its way: a thin line at the top says so — it takes no room, so nothing jumps.)
   const refreshing = Object.keys(flowData).some((k) => k.endsWith("_status") && (flowData[k] === "stale" || flowData[k] === "loading") && flowData[k.slice(0, -7)] != null);
   const refreshLine = refreshing ? <div aria-hidden className="ws-refresh pointer-events-none absolute inset-x-0 top-0 h-0.5 overflow-hidden rounded-full bg-indigo-500/10 print:hidden"><div className="ws-refresh-bar h-full w-1/3 rounded-full bg-indigo-500/50" /></div> : null;
   if (nav && !inTree && props.view.nav !== "off")
     return (
-      <div className="relative flex flex-col gap-5 md:flex-row md:items-start" data-print-root style={theme as CSSProperties}>
+      <div className={`relative flex flex-col gap-5 md:flex-row md:items-start ${firstLoad ? "zeff-first-load" : ""}`} data-print-root style={theme as CSSProperties} aria-busy={firstLoad || undefined} data-awaiting={firstLoad ? [...awaited, ...(app.loading ? ["app"] : []), ...(needsSettings && !settingsIn ? ["settings"] : [])].join(" ") : undefined}>
+        {loading}
         {refreshLine}
         <ViewNav title={nav.title} entries={nav.entries} active={(e) => (e.state ? (r.state[e.state] ?? "") === (e.value ?? "") : false)} onPick={go} />
         <div className="min-w-0 flex-1 space-y-5">
@@ -1279,7 +1304,8 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
       </div>
     );
   return (
-    <div className="relative space-y-5" data-print-root style={theme as CSSProperties}>
+    <div className={`relative space-y-5 ${firstLoad ? "zeff-first-load" : ""}`} data-print-root style={theme as CSSProperties} aria-busy={firstLoad || undefined} data-awaiting={firstLoad ? [...awaited, ...(app.loading ? ["app"] : []), ...(needsSettings && !settingsIn ? ["settings"] : [])].join(" ") : undefined}>
+      {loading}
       {refreshLine}
       {!onErrors && <PackageUpdateNote dbId={props.data.id} reload={props.reload} />}
       {!onErrors && r.errors.length > 0 && <TemplateTrouble errors={r.errors} view={props.view.name} dbId={props.data.id} dbTitle={props.data.title} reload={props.reload} />}

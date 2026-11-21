@@ -87,6 +87,10 @@ body {
   html[data-focus] .page:has([data-app-screen]) :is(.ws-pagebar, .ws-viewbar) {
     display: none !important; /* (over the bars' own flex: utilities win over this layer) */
   }
+  /* (its ⤡ — FocusExit — only in full screen) */
+  html:not([data-focus]) .focus-exit {
+    display: none !important;
+  }
   .card {
     @apply rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900;
   }
@@ -513,5 +517,69 @@ p a:not([class*="btn"]):not([role]),
   .ws-answer a[href^="https://source.invalid/"] {
     background: var(--color-indigo-950);
     color: var(--color-indigo-200);
+  }
+}
+
+/*
+ * The loading screen (components/LoadingScreen.tsx). And the main area with nothing in it (a route on its way, a redirect being followed) shows the
+ * same screen, drawn here: never an empty frame or half a page meanwhile.
+ */
+@keyframes zeff-loading-spin {
+  to { transform: rotate(360deg); }
+}
+/* (At once, no fade: a page's, the empty main area's and a view's stand at the same place and follow each other — they read as one.) */
+.zeff-loading-screen {
+  height: calc(100dvh - 7rem);
+}
+/* (an app's view under the Workspace page's bars; full screen without them: where the page's loading screen was, nothing jumps) */
+.zeff-loading-view {
+  height: calc(100dvh - 13rem);
+  min-height: 12rem;
+}
+html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
+  height: calc(100dvh - 7rem);
+}
+.zeff-loading-block {
+  min-height: 6rem;
+  padding-block: 1.5rem;
+}
+/* A view waiting for its first data: only the loading screen is seen; the rest is there (its <data> load) but not drawn. */
+.zeff-first-load > :not(.zeff-loading) {
+  display: none !important;
+}
+.main-body:empty {
+  display: flex;
+  height: calc(100dvh - 7rem);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.main-body:empty::before {
+  content: "";
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 4px solid color-mix(in srgb, var(--color-indigo-600) 15%, transparent);
+  border-top-color: var(--color-indigo-600);
+  animation: zeff-loading-spin 900ms linear infinite;
+}
+.main-body:empty::after {
+  content: var(--zeff-loading-label, "Loading");
+  color: var(--color-zinc-400);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+@media (prefers-color-scheme: dark) {
+  .main-body:empty::before {
+    border-color: color-mix(in srgb, var(--color-indigo-400) 15%, transparent);
+    border-top-color: var(--color-indigo-400);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .main-body:empty::before {
+    animation-duration: 2.5s;
   }
 }

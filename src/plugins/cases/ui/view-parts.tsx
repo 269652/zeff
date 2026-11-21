@@ -32,7 +32,7 @@ function useCasesData(_props: AppViewProps, state: Record<string, string>) {
   const [today] = useState(() => new Date().toISOString().slice(0, 10));
   const paying = state.paying ?? "";
   const data = useMemo(() => (o ? casesAppData(o, { t, today, paying, locale: typeof navigator !== "undefined" ? navigator.language : undefined }) : { loading: true, error }), [o, t, today, paying, error]);
-  return { data, reload: load };
+  return { data, reload: load, loading: !o && !error };
 }
 
 const overviewOf = (p: PartProps) => (p.app.overview as CasesOverview | undefined) ?? null;

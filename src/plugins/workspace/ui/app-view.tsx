@@ -2,6 +2,7 @@
 
 import { useT } from "@/components/I18nProvider";
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent, type ReactNode } from "react";
+import { LoadingScreen } from "@/components/LoadingScreen";
 import type { DatabaseData } from "../actions";
 import type { Row, View } from "../model";
 import { viewAppMeta } from "../view-apps";
@@ -48,7 +49,8 @@ export type ActionEnv = { props: AppViewProps; state: Record<string, string>; se
 /** An app's view, client side: its parts (components by name), the data its template reads as app.* (a hook), its own actions. */
 export type ViewAppModule = {
   parts: Record<string, ComponentType<PartProps>>;
-  useAppData: (props: AppViewProps, state: Record<string, string>) => { data: Record<string, unknown>; reload: () => void };
+  /** (loading: its data isn't there yet for the first time — the view shows the loading screen meanwhile, not its parts around nothing) */
+  useAppData: (props: AppViewProps, state: Record<string, string>) => { data: Record<string, unknown>; reload: () => void; loading?: boolean };
   actions?: Record<string, (env: ActionEnv) => void>;
   /** The toolbar's New taken over while the app is shown (the people's name field, the calendar's new event). */
   onNew?: (env: ActionEnv) => void;
@@ -72,7 +74,7 @@ const MODULES: Record<string, () => Promise<ViewAppModule>> = {
   gitlab: () => import("@/plugins/gitlab/ui/view-parts").then((m) => m.default),
 };
 
-type HostProps = AppViewProps & { src: string; onErrors?: (errors: { line: number; message: string }[]) => void };
+type HostProps = AppViewProps & { src: string; onErrors?: (errors: { line: number; message: string }[]) => void; loader?: "view" | "block" };
 const VIEWS: Record<string, LazyExoticComponent<ComponentType<HostProps>>> = Object.fromEntries(
   Object.entries(MODULES).map(([app, load]) => [
     app,
@@ -88,14 +90,15 @@ const VIEWS: Record<string, LazyExoticComponent<ComponentType<HostProps>>> = Obj
 export const appAvailable = (data: DatabaseData, view: View): boolean => !!view.app && !!VIEWS[view.app] && (view.app === "template" || !!data.extras?.appViews?.some((a) => a.id === view.app));
 
 /** An app's view of the database drawn from its template (`src`: one being written; else the view's own, else the app's default) — or, its app not there (its plugin not installed), the fallback (a table). */
-export function AppViewHost({ fallback, src, onErrors, ...props }: AppViewProps & { fallback: ReactNode; src?: string; onErrors?: HostProps["onErrors"] }) {
+export function AppViewHost({ fallback, src, onErrors, loader = "view", ...props }: AppViewProps & { fallback: ReactNode; src?: string; onErrors?: HostProps["onErrors"]; /** The loading screen's size: the page's view, or one inside a page. */ loader?: "view" | "block" }) {
   const t = useT();
   const View = props.view.app ? VIEWS[props.view.app] : undefined;
   if (!View || !appAvailable(props.data, props.view)) return <>{fallback}</>;
   const template = src ?? props.view.template ?? viewAppMeta(props.view.app!)?.defaultTemplate(t) ?? "";
   return (
-    <Suspense fallback={<p className="text-sm text-zinc-400">…</p>}>
-      <View {...props} src={template} onErrors={onErrors} />
+    // (Its code on its way: the same loading screen the view shows while its first data comes — one, not a "…" and then that.)
+    <Suspense fallback={<LoadingScreen label={t("Loading")} size={loader} />}>
+      <View {...props} src={template} onErrors={onErrors} loader={loader} />
     </Suspense>
   );
 }

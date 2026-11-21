@@ -409,11 +409,14 @@ export function ContextCountsView({ groups, remote, onHover }: { groups: Record<
   );
 }
 
-/** The toggle of a context that isn't loaded yet: "Context (12)" and its kinds — `onOpen` fetches it. */
-export function ContextSummaryToggle({ summary, onOpen, loading }: { summary: ContextSummary; onOpen: () => void; loading?: boolean }) {
+/**
+ * The toggle of a context that isn't loaded yet: "Context (12)" and its kinds — `onOpen` fetches it. While it loads (loading) it reads
+ * the same: the summary already says what is there — no "Loading …" in every row of a list meanwhile.
+ */
+export function ContextSummaryToggle({ summary, onOpen }: { summary: ContextSummary; onOpen: () => void; loading?: boolean }) {
   const t = useT();
   return (
-    <AreaToggle open={false} onToggle={onOpen} label={loading ? t("Loading …") : t("Context ({n})", { n: summary.n })}>
+    <AreaToggle open={false} onToggle={onOpen} label={t("Context ({n})", { n: summary.n })}>
       <ContextCountsView groups={summary.groups} remote={summary.remote} />
     </AreaToggle>
   );

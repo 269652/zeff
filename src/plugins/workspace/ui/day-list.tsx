@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -56,7 +57,7 @@ export function DayListTab({ tab, dbId, data, set, saved, reload, logView }: { t
     router.refresh();
   };
   if (tab === "day:today") return <DayToday data={data} stats={stats} dbId={dbId} set={set} saved={saved} after={after} reload={reload} />;
-  if (!stats) return <p className="py-6 text-sm text-zinc-500">{t("Loading …")}</p>;
+  if (!stats) return <LoadingScreen label={t("Loading")} size="view" />;
   if (tab === "day:history") return <DayHistory stats={stats} logView={logView} />;
   return <DayFigures stats={stats} />;
 }

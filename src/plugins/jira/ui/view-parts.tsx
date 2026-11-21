@@ -23,7 +23,7 @@ function useJiraData(props: AppViewProps) {
     };
     // (Read again when the rows change: a sync, a job set.)
   }, [tick, props.rows.length]);
-  return { data: (data ?? {}) as Record<string, unknown>, reload: useCallback(() => setTick((x) => x + 1), []) };
+  return { data: (data ?? {}) as Record<string, unknown>, reload: useCallback(() => setTick((x) => x + 1), []), loading: data === null };
 }
 
 const screen = (p: PartProps): JiraScreen | null => (p.app.tickets ? (p.app as JiraScreen) : null);

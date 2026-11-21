@@ -1,5 +1,6 @@
 "use client";
 
+import { LoadingScreen } from "@/components/LoadingScreen";
 import { useEffect, useState } from "react";
 import { confirmAction } from "@/components/confirm";
 import { toast } from "@/components/Toaster";
@@ -43,7 +44,7 @@ export function VersionHistory({ title, source, empty, onClose, onRestored }: { 
   return (
     <Modal title={title} onClose={onClose} wide>
       {versions === null ? (
-        <p className="text-sm text-zinc-500">{t("Loading …")}</p>
+        <LoadingScreen label={t("Loading")} size="block" />
       ) : !versions.length ? (
         <p className="text-sm text-zinc-500">{empty ?? t("No earlier versions yet — one is kept every time it changes.")}</p>
       ) : (

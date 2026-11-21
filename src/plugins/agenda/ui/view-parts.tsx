@@ -185,8 +185,10 @@ function NewNote(p: PartProps) {
 }
 
 /** The screen's own data: the projects by category, today's events — and an older Agenda brought up to date on the way (then reloaded). */
-function useAgendaData(props: AppViewProps): { data: Record<string, unknown>; reload: () => void } {
+function useAgendaData(props: AppViewProps): { data: Record<string, unknown>; reload: () => void; loading: boolean } {
   const [data, setData] = useState<AgendaAppData>({ projects: [], events: [], upgraded: false });
+  // (Not read yet: the view shows its loading screen, not empty projects.)
+  const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
   const { id } = props.data;
   // (The rows' reload by a ref: a new function every time the view is drawn must not load again.)
@@ -199,6 +201,7 @@ function useAgendaData(props: AppViewProps): { data: Record<string, unknown>; re
   useEffect(() => {
     let live = true;
     void agendaDataAction(id).then((r) => {
+      if (live) setLoading(false);
       if (!live || !r.ok) return;
       setData(r);
       if (r.upgraded) reloadRows.current();
@@ -208,7 +211,7 @@ function useAgendaData(props: AppViewProps): { data: Record<string, unknown>; re
     };
   }, [id, notes, tick]);
   const reload = useCallback(() => setTick((n) => n + 1), []);
-  return { data: data as unknown as Record<string, unknown>, reload };
+  return { data: data as unknown as Record<string, unknown>, reload, loading };
 }
 
 const view: ViewAppModule = {

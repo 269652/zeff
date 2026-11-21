@@ -336,7 +336,7 @@ function WidgetTemplated({ src, data, busy, act, hideTitle, pageId, onErrors }: 
   const view: View = useMemo(() => ({ id: "widget", name: "widget", type: "app", app: "widget", template: src, filter: { op: "and", rules: [] }, sorts: [], hidden: [] }), [src]);
   return (
     <AppCtx.Provider value={app}>
-      <TemplateView src={src} onErrors={onErrors} module={WIDGET_MODULE} meta={WIDGET_META} view={view} data={db} rows={[]} openRow={(id) => router.push(`/workspace/${id}`)} reload={() => router.refresh()} />
+      <TemplateView loader="block" src={src} onErrors={onErrors} module={WIDGET_MODULE} meta={WIDGET_META} view={view} data={db} rows={[]} openRow={(id) => router.push(`/workspace/${id}`)} reload={() => router.refresh()} />
     </AppCtx.Provider>
   );
 }
