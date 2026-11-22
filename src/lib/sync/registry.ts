@@ -603,7 +603,17 @@ const integrationSteps = (): Partial<Record<string, Step>> =>
  * The flows marked as a sync (a plugin's package brings them — Google Calendar's …; FlowDef.sync): each a step of the menu by the key
  * "flow:<name>" — run there as a flow, its last run what the menu shows, its schedule trigger its interval (the flows' own clock runs it).
  */
+// (kept two seconds: the menu's overview asks for each step several times — read anew each time, every flow was listed and parsed for
+// every step it asked about; per account, as the flows are)
+let flowStepsMemo: { account: string; at: number; steps: Record<string, Step> } | null = null;
 function flowSteps(): Record<string, Step> {
+  const account = currentAccountId();
+  if (flowStepsMemo && flowStepsMemo.account === account && Date.now() - flowStepsMemo.at < 2000) return flowStepsMemo.steps;
+  const steps = readFlowSteps();
+  flowStepsMemo = { account, at: Date.now(), steps };
+  return steps;
+}
+function readFlowSteps(): Record<string, Step> {
   let flows: Flow[];
   try {
     flows = listFlows().filter((f) => f.sync && f.enabled !== false);
