@@ -482,6 +482,22 @@ export const TIME_FLOW_ACTIONS: FlowAction[] = [
     },
   },
   {
+    name: "time.slot-run",
+    group: "time",
+    label: "A button another plugin put into the report",
+    summary:
+      "Runs a button of a plugin that adds to the time report's places (zeiterfassung.slots: its TimeSlot.run) — input plugin (its id), op (the button) and the button's values (week, month, date, id, key). What it does is that plugin's (a pull of what a booking system has, say). Output { ok, message }; a refusal is an error.",
+    input: [f("plugin", "text", { required: true }), f("op", "text", { required: true }), f("week", "text"), f("month", "text"), f("date", "text"), f("id", "text"), f("key", "text")],
+    output: "{ ok, message }",
+    writes: true,
+    run: async (i, ctx) => {
+      if (ctx.dryRun) return { ok: true, message: "" };
+      const { runSlot, SLOT_RUN_INPUTS } = await import("./time-slots");
+      const values = Object.fromEntries(SLOT_RUN_INPUTS.flatMap((k) => (has(i[k]) ? [[k, text(i[k]).trim()]] : [])));
+      return { ok: true, message: await runSlot(text(i.plugin).trim(), text(i.op).trim(), values) };
+    },
+  },
+  {
     name: "time.source-search",
     group: "time",
     label: "Search the messages and items that can be added to an entry as a source",

@@ -100,6 +100,8 @@ export type IntegrationServer = {
   weekClose?: (ctx: WeekCloseContext) => CloseItem[] | Promise<CloseItem[]>;
   /** The same places as data (the time report plugin draws them): cards, marks, approvals, a jobs column, close steps — see plugins/zeiterfassung/time-slots.ts. */
   slots?: import("@/plugins/zeiterfassung/time-slots").TimeSlot;
+  /** Its buttons on the Todos screen (links, or buttons that run a flow) — see plugins/todos/places.ts (extension point "todos.actions"). */
+  todoActions?: () => import("@/plugins/todos/places").TodoAction[] | Promise<import("@/plugins/todos/places").TodoAction[]>;
 };
 
 /**

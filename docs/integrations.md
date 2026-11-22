@@ -44,6 +44,13 @@ integration's plugins are not in it.
 | The jobs page (toolbar, column) | `server.jobs` → `JobsSlot` | `src/app/jobs/page.tsx` via `jobsSlots()` |
 | The week's close | `server.weekClose` | `src/lib/week-close.ts` |
 | Marks in the week table / entries list | `client.CellMark`, `EntryMark`, `DayMark` … | `WeekTable`, `EntriesTable` |
+| The time report plugin's places (cards, buttons, marks, approvals, jobs column) — as data | `server.slots` → `TimeSlot` | `src/plugins/zeiterfassung/time-slots.ts` (extension point `zeiterfassung.slots`) |
+| A button of those places that runs the plugin's own code (a pull) | `server.slots.run(op, input)`, buttons made with `slotRun(…)` | the kernel's `time.slot-run`, the report's flow `zeiterfassung.slot-run` |
+| Buttons on the Todos screen (links, or flows to run) | `server.todoActions` → `TodoAction[]` | `src/plugins/todos/places.ts` (extension point `todos.actions`), the kernel's read `todos.actions`, the Todos plugin's lambda `todos.places` |
+
+The page hooks (`week`, `month`, `jobs`, `client.*`) are the built-in pages' — the screens that replaced them (the time report
+and the Todos screen as plugins of the view language) draw the places from data: `slots` and `todoActions`. A sync step's own
+default interval: its `step.schedule().everyMinutes` (the scheduler asks it before the Sync settings' row).
 
 ## Tests
 

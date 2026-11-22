@@ -16,8 +16,8 @@ const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
 // Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
-const PLUGIN_VERSION = "0.7.6";
-const PACKAGE_VERSION = "1.6.6";
+const PLUGIN_VERSION = "0.7.7";
+const PACKAGE_VERSION = "1.6.7";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
@@ -96,6 +96,7 @@ const FLOWS = [
   flow("f12", "zeiterfassung.day-undo", "Take the day's booking back", "Takes back what a booking of the day created, as far as it is still as booked (input created). Run by the End of day tab.", "time.day-undo", i("created")),
   flow("f8", "zeiterfassung.schedule-save", "Save the schedule", "The weekly hours, the default break or the flex-time job (input what hours|pauses|flex, mon … sun, text, jobNumber, comment). Run by the Settings tab.", "time.schedule-save", i("what", "mon", "tue", "wed", "thu", "fri", "sat", "sun", "text", "jobNumber", "comment", "punch", "vacation", "sick", "holiday", "other")),
   flow("f17", "zeiterfassung.absence-book", "Book absences on their jobs", "The absence hours of the given days (input dates) booked on the job of their kind of absence. Run by the report's absence rows.", "time.absence-book", i("dates")),
+  flow("f18", "zeiterfassung.slot-run", "Run a button another plugin put into the report", "A button of a plugin that adds to the report's places — a booking system's pull, say (input plugin, op and the button's values week, month, date, id, key). Run by the report's heads and the jobs' toolbar.", "time.slot-run", i("plugin", "op", "week", "month", "date", "id", "key")),
   flow("f9", "zeiterfassung.flex-book", "Book the missing hours on the flex-time job", "The missing hours of the given days (input dates) booked on the flex-time job. Run by the report.", "time.flex-book", i("dates")),
   flow("f10", "zeiterfassung.absence", "Add or delete an absence", "An absence added (startDate, endDate, type, hours, note, repeatUntil) or deleted (input delete: its id). Run by the Settings tab.", "time.absence", i("delete", "startDate", "endDate", "type", "hours", "note", "repeatUntil")),
   flow("f6", "zeiterfassung.job-save", "Create or change a job", "A job: without id created, with id changed (number, name, customer, description, defaultTags, active). Run by the Jobs tab.", "time.job-save", i("id", "number", "name", "customer", "description", "defaultTags", "active", "full")),

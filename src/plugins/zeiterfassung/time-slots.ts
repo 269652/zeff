@@ -39,9 +39,43 @@ export type TimeSlot = {
   month?: (ctx: { month: MonthInfo; entries: EntryWithJob[] }) => MonthSlotData | Promise<MonthSlotData>;
   jobs?: (jobs: JobWithStats[]) => JobsSlotData | Promise<JobsSlotData>;
   weekClose?: (ctx: { week: WeekInfo; now: Date; over: boolean; entries: EntryWithJob[]; query: string }) => CloseItem[] | Promise<CloseItem[]>;
+  /**
+   * What its own buttons do (a SlotAction made by slotRun): `op` names the button, `input` holds its values (texts). Its answer is said
+   * where the button is; ok false is a refusal. Run by the kernel's time.slot-run (the report's flow zeiterfassung.slot-run).
+   */
+  run?: (op: string, input: Record<string, string>) => Promise<{ ok: boolean; message: string }>;
 };
 
 export const timeSlots = extensionPoint<TimeSlot>("zeiterfassung.slots");
+
+/** The report's flow that runs a contributor's own button (TimeSlot.run): the package's zeiterfassung.slot-run over the kernel's time.slot-run. */
+export const SLOT_RUN_FLOW = "zeiterfassung.slot-run";
+/** The values a slot button may hand its contributor (each a text; the flow passes these through). */
+export const SLOT_RUN_INPUTS = ["week", "month", "date", "id", "key"] as const;
+
+/** A button that runs the contributor's own TimeSlot.run(op, args) — no flow of its own needed. */
+export const slotRun = (
+  plugin: string,
+  op: string,
+  label: string,
+  args: Partial<Record<(typeof SLOT_RUN_INPUTS)[number], string>> = {},
+  extra: Pick<SlotAction, "confirm" | "tip"> = {},
+): SlotAction => ({
+  label,
+  flow: SLOT_RUN_FLOW,
+  // (with= is "a=1, b=2": a value keeps no comma or equals sign)
+  with: [`plugin=${plugin}`, `op=${op}`, ...Object.entries(args).map(([k, v]) => `${k}=${String(v ?? "").replace(/[,=]/g, " ")}`)].join(", "),
+  ...extra,
+});
+
+/** A contributor's own button run (TimeSlot.run) — the installed one of that id; its answer, a refusal (ok false) thrown. */
+export async function runSlot(plugin: string, op: string, input: Record<string, string>): Promise<string> {
+  const c = timeSlots.list().find((x) => String(x.plugin) === plugin);
+  if (!c?.impl.run) throw new Error(`“${plugin}” has no buttons of its own here (is it installed?).`);
+  const r = await c.impl.run(op, input);
+  if (!r.ok) throw new Error(r.message);
+  return r.message;
+}
 
 /** What every installed contributor says for a place, each by its id; one that fails is left out (and said in the log). */
 async function ask<T>(pick: (s: TimeSlot) => (() => T | Promise<T>) | undefined): Promise<{ id: string; slot: T }[]> {
