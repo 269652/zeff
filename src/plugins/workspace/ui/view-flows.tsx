@@ -6,6 +6,7 @@ import { useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
 import { rowLifecycleAction, runFlowAction, runLambdaAction, runUserAction, takeTransitionAction } from "../actions";
 import { parseWith } from "../flows/with";
+import { keepAnswer, keptAnswer, keptKey, onlyHeldChanged, preloadsOf } from "./data-kept";
 
 /**
  * A view's flows (flows/): <data> loading a flow's output into data.<name> whenever what it is called with changes, and a row's
@@ -77,7 +78,39 @@ const RELOAD_EVENT = "zeff:flowdata-reload";
 /** Every <data> on the screen loads again (a reload button: the blocks of a page that read from flows, not only its own). */
 export function reloadFlowData(): void {
   shared.clear();
+  preloadedAt.clear();
   if (typeof window !== "undefined") window.dispatchEvent(new Event(RELOAD_EVENT));
+}
+
+/**
+ * preload=: once the answer on screen is in, the answers for the other values of an input (another tab) are asked quietly and kept
+ * (data-kept.ts) — the first switch to them shows at once. One at a time for the whole page, in idle time, not while the tab is
+ * hidden, each at most every 30 s; asked through runFlowShared (a block asking the same at once gets the same answer).
+ */
+const PRELOAD_EVERY_MS = 30_000;
+const preloadedAt = new Map<string, number>();
+let preloadQueue: Promise<void> = Promise.resolve();
+const idle = (): Promise<void> =>
+  new Promise((done) => {
+    const w = typeof window !== "undefined" ? (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }) : undefined;
+    if (w?.requestIdleCallback) w.requestIdleCallback(() => done(), { timeout: 3000 });
+    else setTimeout(done, 400);
+  });
+function preloadOthers(flow: string, source: string, inputs: Record<string, unknown>, others: { name: string; value: string }[], opts: { row?: number; lambda?: boolean }): void {
+  const now = keptKey(source, inputs);
+  for (const o of others) {
+    const alt = { ...inputs, ...parseWith(`${o.name}=${o.value}`) };
+    const key = keptKey(source, alt);
+    if (key === now || Date.now() - (preloadedAt.get(key) ?? 0) < PRELOAD_EVERY_MS) continue;
+    preloadedAt.set(key, Date.now());
+    preloadQueue = preloadQueue.then(async () => {
+      await idle();
+      if (typeof document !== "undefined" && document.hidden) return void preloadedAt.delete(key);
+      const r = await runFlowShared(flow, alt, opts).catch(() => null);
+      if (r?.ok && r.status === "done") keepAnswer(key, r.output ?? null);
+      else preloadedAt.delete(key);
+    });
+  }
 }
 
 /** Loads a flow's output into data.<name> (nothing drawn): again when its input changes, after a pause while it is typed. */
@@ -87,6 +120,9 @@ export function FlowData({ a, setData, row, reload }: { a: Record<string, string
   const seq = useRef(0);
   const keptFor = useRef("");
   const keptText = useRef<string | null>(null);
+  // (What it was asked with the last time, and whether data.<name> holds an answer now — for hold=.)
+  const askedWith = useRef<Record<string, unknown> | null>(null);
+  const onScreen = useRef(false);
   // (Bumped by reloadFlowData: asked anew.)
   const [round, setRound] = useState(0);
   useEffect(() => {
@@ -95,45 +131,78 @@ export function FlowData({ a, setData, row, reload }: { a: Record<string, string
     return () => window.removeEventListener(RELOAD_EVENT, again);
   }, []);
   // (A layout effect: what this browser kept is in data.<name> before the view is painted — the view shows it at once, not its
-  // loading screen for a frame. The asking itself is on a timer anyway.)
+  // loading screen for a frame, and never a frame of the answer for the inputs before. The asking itself is on a timer anyway.)
   useLayoutEffect(() => {
     const name = a.name;
+    // (An answer on screen: data.<name>; data.<name>_last the last answer whatever it was asked with — for what may show the one
+    // before while the new loads: counts, headings; data.<name>_loading off.)
+    const show = (value: unknown, status: string) => {
+      onScreen.current = true;
+      setData(name, { [name]: value, [`${name}_last`]: value, [`${name}_status`]: status, [`${name}_error`]: null, [`${name}_loading`]: false });
+    };
     if (a.when !== undefined && !a.when.trim()) {
-      setData(name, { [name]: null, [`${name}_status`]: "", [`${name}_error`]: null });
+      keptFor.current = "";
+      onScreen.current = false;
+      setData(name, { [name]: null, [`${name}_status`]: "", [`${name}_error`]: null, [`${name}_loading`]: false });
       return;
     }
-    // What this flow gave the last time (kept in the browser, per page): shown at once while it loads again — the screen is there, not empty.
-    const cacheKey = `zeff.flowdata:${typeof location !== "undefined" ? location.pathname : ""}:${JSON.stringify([source, a.with ?? ""])}`;
-    // (Only when it is asked anew — not at every poll of every=, when what it shows is already the last answer.)
+    const inputs = parseWith(a.with);
+    // What this flow gave the last time it was asked this (per page and inputs: in memory for the session — data-kept.ts — and in
+    // localStorage across visits): shown at once while it loads again — the screen is there, not empty.
+    const cacheKey = keptKey(source, inputs);
+    // (Only when it is asked anew — not at a reload with the same inputs, when what it shows is already the last answer.)
+    let nothingKept = false;
     if (keptFor.current !== cacheKey) {
+      const before = keptFor.current ? askedWith.current : null;
       keptFor.current = cacheKey;
-      try {
-        keptText.current = localStorage.getItem(cacheKey);
-        if (keptText.current) setData(name, { [name]: JSON.parse(keptText.current), [`${name}_status`]: "stale", [`${name}_error`]: null });
-      } catch {
-        // no storage: it loads as before
+      keptText.current = null;
+      let kept = keptAnswer(cacheKey);
+      if (kept === undefined) {
+        try {
+          keptText.current = localStorage.getItem(cacheKey);
+          if (keptText.current) kept = JSON.parse(keptText.current);
+        } catch {
+          // no storage: it loads as before
+        }
+      }
+      if (kept !== undefined) show(kept, "stale");
+      else {
+        nothingKept = true;
+        // (Only a held input changed — a search typed: the list on screen stays while the narrowed one loads.)
+        if (onScreen.current && onlyHeldChanged(before, inputs, a.hold)) setData(name, { [`${name}_status`]: "stale" });
+        else {
+          // Nothing for these inputs yet: no answer shown as if it were theirs — empty and loading (the view draws its loader).
+          onScreen.current = false;
+          setData(name, { [name]: null, [`${name}_status`]: "loading", [`${name}_error`]: null, [`${name}_loading`]: true });
+        }
       }
     }
+    askedWith.current = inputs;
     const mine = ++seq.current;
-    // (This browser kept nothing: the server's last answer, asked for at the same time as the fresh one — whichever is there first.)
+    // (Nothing kept for these inputs: the server's last answer, asked for at the same time as the fresh one — whichever is there first.)
     let freshIn = false;
-    if (!keptText.current && (a.flow || a.lambda)) {
-      void peekData(a.flow ? "flow" : "lambda", a.flow ?? a.lambda, parseWith(a.with), row).then((kept) => {
-        if (kept && !freshIn && mine === seq.current) setData(name, { [name]: (kept as { output: unknown }).output, [`${name}_status`]: "stale", [`${name}_error`]: null });
+    if (nothingKept && (a.flow || a.lambda)) {
+      void peekData(a.flow ? "flow" : "lambda", a.flow ?? a.lambda, inputs, row).then((kept) => {
+        if (kept && !freshIn && mine === seq.current) show((kept as { output: unknown }).output, "stale");
       });
     }
     const timer = setTimeout(
       async () => {
         setData(name, { [`${name}_status`]: "loading" });
-        const r = await runFlowShared(a.flow ?? a.do ?? a.lambda, parseWith(a.with), { ...(row ? { row } : {}), ...(!a.flow && a.do ? { user: true } : !a.flow && a.lambda ? { lambda: true } : {}) });
+        const r = await runFlowShared(a.flow ?? a.do ?? a.lambda, inputs, { ...(row ? { row } : {}), ...(!a.flow && a.do ? { user: true } : !a.flow && a.lambda ? { lambda: true } : {}) });
         if (mine !== seq.current) return;
         freshIn = true;
-        if (!r.ok) return setData(name, { [`${name}_status`]: "error", [`${name}_error`]: r.error });
+        if (!r.ok) return setData(name, { [`${name}_status`]: "error", [`${name}_error`]: r.error, [`${name}_loading`]: false });
         const res = r;
-        if (res.status === "failed") setData(name, { [`${name}_status`]: "error", [`${name}_error`]: res.error });
+        if (res.status === "failed") setData(name, { [`${name}_status`]: "error", [`${name}_error`]: res.error, [`${name}_loading`]: false });
         else {
-          setData(name, { [name]: res.output, [`${name}_status`]: res.status === "waiting" ? "waiting" : "ok", [`${name}_error`]: null });
+          show(res.output, res.status === "waiting" ? "waiting" : "ok");
           if (a.reload === "true" && res.status === "done") reload?.();
+          if (res.status !== "waiting") {
+            keepAnswer(cacheKey, res.output ?? null);
+            // (preload="scope=done|worker": the answers for the other tabs too, quietly — the first switch to them shows at once.)
+            if (res.status === "done" && a.preload && (a.flow || a.lambda)) preloadOthers(a.flow ?? a.lambda, source, inputs, preloadsOf(a.preload), { ...(row ? { row } : {}), ...(a.flow ? {} : { lambda: true }) });
+          }
         }
         if (res.status !== "waiting") {
           try {

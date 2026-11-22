@@ -15,6 +15,11 @@ import { cellText, COLORS, noLabels, type Labels, type Property, type Row } from
 import { localDay } from "@/lib/dates";
 
 export type VNode = string | { t: string; a: Record<string, string>; c: VNode[] };
+
+/** A node's key among its siblings when it stands for an item with an id ({{#each}} of rows, of a <data>'s list) — drawn by it. */
+const nodeKeys = new WeakMap<object, string>();
+export const keyNode = (n: Extract<VNode, object>, key: string): void => void nodeKeys.set(n, key);
+export const nodeKey = (n: VNode): string | undefined => (typeof n === "string" ? undefined : nodeKeys.get(n));
 export type TplError = { line: number; message: string };
 
 /** A filter and its arguments — `names`: the arguments written bare (state.q, a field), not in quotes and not numbers. */

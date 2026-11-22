@@ -20,7 +20,7 @@ import { layoutGraph, type GraphNodeIn } from "./view-graph";
 import { checkWidgetHtml, WIDGET_LIBS } from "@/lib/widgets/sandbox";
 import { checkSpec, specHtml, type ExerciseSet } from "@/lib/widgets/spec";
 import { MAX_SETTINGS, settingsWithDefaults, type SettingDecl } from "./view-settings";
-import { ANY_TAG_ATTRS, cardScope, CARD_TAGS, checkAttr, FILTERS as CARD_FILTERS, isField, isNode, KEYWORDS, numOf, parseFilter, parseTemplate, splitPipes, textOf, vnodeToString, type AttrKind, type CardScope, type Ctx as CardCtx, type Field, type TagDef, type TNode, type TplError, type VNode } from "./card-template";
+import { ANY_TAG_ATTRS, cardScope, CARD_TAGS, checkAttr, FILTERS as CARD_FILTERS, isField, isNode, KEYWORDS, keyNode, nodeKey, numOf, parseFilter, parseTemplate, splitPipes, textOf, vnodeToString, type AttrKind, type CardScope, type Ctx as CardCtx, type Field, type TagDef, type TNode, type TplError, type VNode } from "./card-template";
 import { noLabels, TITLE, type Labels, type Property, type Row } from "./model";
 import { localDay } from "@/lib/dates";
 import { blockFlowName, blockSignature, paramValue, type BlockDef } from "./blocks";
@@ -206,7 +206,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   selected: T({ empty: "text" }),
   button: T({ action: "text", label: "text", icon: "text", request: "text", row: "text", prop: "text", value: "text", values: "text", state: "text", href: "url", confirm: "text", /** item / item-bad: a line of a menu (item-bad: red — deleting). */ variant: { oneOf: ["primary", "plain", "quiet", "danger", "link", "send", "inline", "item", "item-bad", "chip"] }, /** variant=chip: its colour (a week booked: good, one with hours missing: bad) */ tone: { oneOf: ["plain", "good", "warn", "bad"] }, /** A second, smaller line under the label (an option and what it means). */ sub: "text", print: { oneOf: ["true", "false"] }, tip: "text", disabled: { oneOf: ["true", "false"] }, wide: { oneOf: ["true", "false"] }, /** md: a plain, primary or danger button at the size of a page's controls (else small) */ size: { oneOf: ["sm", "md"] }, keys: "text", emit: "text", run: "text", do: "text", fill: "text", undo: "text", with: "text", into: "text", done: "text", then: "text", transition: "text", note: { oneOf: ["true", "false"] }, score: "text", correct: "text", total: "text", feedback: "text", finished: { oneOf: ["true", "false"] }, chat: "text", key: "text", text: "text", title: "text" }, true),
   // A flow's output loaded into data.<name> — again whenever what it is called with changes (flows/).
-  data: T({ name: "text", flow: "text", lambda: "text", compute: "text", do: "text", with: "text", when: "text", /** In ms (up to 3000). */ debounce: "num", /** In s. */ every: "num", reload: { oneOf: ["true", "false"] } }, true),
+  data: T({ name: "text", flow: "text", lambda: "text", compute: "text", do: "text", with: "text", when: "text", /** In ms (up to 3000). */ debounce: "num", /** In s. */ every: "num", /** Inputs (a typed search) whose change keeps the answer on screen while the new one loads. */ hold: "text", /** Other values of an input to load ahead, quietly: "scope=done|worker". */ preload: "text", reload: { oneOf: ["true", "false"] } }, true),
   // A row's lifecycle: its transitions as buttons (only those it can take now enabled) and its way so far.
   transitions: T({ history: { oneOf: ["true", "false"] } }, true),
   search: T({ bind: "text", placeholder: "text" }, true),
@@ -267,6 +267,8 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   pill: T({ label: "text", tone: { oneOf: ["run", "plain", "muted", "off", "done", "bad", "warn"] }, dot: { oneOf: ["pulse", "still", "space", "none"] }, mono: { oneOf: ["true", "false"] }, bold: { oneOf: ["true", "false"] }, tag: "text", caret: { oneOf: ["true", "false"] }, shape: { oneOf: ["round", "tag", "bare"] }, width: "int", look: { oneOf: ["due", "filter", "ghost", "shortcut", "primary", "retry", "hide", "area", "run", "open"] }, glyph: "text", on: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
   /** A small turning circle: something is under way. */
   spinner: T({}, true),
+  /** The kit's loader, a block's size (what a part shows while its data loads — {{#if data.x_loading}}<loading/>{{/if}}); label= its word. */
+  loading: T({ label: "text" }, true),
   // A list of things to do and the screen around it (ui/view-blocks-list.tsx). <sidebarframe store="key"><sidebar>…</sidebar>content</sidebarframe>: a page with a
   // sidebar on the left that folds away (kept in this browser under store). <card>: a framed card (gap=2 tighter; flush=phone: no frame on a phone).
   // <segmented bind options='[["open","Yours","3"],…]'>: a segmented switch with counts. <checklist spacing=loose>: the list; <checkrow id label checked tone look=suggest>:
@@ -1888,14 +1890,57 @@ function drawList(list: TNode[], outer: Ctx): VNode[] {
       const v = applyFilters(head(n.expr, ctx, n.line), n.filters, ctx, n.line);
       res.push(...out(v));
     } else if (n.k === "if") {
+      // ({{#if data.x.rows}}…{{#else}}empty{{/if}} while data.x loads for new inputs: neither "there are some" nor "there are none" —
+      // the kit's loader in their place.)
+      if (n.else.length && loadingData(n.cond, ctx)) {
+        res.push(LOADER);
+        continue;
+      }
       const cond = splitPipes(n.cond).length > 1 ? pipe(n.cond, ctx, n.line) : evaluate(n.cond, ctx, n.line);
       res.push(...drawList(truthy(cond) ? n.then : n.else, ctx));
     } else if (n.k === "each") {
+      if (loadingData(n.expr, ctx)) {
+        res.push(LOADER);
+        continue;
+      }
       const src = pipe(n.expr, ctx, n.line);
-      for (const it of itemsOf(src)) res.push(...drawList(n.body, withItem(ctx, it)));
+      for (const it of itemsOf(src)) res.push(...keyedBy(it, n.line, drawList(n.body, withItem(ctx, it))));
     } else res.push(...drawTag(n, ctx));
   }
   return res;
+}
+
+/** The kit's loader (a LoadingScreen of a block's size), drawn where an answer for the current inputs is still on its way. */
+const LOADER: VNode = { t: "loading", a: { auto: "true" }, c: [] };
+
+/**
+ * Whether this condition / list reads a <data> that has no answer for its current inputs yet (data.<name>_loading — view-flows.tsx).
+ * One that also reads data.<name>_last, _loading, _status or _error decides by itself what to show meanwhile: not taken over.
+ */
+function loadingData(expr: string, ctx: Ctx): boolean {
+  const data = ctx.data.data;
+  if (!data) return false;
+  const names = [...expr.matchAll(/\bdata\.([\p{L}_][\p{L}\p{N}_]*)/gu)].map((m) => m[1]);
+  let loading = false;
+  for (const name of names) {
+    if (data[`${ctx.prefix}${name}_loading`] !== true) continue;
+    if (names.some((o) => o !== name && o.startsWith(`${name}_`))) return false;
+    loading = true;
+  }
+  return loading;
+}
+
+/**
+ * What an {{#each}} drew for one item, keyed by the item's id where it has one (_k): drawn again with a newer answer, a row keeps its
+ * place in the page (its state, its focus, no flash) when others are added before it or go — not the place of whatever is n-th now.
+ * (Kept beside the node — card-template.ts keyNode —, not in its attributes: what is drawn stays the same.)
+ */
+function keyedBy(item: unknown, line: number, nodes: VNode[]): VNode[] {
+  const id = item && typeof item === "object" ? (item as Record<string, unknown>).id : undefined;
+  if (typeof id !== "string" && typeof id !== "number") return nodes;
+  let j = 0;
+  for (const n of nodes) if (typeof n !== "string" && nodeKey(n) === undefined) keyNode(n, `${line}:${id}:${j++}`);
+  return nodes;
 }
 
 const parsedCache = new Map<string, ReturnType<typeof parseTemplate>>();
@@ -2003,7 +2048,7 @@ export function viewReference(parts: PartMeta[] = [], actions: ActionMeta[] = []
     `BUTTONS: <button action=… label=\"…\" row=\"{{ id }}\" (the row it acts on, outside a row) variant=primary|plain|quiet|danger|link confirm=\"…\" print=true (also on paper) disabled=\"{{ … }}\" wide=true keys=\"N\" (its key, shown in the tooltip)/> — actions: ${Object.entries(ACTIONS)
       .map(([k, v]) => `${k} (${v.what}${v.row ? "; in a row" : ""})`)
       .join(", ")}${actions.length ? `, ${actions.map((x) => `${x.name} (${x.description})`).join(", ")}` : ""}.`,
-    'FLOWS (what the app does on the server — a web request, a lookup, the AI, rows written; built in the Studio or with workspace_save_flow): <button run="flow.name" with="q={{ state.q }}, n=5" into="result" done="Saved." then="state=value" label="…"/> runs a flow (in a row: the row is its `row`), its output in data.result; <data name="films" flow="movie.search" with="query={{ state.q }}" when="{{ state.q }}" debounce=400/> loads a flow\'s output into data.films, again whenever with= changes (when=: only while it is filled) — data.films_status is loading|stale|ok|error (stale: the last answer, kept in the browser, shown while it loads again), data.films_error the error. Show it: {{#each data.films.hits}}…{{/each}}, <datatable source="data.films.hits">. LAMBDAS: <data name="agenda" lambda="agenda.data" with="db={{ db.id }}"/> loads the answer of a lambda the same way (a function lambda of a plugin or of the Studio; it only reads), into data.agenda. OTHER DATABASES (an app of several — contacts and their deals, recipes and their ingredients): <data name="deals" do="db.query" with="database=Deals, where.Stage=Open, sort=-Amount, limit=50"/> reads another database\'s rows into data.deals.rows (each { id, title, <field>: value }; data.deals.count), do="db.get" with="row={{ id }}" one row, do="db.schema" its fields; buttons write there as you: <button do="db.insert" with="database=Deals, title={{ state.name }}, values.Stage=Open, values.Amount={{ state.amount }}" done="Added." then="name="/>, do="db.update" with="row={{ id }}, values.Stage=Won", do="db.archive" with="row={{ id }}" — what <data> reads is read again after it. A dotted name is a key of an object (values.Stage=Open, where.Owner=me); a value of JSON is taken as it is (rows=[3,4]). MANY AT ONCE: <check bind="picked"/> in a list\'s item ticks it (its id into state.picked, a JSON list), <check bind="picked" all="rows | …" label="All"/> all of them; then <button do="rows.update" with="rows={{ state.picked }}, values.Status=Done" then="picked=" label="Done ({{ state.picked | fromjson | len }})" disabled="{{ not state.picked }}"/> or do="rows.archive" with="rows={{ state.picked }}" confirm="…". TIME: <tick every=1/> draws the view again every second (1–3600): now.time (HH:MM:SS), now.datetime, now.ms go on — {{ Started | since | clock }} (a stopwatch: 1:02:03), {{ Due | until | duration }} (2 h 5 min), duration(\'min\') for minutes. LIFECYCLE (a database whose status follows transitions): <button transition="Approve" label="…" note=true/> in a row moves it on (its guard and required fields checked on the server), <transitions history=true/> in <selected>: the row\'s transitions as buttons and its way so far.',
+    'FLOWS (what the app does on the server — a web request, a lookup, the AI, rows written; built in the Studio or with workspace_save_flow): <button run="flow.name" with="q={{ state.q }}, n=5" into="result" done="Saved." then="state=value" label="…"/> runs a flow (in a row: the row is its `row`), its output in data.result; <data name="films" flow="movie.search" with="query={{ state.q }}" when="{{ state.q }}" debounce=400/> loads a flow\'s output into data.films, again whenever with= changes (when=: only while it is filled) — data.films_status is loading|stale|ok|error (stale: the last answer, kept in the browser, shown while it loads again), data.films_error the error. Its answers are kept per what it was asked with: asked again with inputs seen before (another tab and back) the kept answer shows at once and is refreshed behind. While there is none for the current inputs data.films is empty and data.films_loading true — an {{#if data.films…}}…{{#else}}…{{/if}} or {{#each data.films…}} shows a loader by itself (or write <loading/>); data.films_last is the last answer whatever it was asked with (for counts and headings that may show the one before meanwhile). hold=\"q\": when only these inputs change (a search typed) the answer on screen stays while the new one loads. preload=\"scope=done|worker\": the answers for the other values of an input (of a segmented control, of tabs) are loaded ahead quietly — the first switch shows at once. Show it: {{#each data.films.hits}}…{{/each}}, <datatable source="data.films.hits">. LAMBDAS: <data name="agenda" lambda="agenda.data" with="db={{ db.id }}"/> loads the answer of a lambda the same way (a function lambda of a plugin or of the Studio; it only reads), into data.agenda. OTHER DATABASES (an app of several — contacts and their deals, recipes and their ingredients): <data name="deals" do="db.query" with="database=Deals, where.Stage=Open, sort=-Amount, limit=50"/> reads another database\'s rows into data.deals.rows (each { id, title, <field>: value }; data.deals.count), do="db.get" with="row={{ id }}" one row, do="db.schema" its fields; buttons write there as you: <button do="db.insert" with="database=Deals, title={{ state.name }}, values.Stage=Open, values.Amount={{ state.amount }}" done="Added." then="name="/>, do="db.update" with="row={{ id }}, values.Stage=Won", do="db.archive" with="row={{ id }}" — what <data> reads is read again after it. A dotted name is a key of an object (values.Stage=Open, where.Owner=me); a value of JSON is taken as it is (rows=[3,4]). MANY AT ONCE: <check bind="picked"/> in a list\'s item ticks it (its id into state.picked, a JSON list), <check bind="picked" all="rows | …" label="All"/> all of them; then <button do="rows.update" with="rows={{ state.picked }}, values.Status=Done" then="picked=" label="Done ({{ state.picked | fromjson | len }})" disabled="{{ not state.picked }}"/> or do="rows.archive" with="rows={{ state.picked }}" confirm="…". TIME: <tick every=1/> draws the view again every second (1–3600): now.time (HH:MM:SS), now.datetime, now.ms go on — {{ Started | since | clock }} (a stopwatch: 1:02:03), {{ Due | until | duration }} (2 h 5 min), duration(\'min\') for minutes. LIFECYCLE (a database whose status follows transitions): <button transition="Approve" label="…" note=true/> in a row moves it on (its guard and required fields checked on the server), <transitions history=true/> in <selected>: the row\'s transitions as buttons and its way so far.',
     "FILTERS for collections: where(\"Field\", \"value\") or where(\"Field\", \">\", 5) (=, !=, >, <, >=, <=, contains, empty, filled), only(\"Field\", state.s) (where, or all while nothing is picked), sort(\"Field\", \"desc\"), limit(5), search(state.q), count, sum(\"Field\"), avg(\"Field\"), min(\"Field\"), max(\"Field\"), pluck(\"Field\").",
     "FILTERS for values: host (an address's site), euro (euro(0): whole euros), number(2), percent, hours, date, relative, chip, upper, lower, truncate(40), clamp(3), default(\"—\"), join(\", \"), first, last, count, check, bold, muted, small, code, link, img(80), bar(max), initials; time: since and until (seconds from a date or a date with a time to now), clock (seconds as 1:02:03), duration (seconds as 2 h 5 min; duration('min') of minutes), month (2026-11), week (2026-W46).",
     "NAV: <nav title=\"…\"><entry label=\"…\" icon=\"📥\" state=\"scope\" value=\"inbox\" n=\"{{ … }}\" group=\"…\"/>…</nav> — the view's sidebar (beside the view, or — its setting — in the Workspace tree under the database); an entry sets the view's state, opens a row (row=\"{{ id }}\" — in {{#each}} the row by itself) or goes to an address (href). E.g. the newest five: {{#each rows | sort('Date', 'desc') | limit(5)}}<entry label=\"{{ title }}\" group=\"Newest\"/>{{/each}}.",

@@ -1,7 +1,7 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
-import { safeUrl, type VNode } from "../card-template";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
+import { nodeKey, safeUrl, type VNode } from "../card-template";
 import { Tag } from "./cells";
 
 /**
@@ -33,7 +33,9 @@ export function Level({ nodes, ext }: { nodes: VNode[]; ext?: DrawExt }) {
     if (isInline(n)) run.push(n);
     else {
       flush(`r${i}`);
-      out.push(draw(n, i, ext));
+      // (An item of a list with an id: keyed by it — a newer answer adds and removes rows around it, it keeps its place and state.)
+      const k = nodeKey(n);
+      out.push(k === undefined ? draw(n, i, ext) : <Fragment key={`k:${k}`}>{draw(n, 0, ext)}</Fragment>);
     }
   });
   flush("end");

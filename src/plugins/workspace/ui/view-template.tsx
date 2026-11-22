@@ -810,6 +810,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
             {kids(n.c)}
           </div>
         );
+      case "loading":
+        // (The kit's loader: a part whose <data> loads for new inputs — drawn by itself in {{#if data.x…}}{{#else}} and {{#each data.x…}}, or <loading/>.)
+        return <LoadingScreen key={key} label={a.label || t("Loading")} size="block" />;
       case "on":
       case "theme":
       case "tick":
