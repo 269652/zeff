@@ -216,6 +216,13 @@ function Glyph({ name }: { name: string }) {
       return <CheckIcon className={s} />;
     case "close-sm":
       return <CloseIcon className={s} />;
+    case "reopen":
+      return (
+        <svg viewBox="0 0 20 20" className={s} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 10a6 6 0 1 0 1.8-4.3" />
+          <path d="M4 3.5V7h3.5" />
+        </svg>
+      );
     default:
       return <>{name}</>;
   }
@@ -490,6 +497,8 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
         : `icon-btn ${a.glyph === "x" ? "text-base" : ""} ${on ? (a.tone === "bad" ? "text-red-600 opacity-100 dark:text-red-400" : "text-indigo-600 opacity-100 dark:text-indigo-400") : a.reveal === "true" ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""}`;
       // grace="3.5": the click counts after that many seconds — meanwhile its row is struck through and the button reads undo= (taken back: nothing happened)
       if (a.grace) return <GraceButton key={key} a={a} cls={cls} run={() => env.run(a)} />;
+      // (one that runs something: a small spinner in its place while it does — the click was taken)
+      if (a.run || a.do) return <BusyIconButton key={key} a={a} cls={cls} run={() => env.run(a)} />;
       return (
         <button key={key} type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} aria-pressed={a.pressed ? a.pressed === "true" : undefined} aria-expanded={a.expanded ? a.expanded === "true" : undefined} disabled={a.disabled === "true"} onClick={go}>
           <Glyph name={a.glyph ?? ""} />
@@ -560,6 +569,15 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
             {glyph}
             {kids(n.c)}
           </a>
+        );
+      // hover="…": while its row is hovered it reads that instead and is the button (a "Dismissed" label that turns into "Reopen")
+      if (acts(a) && a.hover)
+        return (
+          <button key={key} type="button" className={`${cls} hover:bg-indigo-50 hover:text-indigo-700 group-hover:text-indigo-700 dark:hover:bg-indigo-950/50 dark:group-hover:text-indigo-300`} title={a.tip || undefined} aria-label={a.hover} onClick={go}>
+            {glyph}
+            <span className="group-hover:hidden group-has-[:focus-visible]:hidden">{kids(n.c)}</span>
+            <span className="hidden group-hover:inline group-has-[:focus-visible]:inline">{a.hover}</span>
+          </button>
         );
       if (acts(a))
         return (
@@ -676,13 +694,34 @@ function GraceButton({ a, cls, run }: { a: Record<string, string>; cls: string; 
   };
   if (waiting)
     return (
-      <button ref={btn} type="button" onClick={click} className="ws-undo inline-flex shrink-0 items-center rounded-full border border-zinc-300 bg-white px-2.5 py-0.5 text-xs font-medium text-indigo-700 no-underline opacity-100 shadow-sm hover:bg-indigo-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-zinc-800">
+      <button ref={btn} type="button" onClick={click} className="ws-undo inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-indigo-700 no-underline opacity-100 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-zinc-800">
         {a.undo || "Undo"}
       </button>
     );
   return (
     <button ref={btn} type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} disabled={a.disabled === "true"} onClick={click}>
       <Glyph name={a.glyph ?? ""} />
+    </button>
+  );
+}
+
+/** An icon button that runs a flow: while it runs, a small spinner in its place (the click was taken — a slow first run shows it). */
+function BusyIconButton({ a, cls, run }: { a: Record<string, string>; cls: string; run: () => void | Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const click = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      await run();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} aria-pressed={a.pressed ? a.pressed === "true" : undefined} aria-busy={busy || undefined} disabled={a.disabled === "true"} onClick={click}>
+      {busy ? <span className="zeff-spinner zeff-spinner-sweep inline-block size-3 text-indigo-500 dark:text-indigo-400 rounded-full border-2 border-zinc-300 border-t-indigo-500 dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden /> : <Glyph name={a.glyph ?? ""} />}
+      {!busy && a.dot === "true" && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-amber-500" aria-hidden />}
     </button>
   );
 }
