@@ -46,9 +46,9 @@ ${runbar}
 {{/if}}
 </sidebar>
 {{#if state.part == 'todos'}}
-{{#if state.scope != 'activity' and not data.x_last}}<line look=empty>Loading …</line>{{#else}}
+{{#if state.scope != 'activity' and not data.x and not data.x_last}}<line look=empty>Loading …</line>{{#else}}
 <card flush=phone>
-<segmented bind="scope" label="Todos" options='[["open","Your todos","{{ data.x_last.counts.open }}"],["done","Done","{{ data.x_last.counts.done }}"],["worker","Worker","{{ data.x_last.counts.worker }}"],["activity","Activity"]]'/>
+<segmented bind="scope" label="Todos" options='[["open","Your todos","{{ data.x ? data.x.counts.open : data.x_last.counts.open }}"],["done","Done","{{ data.x ? data.x.counts.done : data.x_last.counts.done }}"],["worker","Worker","{{ data.x ? data.x.counts.worker : data.x_last.counts.worker }}"],["activity","Activity"]]'/>
 {{#if state.scope == 'activity'}}
 ${activity}
 {{#else}}
