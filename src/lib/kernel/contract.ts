@@ -50,6 +50,8 @@ export const KERNEL_CONTRACT = {
     "questions.views": { form: "owner", owner: "questions" },
     // The places of the time report other plugins fill (cards, marks, approvals, a jobs column, closing steps) — as data: plugins/zeiterfassung/time-slots.ts.
     "zeiterfassung.slots": { form: "owner", owner: "zeiterfassung" },
+    // A reference's hover card by its kind (<ref kind id>, refs.card): the kernel's reads of what Zeff keeps (tickets, people, todos, pages, MRs); a plugin draws its own with <hover><hovercard>.
+    "refs.cards": { form: "covered", by: "view:hover" },
     "review.links": { form: "stored", manifest: "reviewLinks" },
     "review.sources": { form: "stored", manifest: "reviewSources" },
     "shell.tabMenus": { form: "stored", manifest: "tabMenus" },
