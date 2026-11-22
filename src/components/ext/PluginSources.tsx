@@ -101,10 +101,11 @@ export function PluginSources() {
                   {s.sha ? ` @ ${s.sha.slice(0, 7)}` : ""}
                   {s.source.hasToken ? ` · 🔑 ${t("with a token")}` : ""}
                   {s.source.fromManifest ? ` · ${t("named by a plugin")}` : ""}
+                  {s.source.builtIn ? ` · ${t("Zeff's own")}` : ""}
                 </span>
                 <span className="flex-1" />
                 <span className="text-xs text-zinc-400">{t("checked {when}", { when: new Date(s.checkedAt).toLocaleTimeString() })}</span>
-                {!s.source.fromManifest && (
+                {!s.source.fromManifest && !s.source.builtIn && (
                   <button type="button" className="rounded px-1.5 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" onClick={() => confirmAction(t("Remove this source? Plugins installed from it stay.")) && void run(`rm-${s.source.id}`, () => removeSourceAction(s.source.id))}>
                     ✕ {t("Remove")}
                   </button>

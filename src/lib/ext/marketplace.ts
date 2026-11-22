@@ -57,6 +57,8 @@ export async function viewOf(states: SourceState[], checked: boolean): Promise<M
   const items: MarketItem[] = [];
   for (const st of states)
     for (const p of st.plugins) {
+      // (a state kept from before the catalog — a listing it doesn't have yet: left out until the next check)
+      if (!p.listing) continue;
       const inst = here.get(p.id);
       items.push({
         key: `${st.source.id}:${p.id}`,

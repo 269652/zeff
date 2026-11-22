@@ -208,6 +208,7 @@ export async function marketplaceAction(mode: "cached" | "check" | "fresh" = "ca
     if (m === "fresh") await (await import("./packages-sync")).checkForUpdates().catch(() => {});
     return { ok: true, view, permissions: (await import("./permission-texts")).permissionTexts() };
   } catch (e) {
+    console.error("[marketplace] the listing failed", e);
     return { ok: false, error: errorMessage(e) };
   }
 }

@@ -38,7 +38,7 @@ const CACHE_MS = 10 * 60_000;
 
 export type Source = { id: string; url: string; branch?: string; token?: string; addedAt: string };
 /** What the user sees of a source (never its token). */
-export type SourceView = { id: string; url: string; branch?: string; hasToken: boolean; fromManifest?: boolean; fromPackages?: string; git?: boolean };
+export type SourceView = { id: string; url: string; branch?: string; hasToken: boolean; fromManifest?: boolean; fromPackages?: string; git?: boolean; /** Zeff's own repository: always there, not removed. */ builtIn?: boolean };
 export type Origin = { url: string; path: string; branch: string; sha: string; version: string; at: string; files: string[]; /** Installed from a signed release: the key (lib/kernel/release.ts) — its updates must be signed too. */ signed?: string };
 export type Remote = {
   id: string;
@@ -64,11 +64,12 @@ export type SourceState = { source: SourceView; branch: string; sha: string; plu
 // ---------------------------------------------------------------------------
 
 type Fetcher = (url: string, init?: { headers?: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; arrayBuffer: () => Promise<ArrayBuffer> }>;
-const g = globalThis as { __zeffSourceFetch?: Fetcher; __zeffSourceCache?: Map<string, { at: number; state: SourceState }> };
+const g = globalThis as { __zeffSourceFetch?: Fetcher; __zeffSourceCache2?: Map<string, { at: number; state: SourceState }> };
 const fetcher = (): Fetcher => g.__zeffSourceFetch ?? ((url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(30_000) }) as never);
 /** (Tests: a stand-in for the network.) */
 export const setSourceFetcher = (f: Fetcher | undefined) => ((g.__zeffSourceFetch = f), cache().clear());
-const cache = () => (g.__zeffSourceCache ??= new Map());
+// (2: the states carry their catalog listing — the ones kept by an older version of this file in a running server are not read)
+const cache = () => (g.__zeffSourceCache2 ??= new Map());
 
 export function parseGithub(url: string): { owner: string; repo: string } | null {
   const m = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(String(url).trim());
@@ -192,8 +193,24 @@ export function listSources(): Source[] {
     seen.add(norm(r.url));
     out.push({ id: `m:${p.id}`, url: r.url, ...(r.branch ? { branch: r.branch } : {}), addedAt: "" });
   }
+  // Zeff's own plugins repository is always a source (ZEFF_DEFAULT_PLUGIN_SOURCE: another address, or "off"); not while tests stand in for GitHub.
+  const def = defaultSource();
+  if (def && !g.__zeffSourceFetch && !seen.has(norm(def))) {
+    const token = getPref<Record<string, string>>(`${SOURCES}.tokens`, {})[norm(def)];
+    out.push({ id: "d:zeff-plugins", url: def, branch: "main", ...(token ? { token } : {}), addedAt: "" });
+  }
   return out;
 }
+
+/** Zeff's own plugins repository on GitHub — the source every Zeff has. */
+export const DEFAULT_PLUGIN_SOURCE = "https://github.com/269652/zeff-plugins";
+const defaultSource = (): string | null => {
+  const v = process.env.ZEFF_DEFAULT_PLUGIN_SOURCE?.trim();
+  if (v === "off" || v === "none") return null;
+  // (not in the test runner: tests have their own sources and never reach GitHub)
+  if (!v && process.env.NODE_TEST_CONTEXT) return null;
+  return v || DEFAULT_PLUGIN_SOURCE;
+};
 
 export const viewOf = (s: Source): SourceView => ({
   id: s.id,
@@ -202,6 +219,7 @@ export const viewOf = (s: Source): SourceView => ({
   hasToken: !!s.token,
   ...(s.id.startsWith("m:") ? { fromManifest: true } : {}),
   ...(s.id.startsWith("p:") ? { fromPackages: s.id.slice(2) } : {}),
+  ...(s.id.startsWith("d:") ? { builtIn: true } : {}),
   ...(git.isGitUrl(s.url) ? { git: true } : {}),
 });
 
