@@ -13,7 +13,7 @@ const INLINE = new Set(["b", "i", "small", "muted", "code", "chip", "badge", "a"
 const isInline = (n: VNode) => typeof n === "string" || INLINE.has(n.t);
 
 /** More tags drawn by whoever uses these nodes (a view's: buttons, lists, parts …) — undefined: not one of them. */
-export type DrawExt = (n: Extract<VNode, object>, key: number, kids: (nodes: VNode[]) => ReactNode) => ReactNode | undefined;
+export type DrawExt = (n: Extract<VNode, object>, key: number | string, kids: (nodes: VNode[]) => ReactNode) => ReactNode | undefined;
 
 /** The nodes of one level: runs of inline things (text, chips, bold …) share a wrapping line, blocks (row, col, bar …) stand alone. */
 export function Level({ nodes, ext }: { nodes: VNode[]; ext?: DrawExt }) {
@@ -23,7 +23,7 @@ export function Level({ nodes, ext }: { nodes: VNode[]; ext?: DrawExt }) {
     if (run.some((n) => typeof n !== "string" || n.trim())) {
       out.push(
         <div key={key} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          {run.map((n, i) => draw(n, i, ext))}
+          {run.map((n, i) => draw(n, typeof n !== "string" && n.a.__key ? n.a.__key : i, ext))}
         </div>,
       );
     }
@@ -33,7 +33,7 @@ export function Level({ nodes, ext }: { nodes: VNode[]; ext?: DrawExt }) {
     if (isInline(n)) run.push(n);
     else {
       flush(`r${i}`);
-      out.push(draw(n, i, ext));
+      out.push(draw(n, typeof n !== "string" && n.a.__key ? n.a.__key : i, ext));
     }
   });
   flush("end");
@@ -47,7 +47,7 @@ const textOf = (c: VNode[]): string => c.map((n) => (typeof n === "string" ? n :
  * A node drawn — and phone="hide" (not on a phone) or phone="only" (only there) on any element: in a box that takes no room
  * of its own (display: contents), hidden by the screen's width.
  */
-export function draw(n: VNode, key: number, ext?: DrawExt): ReactNode {
+export function draw(n: VNode, key: number | string, ext?: DrawExt): ReactNode {
   if (typeof n === "string" || (n.a.phone !== "hide" && n.a.phone !== "only")) return drawNode(n, key, ext);
   return (
     <div key={key} className={`contents ${n.a.phone === "hide" ? "max-sm:hidden" : "sm:hidden"}`}>
@@ -56,13 +56,13 @@ export function draw(n: VNode, key: number, ext?: DrawExt): ReactNode {
   );
 }
 
-function drawNode(n: VNode, key: number, ext?: DrawExt): ReactNode {
+function drawNode(n: VNode, key: number | string, ext?: DrawExt): ReactNode {
   if (typeof n === "string") return n;
   if (ext) {
     const own = ext(n, key, (nodes) => <Level nodes={nodes} ext={ext} />);
     if (own !== undefined) return own;
   }
-  const kids = n.c.map((c, i) => draw(c, i, ext));
+  const kids = n.c.map((c, i) => draw(c, typeof c !== "string" && c.a.__key ? c.a.__key : i, ext));
   switch (n.t) {
     case "row":
       return (

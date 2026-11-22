@@ -1892,7 +1892,14 @@ function drawList(list: TNode[], outer: Ctx): VNode[] {
       res.push(...drawList(truthy(cond) ? n.then : n.else, ctx));
     } else if (n.k === "each") {
       const src = pipe(n.expr, ctx, n.line);
-      for (const it of itemsOf(src)) res.push(...drawList(n.body, withItem(ctx, it)));
+      for (const it of itemsOf(src)) {
+        const out = drawList(n.body, withItem(ctx, it));
+        // (an item with an id keeps its identity in the list: what is drawn for it is keyed by it, not by its place — a row removed
+        // above doesn't hand its state — a waiting undo, a tick — to the one moving up)
+        const id = it && typeof it === "object" ? (it as { id?: unknown }).id : undefined;
+        if (id !== undefined && id !== null && id !== "") out.forEach((v, j) => typeof v !== "string" && (v.a = { ...v.a, __key: `i${String(id)}.${j}` }));
+        res.push(...out);
+      }
     } else res.push(...drawTag(n, ctx));
   }
   return res;
