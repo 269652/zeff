@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { VNode } from "../view-template";
+import { siblingKeys } from "./card-template";
 import type { BlockEnv } from "./view-blocks";
 import { SidebarFrame } from "@/components/SidebarFrame";
 import { CopyButton } from "@/components/CopyButton";
@@ -362,7 +363,11 @@ function SearchField({ a, n, kids, env }: { a: Record<string, string>; n: Node; 
 export function listBlock(n: Node, key: string | number, kids0: Kids, env: BlockEnv): ReactNode | undefined {
   const a = n.a;
   // (What is inside these pieces flows as text: words and the pieces themselves side by side, not one line each.)
-  const kids: Kids = (nodes) => nodes.map((c, i) => (typeof c === "string" ? c : <Fragment key={i}>{kids0([c])}</Fragment>));
+  // (Keyed as a level keys them — siblingKeys: a callout shown above the list doesn't make it drawn anew.)
+  const kids: Kids = (nodes) => {
+    const keys = siblingKeys(nodes);
+    return nodes.map((c, i) => (typeof c === "string" ? c : <Fragment key={keys[i]}>{kids0([c])}</Fragment>));
+  };
   const go = (e?: React.SyntheticEvent) => (e?.stopPropagation(), env.run(a));
   switch (n.t) {
     case "sidebarframe": {

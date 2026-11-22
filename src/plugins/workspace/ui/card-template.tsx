@@ -15,14 +15,35 @@ const isInline = (n: VNode) => typeof n === "string" || INLINE.has(n.t);
 /** More tags drawn by whoever uses these nodes (a view's: buttons, lists, parts …) — undefined: not one of them. */
 export type DrawExt = (n: Extract<VNode, object>, key: number, kids: (nodes: VNode[]) => ReactNode) => ReactNode | undefined;
 
+/**
+ * The keys of a level's nodes for React: an item of a list with an id by it (view-template.ts keyNode); any other block by its tag,
+ * its look= / tone= and how many of those came before it here — not by its place: a block shown above it by an {{#if}} (a message,
+ * a callout, an error line) doesn't make React take the list below for another one and draw it anew. Runs of inline pieces: "~run".
+ */
+export function siblingKeys(nodes: VNode[]): string[] {
+  const seen = new Map<string, number>();
+  const nth = (t: string) => {
+    const k = seen.get(t) ?? 0;
+    seen.set(t, k + 1);
+    return `${t}#${k}`;
+  };
+  return nodes.map((n) => {
+    if (typeof n === "string") return nth("~text");
+    const k = nodeKey(n);
+    return k !== undefined ? `k:${k}` : nth(`${n.t}.${n.a.look ?? n.a.tone ?? ""}`);
+  });
+}
+
 /** The nodes of one level: runs of inline things (text, chips, bold …) share a wrapping line, blocks (row, col, bar …) stand alone. */
 export function Level({ nodes, ext }: { nodes: VNode[]; ext?: DrawExt }) {
   const out: ReactNode[] = [];
+  const keys = siblingKeys(nodes);
   let run: VNode[] = [];
-  const flush = (key: string) => {
+  let runs = 0;
+  const flush = () => {
     if (run.some((n) => typeof n !== "string" || n.trim())) {
       out.push(
-        <div key={key} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <div key={`~run#${runs++}`} className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           {run.map((n, i) => draw(n, i, ext))}
         </div>,
       );
@@ -32,13 +53,12 @@ export function Level({ nodes, ext }: { nodes: VNode[]; ext?: DrawExt }) {
   nodes.forEach((n, i) => {
     if (isInline(n)) run.push(n);
     else {
-      flush(`r${i}`);
-      // (An item of a list with an id: keyed by it — a newer answer adds and removes rows around it, it keeps its place and state.)
-      const k = nodeKey(n);
-      out.push(k === undefined ? draw(n, i, ext) : <Fragment key={`k:${k}`}>{draw(n, 0, ext)}</Fragment>);
+      flush();
+      // (Inside its keyed box the node is the only one: key 0, not its place — that would change with what comes before.)
+      out.push(<Fragment key={keys[i]}>{drawPhone(n, 0, ext)}</Fragment>);
     }
   });
-  flush("end");
+  flush();
   return <>{out}</>;
 }
 
@@ -50,6 +70,12 @@ const textOf = (c: VNode[]): string => c.map((n) => (typeof n === "string" ? n :
  * of its own (display: contents), hidden by the screen's width.
  */
 export function draw(n: VNode, key: number, ext?: DrawExt): ReactNode {
+  // (An item of a list with an id: keyed by it — a newer answer adds and removes rows around it, it keeps its place and its state.)
+  const k = nodeKey(n);
+  if (k !== undefined) return <Fragment key={`k:${k}`}>{drawPhone(n, 0, ext)}</Fragment>;
+  return drawPhone(n, key, ext);
+}
+function drawPhone(n: VNode, key: number, ext?: DrawExt): ReactNode {
   if (typeof n === "string" || (n.a.phone !== "hide" && n.a.phone !== "only")) return drawNode(n, key, ext);
   return (
     <div key={key} className={`contents ${n.a.phone === "hide" ? "max-sm:hidden" : "sm:hidden"}`}>

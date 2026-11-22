@@ -1904,7 +1904,8 @@ function drawList(list: TNode[], outer: Ctx): VNode[] {
         continue;
       }
       const src = pipe(n.expr, ctx, n.line);
-      for (const it of itemsOf(src)) res.push(...keyedBy(it, n.line, drawList(n.body, withItem(ctx, it))));
+      const seen = new Set<string>();
+      for (const it of itemsOf(src)) res.push(...keyedBy(it, n.line, seen, drawList(n.body, withItem(ctx, it))));
     } else res.push(...drawTag(n, ctx));
   }
   return res;
@@ -1935,11 +1936,14 @@ function loadingData(expr: string, ctx: Ctx): boolean {
  * place in the page (its state, its focus, no flash) when others are added before it or go — not the place of whatever is n-th now.
  * (Kept beside the node — card-template.ts keyNode —, not in its attributes: what is drawn stays the same.)
  */
-function keyedBy(item: unknown, line: number, nodes: VNode[]): VNode[] {
-  const id = item && typeof item === "object" ? (item as Record<string, unknown>).id : undefined;
-  if (typeof id !== "string" && typeof id !== "number") return nodes;
+function keyedBy(item: unknown, line: number, seen: Set<string>, nodes: VNode[]): VNode[] {
+  // (Its id; else its key, name or label — a group of a list has those —, once in this list: a second of the same is not keyed.)
+  const o = item && typeof item === "object" ? (item as Record<string, unknown>) : undefined;
+  const raw = o ? [o.id, o.key, o.name, o.label, o.group].find((v) => typeof v === "string" || typeof v === "number") : undefined;
+  if (raw === undefined || seen.has(String(raw))) return nodes;
+  seen.add(String(raw));
   let j = 0;
-  for (const n of nodes) if (typeof n !== "string" && nodeKey(n) === undefined) keyNode(n, `${line}:${id}:${j++}`);
+  for (const n of nodes) if (typeof n !== "string" && nodeKey(n) === undefined) keyNode(n, `${line}:${raw}:${j++}`);
   return nodes;
 }
 
