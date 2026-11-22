@@ -80,7 +80,7 @@ export function RefCardView({ card, loading }: { card: RefCard | null | undefine
             <div className="min-w-0 flex-1">
               {(card.eyebrow || !!card.badges?.length) && (
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate font-mono text-[11px] text-zinc-500">{card.eyebrow}</span>
+                  <span className={`truncate text-[11px] text-zinc-500 ${card.kind === "person" || card.kind === "page" ? "" : "font-mono"}`}>{card.eyebrow}</span>
                   <span className="flex shrink-0 flex-wrap justify-end gap-1">
                     {card.badges?.map((b, i) => (
                       <span key={i} className={`rounded-full px-1.5 py-px text-[11px] font-medium ${BADGE[b.tone ?? "plain"]}`}>
