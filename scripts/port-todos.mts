@@ -105,7 +105,7 @@ write(
     {
       format: 1,
       id: "todos-ext",
-      version: "1.7.6",
+      version: "1.7.8",
       name: "Todos",
       description: "Your todos on a screen made of Zeff's own kit: grouped by urgency, with the ones you wait on, done and the workers' — tick, flag, set aside, dismiss, a due day, add.",
       icon: "✅",
@@ -180,7 +180,7 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "todos-ext",
       name: "Todos (screens)",
-      version: old.version && old.version >= "0.4.6" ? old.version : "0.4.6",
+      version: old.version && old.version >= "0.4.8" ? old.version : "0.4.8",
       description: "The Todos screen in the Workspace, made of Zeff's own kit: your todos grouped by urgency, the ones you wait on, done, the workers'; tick, flag, set aside, dismiss, a due day, add. The todos themselves (the engine) stay Zeff's.",
       author: "Zeff",
       apiVersion: 1,
