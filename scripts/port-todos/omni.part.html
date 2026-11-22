@@ -1,6 +1,6 @@
 <line look=tools>
-<searchfield bind="omniq" placeholder="{{ data.x.chips ? 'and …' : 'Search todos, tickets, mails, comments, notes, people …' }}" label="Search the todos and everything they are made of" enter="omni-first" back="omni-back">
-{{#each data.x.chips}}<token label="{{ title }}" remove="Remove this filter" action="pick" state="chips" value="{{ pick }}"/>{{/each}}
+<searchfield bind="omniq" placeholder="{{ data.x_last.chips ? 'and …' : 'Search todos, tickets, mails, comments, notes, people …' }}" label="Search the todos and everything they are made of" enter="omni-first" back="omni-back">
+{{#each data.x_last.chips}}<token label="{{ title }}" remove="Remove this filter" action="pick" state="chips" value="{{ pick }}"/>{{/each}}
 <popover>
 {{#if data.hits.none}}<option empty=true label="{{ data.hits.none }}"/>{{/if}}
 {{#if not data.hits}}<option empty=true label="Searching …"/>{{/if}}
@@ -8,6 +8,6 @@
 </popover>
 </searchfield>
 <on event="omni-first" action="pick" state="chips" value="{{ data.hits.first }}"/><on event="omni-back" action="pop" state="chips"/>
-{{#if data.x.chips}}<ink tone="link quiet" action="state" state="chips" value="[]">Clear the filter</ink>{{/if}}
+{{#if data.x_last.chips}}<ink tone="link quiet" action="state" state="chips" value="[]">Clear the filter</ink>{{/if}}
 {{#if state.filter}}<ink tone="link quiet" action="state" state="filter" value="">Clear the filter</ink>{{/if}}
 </line>

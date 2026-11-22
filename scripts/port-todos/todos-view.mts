@@ -20,7 +20,7 @@ export function todosViewTemplate(): string {
   const tickets = part("tickets").replace("ROW", r);
   const recapSide = part("recap-side");
   return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value="" keep=true/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="quick" value=""/><state name="acts" value=""/><state name="replytext" value=""/><state name="askq" value="" keep=true/><state name="jql" value=""/><state name="aq" value=""/><state name="busy" value=""/><state name="instr" value="" keep=true/><state name="opedit" value=""/><state name="optext" value=""/><state name="noteedit" value=""/><state name="notetext" value=""/><state name="tf_name" value=""/><state name="tf_iban" value=""/><state name="tf_bic" value=""/><state name="tf_amount" value=""/><state name="tf_purpose" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value="" keep=true/><state name="mins" value=""/><state name="timenote" value=""/>
-<data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}, chips={{ state.chips }}" debounce="300" when="{{ state.part == 'todos' and state.scope != 'activity' }}"/>
+<data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}, chips={{ state.chips }}" debounce="300" hold="filter,chips" preload="scope=open|done|worker" when="{{ state.part == 'todos' and state.scope != 'activity' }}"/>
 <data name="hits" lambda="todos.hits" with="q={{ state.omniq }}" debounce="150" when="{{ state.omniq }}"/>
 <data name="feed" lambda="todos.feed" with="filter={{ state.feedfilter }}" when="{{ state.part == 'todos' and state.scope == 'activity' }}"/>
 <data name="seen" flow="todos-ext.seen" with="id={{ data.feed.max }}" when="{{ state.scope == 'activity' and data.feed.max }}"/>
@@ -46,9 +46,9 @@ ${runbar}
 {{/if}}
 </sidebar>
 {{#if state.part == 'todos'}}
-{{#if state.scope != 'activity' and not data.x}}<line look=empty>Loading …</line>{{#else}}
+{{#if state.scope != 'activity' and not data.x_last}}<line look=empty>Loading …</line>{{#else}}
 <card flush=phone>
-<segmented bind="scope" label="Todos" options='[["open","Your todos","{{ data.x.counts.open }}"],["done","Done","{{ data.x.counts.done }}"],["worker","Worker","{{ data.x.counts.worker }}"],["activity","Activity"]]'/>
+<segmented bind="scope" label="Todos" options='[["open","Your todos","{{ data.x_last.counts.open }}"],["done","Done","{{ data.x_last.counts.done }}"],["worker","Worker","{{ data.x_last.counts.worker }}"],["activity","Activity"]]'/>
 {{#if state.scope == 'activity'}}
 ${activity}
 {{#else}}
