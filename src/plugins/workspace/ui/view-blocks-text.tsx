@@ -20,7 +20,7 @@ export function textBlock(t: string, a: A, key: string | number, run?: (a: A) =>
     case "terminal":
       return <Terminal key={key} a={a} />;
     case "spinner":
-      return <span key={key} className="zeff-spinner inline-block size-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-indigo-500 align-[-2px] dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden />;
+      return <span key={key} className="zeff-spinner zeff-spinner-sweep inline-block size-3 shrink-0 text-indigo-500 dark:text-indigo-400 rounded-full border-2 border-zinc-300 border-t-indigo-500 align-[-2px] dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden />;
     default:
       return undefined;
   }

@@ -601,3 +601,42 @@ html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
   opacity: 1 !important;
   pointer-events: auto !important;
 }
+
+/* The loading spinners' arc: it grows and shrinks while it turns (so it reads as working, not as a stuck ring). */
+@keyframes zeff-spinner-arc {
+  0% { stroke-dasharray: 6 126; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 80 126; stroke-dashoffset: -20; }
+  100% { stroke-dasharray: 6 126; stroke-dashoffset: -120; }
+}
+.zeff-spinner-arc {
+  animation: zeff-spinner-arc 1.4s ease-in-out infinite;
+}
+/* The CSS-only ones (the empty main area, the kit's small spinner): their arc widens to a half and back. */
+@keyframes zeff-spinner-sweep {
+  0%, 100% { border-right-color: transparent; }
+  50% { border-right-color: currentColor; }
+}
+.main-body:empty::before {
+  color: var(--color-indigo-600);
+  animation: zeff-loading-spin 900ms linear infinite, zeff-spinner-sweep 1.4s ease-in-out infinite;
+}
+.zeff-spinner-sweep {
+  animation: spin 900ms linear infinite, zeff-spinner-sweep 1.4s ease-in-out infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .main-body:empty::before { color: var(--color-indigo-400); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zeff-spinner-arc {
+    animation-duration: 2.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .main-body:empty::before {
+    animation-duration: 2.5s, 2.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .zeff-spinner-sweep {
+    animation-duration: 2.5s, 2.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

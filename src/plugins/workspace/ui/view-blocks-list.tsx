@@ -720,7 +720,7 @@ function BusyIconButton({ a, cls, run }: { a: Record<string, string>; cls: strin
   };
   return (
     <button type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} aria-pressed={a.pressed ? a.pressed === "true" : undefined} aria-busy={busy || undefined} disabled={a.disabled === "true"} onClick={click}>
-      {busy ? <span className="zeff-spinner inline-block size-3 animate-spin rounded-full border-2 border-zinc-300 border-t-indigo-500 dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden /> : <Glyph name={a.glyph ?? ""} />}
+      {busy ? <span className="zeff-spinner zeff-spinner-sweep inline-block size-3 text-indigo-500 dark:text-indigo-400 rounded-full border-2 border-zinc-300 border-t-indigo-500 dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden /> : <Glyph name={a.glyph ?? ""} />}
       {!busy && a.dot === "true" && <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-amber-500" aria-hidden />}
     </button>
   );

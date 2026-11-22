@@ -13,7 +13,7 @@ export function LoadingScreen({ label, size = "screen" }: { label: string; size?
       <span className={`${size === "block" ? "size-6" : "size-10"} zeff-spinner inline-block animate-spin text-indigo-600 [animation-duration:900ms] will-change-transform dark:text-indigo-400`} aria-hidden>
         <svg viewBox="0 0 48 48" className="size-full">
           <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" className="opacity-15" />
-          <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="40 126" />
+          <circle cx="24" cy="24" r="20" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="40 126" className="zeff-spinner-arc" />
         </svg>
       </span>
       <span className="text-xs font-medium tracking-wide text-zinc-400 uppercase">{label}</span>
