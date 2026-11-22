@@ -104,6 +104,10 @@ const configFor = (modHooks: boolean): NextConfig => {
     experimental: {
       // Context items upload files (screenshots, documents) with their form — up to 20 MB each.
       serverActions: { bodySizeLimit: "50mb" },
+      // A request under an account's prefix is passed on by the proxy (src/proxy.ts rewrites it): Next gives such a pass 30 s, then
+      // hangs up — a long action (a booking export filling a week in the browser: minutes) went on and succeeded, and its page got
+      // "an unexpected response". 30 minutes, as long as anything here takes.
+      proxyTimeout: 30 * 60_000,
       // The server code has thousands of `await import()`. Without this every one of them is a chunk group with everything it
       // reaches, even what the page loading it already has: the dev server built and wrote the same modules dozens of times over
       // (1.4 GB of server chunks for eight pages, ~50 copies of each module for the instrumentation alone). With it, an import
