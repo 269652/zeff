@@ -17,7 +17,7 @@ import { moreBlock } from "./view-blocks-more";
 
 type Node = Extract<VNode, object>;
 type Kids = (nodes: VNode[]) => ReactNode;
-export type BlockEnv = { props: AppViewProps; state: Record<string, string>; setState: (name: string, value: string) => void; run: (a: Record<string, string>) => void; /** An event sent once the view is drawn with the state just set (its handlers read it). */ emitLater?: (event: string) => void };
+export type BlockEnv = { props: AppViewProps; state: Record<string, string>; setState: (name: string, value: string) => void; run: (a: Record<string, string>) => void | Promise<void>; /** An event sent once the view is drawn with the state just set (its handlers read it). */ emitLater?: (event: string) => void };
 
 const TONES: Record<string, { box: string; text: string; bar: string }> = {
   info: { box: "border-indigo-200 bg-indigo-50 dark:border-indigo-900 dark:bg-indigo-950/30", text: "text-indigo-800 dark:text-indigo-200", bar: "bg-indigo-500" },

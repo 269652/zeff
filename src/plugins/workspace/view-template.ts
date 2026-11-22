@@ -301,7 +301,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   // <fold label look=group store="key" open=true>: a fold-out with a small label (look=group: a list's group heading), kept open or closed in this browser.
   fold: T({ label: "text", look: { oneOf: ["plain", "group"] }, store: "text", open: { oneOf: ["true", "false"] } }),
   listrow: T({ tone: { oneOf: ["plain", "new"] } }),
-  ink: T({ glyph: "text", label: "text", tone: "text", tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
+  ink: T({ /** with an action: what it reads while its row is hovered (a label that turns into its button) */ hover: "text", glyph: "text", label: "text", tone: "text", tip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
   caption: T({ dot: "text", n: "text", tone: { oneOf: ["plain", "bad"] } }),
   copytext: T({ text: "text", label: "text", tip: "text" }, true),
   inset: T({ small: { oneOf: ["true", "false"] } }),
@@ -821,7 +821,7 @@ function out(v: unknown): VNode[] {
 }
 
 /** The attributes that are words shown to the user (translated); every other one is a name, a value or a flow — never translated. */
-const WORD_ATTRS = new Set(["label", "title", "subtitle", "placeholder", "empty", "tip", "more", "confirm", "first", "begin", "done", "aside", "text", "none", "all", "undo"]);
+const WORD_ATTRS = new Set(["label", "title", "subtitle", "placeholder", "empty", "tip", "more", "confirm", "first", "begin", "done", "aside", "text", "none", "all", "undo", "hover"]);
 
 /**
  * A run of a template's text with its values ({{ … }}, given as null) as {0}, {1} …, the spaces made one: the key the language bundles know it by —

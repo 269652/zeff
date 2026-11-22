@@ -1271,7 +1271,7 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
         return <WidgetBlock key={key} id={id} config={conf} title={title} />;
       }
       default:
-        return viewBlock(n, key, kids, { props, state: r.state, setState, run: (x) => void run(x), emitLater: (event) => setPending({ event, id: ++pendingSeq.current }) });
+        return viewBlock(n, key, kids, { props, state: r.state, setState, run: (x) => run(x), emitLater: (event) => setPending({ event, id: ++pendingSeq.current }) });
     }
   };
 
