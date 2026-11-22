@@ -333,7 +333,9 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
   const propOf = (id: string): Property | undefined => schema.properties.find((p) => p.id === id);
 
   /** What a button does (and the events it sends after it). */
-  const run = async (a: Record<string, string>): Promise<void> => {
+  const run = async (a0: Record<string, string>): Promise<void> => {
+    // (an element without action= — a tick box, an icon button, a pill, an option — does what its other attributes say: run=, do=, state=, href=)
+    const a = a0.action ? a0 : { ...a0, action: a0.run ? "run" : a0.do ? "do" : a0.state ? "state" : a0.href ? "url" : "" };
     await doRun(a);
     if (a.emit) await fire(a.emit);
   };
