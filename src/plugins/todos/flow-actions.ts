@@ -24,6 +24,20 @@ const sourceRef = (s: { source: string } & Record<string, never>): string => {
 export const TODO_FLOW_ACTIONS: FlowAction[] = [
   ...PANEL_ACTIONS,
   {
+    name: "todos.actions",
+    group: "todos",
+    label: "The buttons other plugins put on the Todos screen",
+    summary:
+      "What the installed plugins add to the Todos screen (extension point todos.actions — a booking system's links, say): per plugin its buttons, each a link (href: an address of Zeff) or a flow to run (flow, with), with its tip and what it asks before (confirm).",
+    input: [],
+    output: "{ groups: [{ plugin, actions: [{ label, href, flow, with, confirm, tip }] }], actions: [the same, all in one list] }",
+    run: async () => {
+      const { todoActions } = await import("./places");
+      const groups = await todoActions();
+      return { groups, actions: groups.flatMap((g) => g.actions) };
+    },
+  },
+  {
     name: "todos.open",
     group: "todos",
     label: "The open todos, for an AI step",

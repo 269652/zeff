@@ -19,6 +19,7 @@ export function todosViewTemplate(): string {
   const [panel, activity, omni, runbar, recap, today] = ["panel", "activity", "omni", "runbar", "recap", "today"].map(part);
   const tickets = part("tickets").replace("ROW", r);
   const recapSide = part("recap-side");
+  const places = part("places");
   return `<state name="part" value="todos" keep=true/><state name="scope" value="open" keep=true/><state name="filter" value=""/><state name="limit" value="50"/><state name="chips" value="[]"/><state name="omniq" value=""/><state name="feedfilter" value="all"/><state name="att" value=""/><state name="recapday" value=""/><state name="dueedit" value=""/><state name="dueval" value=""/><state name="newtext" value="" keep=true/><state name="newdue" value=""/><state name="newticket" value=""/><state name="panel" value=""/><state name="quick" value=""/><state name="acts" value=""/><state name="replytext" value=""/><state name="askq" value="" keep=true/><state name="jql" value=""/><state name="aq" value=""/><state name="busy" value=""/><state name="instr" value="" keep=true/><state name="opedit" value=""/><state name="optext" value=""/><state name="noteedit" value=""/><state name="notetext" value=""/><state name="tf_name" value=""/><state name="tf_iban" value=""/><state name="tf_bic" value=""/><state name="tf_amount" value=""/><state name="tf_purpose" value=""/><state name="textedit" value=""/><state name="edittext" value=""/><state name="newnote" value="" keep=true/><state name="mins" value=""/><state name="timenote" value=""/>
 <data name="x" lambda="todos.screen" with="scope={{ state.scope }}, filter={{ state.filter }}, chips={{ state.chips }}, limit={{ state.limit }}" debounce="300" hold="filter,chips,limit" preload="scope=open|done|worker" when="{{ state.part == 'todos' and state.scope != 'activity' }}"/>
 <data name="hits" lambda="todos.hits" with="q={{ state.omniq }}" debounce="150" when="{{ state.omniq }}"/>
@@ -27,6 +28,7 @@ export function todosViewTemplate(): string {
 <data name="lage" lambda="todos.lage" with="att={{ state.att }}" every="5" when="{{ state.part == 'todos' or state.part == 'tickets' }}"/>
 <data name="day" lambda="todos.day" with="day={{ state.recapday }}" every="5" when="{{ state.part == 'recap' }}"/>
 <data name="today" lambda="todos.heute" when="{{ state.part == 'today' }}"/>
+<data name="places" lambda="todos.places"/>
 <data name="men" lambda="todos.mention" with="text={{ state.newnote }}" debounce=250 when="{{ state.panel and state.newnote }}"/>
 <data name="p" lambda="todos.panel" with="id={{ state.panel }}" when="{{ state.panel }}"/>
 <data name="qp" lambda="todos.panel" with="id={{ state.quick }}" when="{{ state.quick }}"/>
@@ -39,6 +41,7 @@ export function todosViewTemplate(): string {
 <sidebarframe store="zeff-todos-sidebar">
 <sidebar>
 ${tabs}
+${places}
 {{#if state.part == 'recap'}}
 ${recapSide}
 {{#else}}

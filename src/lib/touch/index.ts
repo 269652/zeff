@@ -48,7 +48,8 @@ export function touchNeeded(action: TouchAction): boolean {
 function normalizeScope(action: TouchAction, raw: string): string {
   if (action !== "booking-export") return "";
   const [system, week] = String(raw).split("|");
-  if (system !== "chrono" && system !== "punch") throw new Error("Unknown system.");
+  // (the booking system: a plugin's id — the integrations name their own)
+  if (!/^[a-z][a-z0-9-]{0,40}$/.test(system ?? "")) throw new Error("Unknown system.");
   const w = resolveWeek(week);
   if (!w) throw new Error("Could not read the week.");
   return `${system}|${w.startIso}`;

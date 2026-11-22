@@ -1,0 +1,6 @@
+{{#if data.places.actions}}
+<row gap=1 wrap=true>
+{{#each data.places.actions}}{{#if href}}<button action="url" href="{{ href }}" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{#else}}<button run="{{ flow }}" with="{{ with }}" confirm="{{ confirm }}" into="placed" emit="todos-changed" label="{{ label }}" tip="{{ tip }}" variant=plain/>{{/if}}{{/each}}
+</row>
+{{#if data.placed.error}}<line look=error>{{ data.placed.error }}</line>{{/if}}
+{{/if}}

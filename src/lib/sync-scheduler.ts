@@ -95,8 +95,10 @@ export function startSyncScheduler(): void {
   ];
   // The mounted integrations' steps (Chrono, Punch): as set on the Sync settings page — while the automation Chrome runs.
   for (const id of integrationServerIds()) {
-    const key = integrationServer(id)?.syncStep?.key as SyncKey | undefined;
-    if (key) jobs.push({ name: key, settings: () => ({ syncMinutes: stepMinutes(key as OwnIntervalKey), lastSyncAt: lastSyncOf(key) }), run: whileChromeRuns(key) });
+    const own = integrationServer(id)?.syncStep;
+    const key = own?.key as SyncKey | undefined;
+    // (its interval as its step says it — the integration keeps its own default — else the Sync settings' row)
+    if (key) jobs.push({ name: key, settings: () => ({ syncMinutes: own?.step.schedule?.().everyMinutes ?? stepMinutes(key as OwnIntervalKey) ?? 0, lastSyncAt: lastSyncOf(key) }), run: whileChromeRuns(key) });
   }
   let lastHealthCheck = 0;
   // The accounts synced since this server started (the first turn of each notes it: its steps weren't due before — the stale check).

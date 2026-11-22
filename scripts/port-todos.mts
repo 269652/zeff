@@ -27,7 +27,7 @@ fs.rmSync(path.join(dir, "lambdas"), { recursive: true, force: true });
 
 // The texts of the screen's data in the languages the packs have: every t("…") of the screen lambda.
 const KEYS: string[] = [];
-for (const file of ["todos.screen.mjs", "todos.panel.mjs", "todos.asks.mjs", "rows.mjs", "todos.hits.mjs", "todos.mention.mjs", "todos.feed.mjs", "todos.lage.mjs", "todos.day.mjs", "todos.heute.mjs"])
+for (const file of ["todos.screen.mjs", "todos.panel.mjs", "todos.asks.mjs", "rows.mjs", "todos.hits.mjs", "todos.mention.mjs", "todos.feed.mjs", "todos.lage.mjs", "todos.day.mjs", "todos.heute.mjs", "todos.places.mjs"])
   for (const m of fs.readFileSync(path.join(SRC, file), "utf8").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
     const k = JSON.parse('"' + m[1] + '"');
     if (!KEYS.includes(k)) KEYS.push(k);
@@ -66,6 +66,7 @@ const LAMBDAS: Record<string, { label: string; what: string; zeff: string[]; tim
   "todos.feed": { label: "Todos: the activity", what: "What happened to the todos in the last two weeks, by day: who made, closed, reopened or merged which, and what is new since you looked.", zeff: ["todos.activity"], timeoutMs: 30000 },
   "todos.lage": { label: "Todos: the briefing and the tickets", what: "The briefing's run and its tickets: the lede, per ticket what the run made of it, the changes it suggests, and the todos on it.", zeff: ["todos.board", "todos.rows", "sync.steps"], timeoutMs: 30000 },
   "todos.day": { label: "Todos: the recap of a day", what: "What you did on a day: the AI's summary, per ticket what was done, and the evidence it was written from.", zeff: ["todos.recap"], timeoutMs: 30000 },
+  "todos.places": { label: "Todos: the buttons other plugins put on the screen", what: "The buttons the installed plugins add beside the tabs — a booking system's links, say: each a link or a flow to run.", zeff: ["todos.actions"], timeoutMs: 15000 },
   "todos.heute": { label: "Todos: the todos' parts of Today", what: "Yours due today or before, what you wait on, what agents ask you, what workers report done.", zeff: ["todos.today"], timeoutMs: 30000 },
   "todos.screen": { label: "Todos: what the screen shows", what: "The todos of a scope (yours in groups by urgency and the ones you wait on, done, the workers') ready to draw: words, ticket, kind, due day, repeat, flags, what a worker or agent says.", zeff: ["todos.rows"], timeoutMs: 30000 },
 };
@@ -105,7 +106,7 @@ write(
     {
       format: 1,
       id: "todos-ext",
-      version: "1.7.6",
+      version: "1.7.7",
       name: "Todos",
       description: "Your todos on a screen made of Zeff's own kit: grouped by urgency, with the ones you wait on, done and the workers' — tick, flag, set aside, dismiss, a due day, add.",
       icon: "✅",
@@ -180,7 +181,7 @@ write(
       $schema: "http://127.0.0.1:9333/ext/sdk/zeff-plugin.schema.json",
       id: "todos-ext",
       name: "Todos (screens)",
-      version: old.version && old.version >= "0.4.6" ? old.version : "0.4.6",
+      version: old.version && old.version >= "0.4.7" ? old.version : "0.4.7",
       description: "The Todos screen in the Workspace, made of Zeff's own kit: your todos grouped by urgency, the ones you wait on, done, the workers'; tick, flag, set aside, dismiss, a due day, add. The todos themselves (the engine) stay Zeff's.",
       author: "Zeff",
       apiVersion: 1,
