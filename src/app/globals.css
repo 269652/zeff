@@ -640,3 +640,15 @@ html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
     animation-iteration-count: infinite !important;
   }
 }
+/* A row reopened, waiting a moment to be taken back (grace= with pending=unstrike): its strike gone at once. */
+.ws-pending-open .line-through {
+  text-decoration: none;
+  color: var(--color-zinc-900);
+}
+@media (prefers-color-scheme: dark) {
+  .ws-pending-open .line-through { color: var(--color-zinc-100); }
+}
+.ws-pending-open .ws-hoverbar {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}

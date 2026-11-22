@@ -13,7 +13,7 @@ const INLINE = new Set(["b", "i", "small", "muted", "code", "chip", "badge", "a"
 const isInline = (n: VNode) => typeof n === "string" || INLINE.has(n.t);
 
 /** More tags drawn by whoever uses these nodes (a view's: buttons, lists, parts …) — undefined: not one of them. */
-export type DrawExt = (n: Extract<VNode, object>, key: number, kids: (nodes: VNode[]) => ReactNode) => ReactNode | undefined;
+export type DrawExt = (n: Extract<VNode, object>, key: number | string, kids: (nodes: VNode[]) => ReactNode) => ReactNode | undefined;
 
 /**
  * The keys of a level's nodes for React: an item of a list with an id by it (view-template.ts keyNode); any other block by its tag,
@@ -69,13 +69,13 @@ const textOf = (c: VNode[]): string => c.map((n) => (typeof n === "string" ? n :
  * A node drawn — and phone="hide" (not on a phone) or phone="only" (only there) on any element: in a box that takes no room
  * of its own (display: contents), hidden by the screen's width.
  */
-export function draw(n: VNode, key: number, ext?: DrawExt): ReactNode {
+export function draw(n: VNode, key: number | string, ext?: DrawExt): ReactNode {
   // (An item of a list with an id: keyed by it — a newer answer adds and removes rows around it, it keeps its place and its state.)
   const k = nodeKey(n);
   if (k !== undefined) return <Fragment key={`k:${k}`}>{drawPhone(n, 0, ext)}</Fragment>;
   return drawPhone(n, key, ext);
 }
-function drawPhone(n: VNode, key: number, ext?: DrawExt): ReactNode {
+function drawPhone(n: VNode, key: number | string, ext?: DrawExt): ReactNode {
   if (typeof n === "string" || (n.a.phone !== "hide" && n.a.phone !== "only")) return drawNode(n, key, ext);
   return (
     <div key={key} className={`contents ${n.a.phone === "hide" ? "max-sm:hidden" : "sm:hidden"}`}>
@@ -84,7 +84,7 @@ function drawPhone(n: VNode, key: number, ext?: DrawExt): ReactNode {
   );
 }
 
-function drawNode(n: VNode, key: number, ext?: DrawExt): ReactNode {
+function drawNode(n: VNode, key: number | string, ext?: DrawExt): ReactNode {
   if (typeof n === "string") return n;
   if (ext) {
     const own = ext(n, key, (nodes) => <Level nodes={nodes} ext={ext} />);
