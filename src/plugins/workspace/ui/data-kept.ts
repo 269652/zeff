@@ -48,13 +48,28 @@ export function forgetKept(): void {
 
 /**
  * hold="filter, q": when only these inputs changed (a search typed), the answer on screen stays while the new one loads — it is the
- * same list, narrowed. Any other input changed (another tab: scope=done) and nothing is kept for the new inputs: no answer is shown
+ * same list, narrowed. A text typed on or taken back by a few letters counts as held by itself (a search box of any view). Any
+ * other input changed (another tab: scope=done) and nothing is kept for the new inputs: no answer is shown
  * as if it were the new one (data.<name> empty, data.<name>_loading true).
  */
 export function onlyHeldChanged(before: Record<string, unknown> | null, after: Record<string, unknown>, hold: string | undefined): boolean {
-  if (!before || !hold?.trim()) return false;
-  const held = new Set(hold.split(",").map((s) => s.trim()).filter(Boolean));
+  if (!before) return false;
+  const held = new Set((hold ?? "").split(",").map((s) => s.trim()).filter(Boolean));
   const names = new Set([...Object.keys(before), ...Object.keys(after)]);
-  for (const k of names) if (!held.has(k) && JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null)) return false;
-  return true;
+  let changed = false;
+  for (const k of names) {
+    if (JSON.stringify(before[k] ?? null) === JSON.stringify(after[k] ?? null)) continue;
+    changed = true;
+    if (!held.has(k) && !typed(before[k], after[k])) return false;
+  }
+  return changed;
+}
+
+/** A text typed on or taken back (a search: "ab" → "abc", "abc" → "ab", "" → "a") — not a number (an id), not a value picked. */
+function typed(a: unknown, b: unknown): boolean {
+  const x = typeof a === "string" ? a : a == null ? "" : null;
+  const y = typeof b === "string" ? b : b == null ? "" : null;
+  if (x === null || y === null) return false;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return long.startsWith(short) && /\p{L}/u.test(long) && !/^\d+$/.test(long) && long.length - short.length <= 3;
 }

@@ -25,6 +25,11 @@ test("hold=: only a held input changed keeps the answer on screen", () => {
   assert.equal(onlyHeldChanged({ scope: "open", filter: "" }, { scope: "done", filter: "" }, "filter"), false);
   assert.equal(onlyHeldChanged({ scope: "open" }, { scope: "done" }, undefined), false);
   assert.equal(onlyHeldChanged(null, { filter: "x" }, "filter"), false);
+  // (A text typed on or taken back is held by itself; an id, a value picked, are not.)
+  assert.equal(onlyHeldChanged({ q: "ann" }, { q: "anna" }, undefined), true);
+  assert.equal(onlyHeldChanged({ q: "anna" }, { q: "an" }, undefined), true);
+  assert.equal(onlyHeldChanged({ id: 1 }, { id: 12 }, undefined), false);
+  assert.equal(onlyHeldChanged({ q: "a" }, { q: "a" }, undefined), false);
 });
 
 test("preload=: the other values of an input, at most six", () => {
