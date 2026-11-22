@@ -31,7 +31,7 @@ export function rowTools(t, lang) {
     return out.map((x) => ({ s: "", ref: "", id: "", label: "", href: "", tip: "", ...x }));
   };
   const view = (r, data) => {
-    const links = (keys) => keys.map((k) => ({ key: k, url: data.tickets?.[k]?.url ?? "", title: data.tickets?.[k]?.summary ?? "" }));
+    const links = (keys) => keys.map((k) => ({ key: k, url: data.tickets?.[k]?.url ?? "", title: data.tickets?.[k]?.summary ?? "", label: data.tickets?.[k]?.url ? `${k} ↗` : k }));
     const closed = r.status !== "open";
     const asking = !closed && r.needsInput ? r.needsInput : "";
     const reported = !closed && !asking && r.workerDone && !r.workerDone.suggested ? r.workerDone : null;
@@ -47,6 +47,7 @@ export function rowTools(t, lang) {
       pathLabel: r.path ? t("Path “{path}”", { path: r.path }) : "",
       ticket: r.ticket,
       ticketUrl: data.tickets?.[r.ticket]?.url ?? "",
+      ticketLabel: data.tickets?.[r.ticket]?.url ? `${r.ticket} ↗` : r.ticket,
       ticketTitle: data.tickets?.[r.ticket]?.summary ?? "",
       ticketStatus: data.tickets?.[r.ticket]?.status ?? "",
       also: links(r.alsoTickets ?? []),

@@ -24,13 +24,13 @@
 </col>
 {{#else}}
 <row gap=2 wrap=false align=start>
-<col fill=true><heading level=3>{{ data.p.text }}</heading></col>
+<col fill=true><heading level=3><reftext>{{ data.p.text }}</reftext></heading></col>
 {{#if not data.p.closed}}<button action="state" state="textedit" value="{{ data.p.id }}" then="edittext={{ data.p.text }}" label="✎" variant=quiet tip="Change the words"/>{{/if}}
 </row>
 {{/if}}
 <row gap=2 wrap=true align=center>
 <small><muted>{{ data.p.kind }}</muted></small>
-{{#if data.p.ticket}}<small><mono>{{ data.p.ticket }}</mono></small>{{/if}}
+{{#if data.p.ticket}}<small><ref kind=ticket id="{{ data.p.ticket }}" tone=mono>{{ data.p.ticket }}</ref></small>{{/if}}
 {{#if data.p.due}}<small><muted>{{ data.p.due }}</muted></small>{{/if}}
 {{#if data.p.waiting}}<small><muted>⏳ Waiting for others</muted></small>{{/if}}
 </row>
@@ -154,7 +154,7 @@
 <input bind="notetext" rows=4 value="{{ text }}"/>
 <row gap=2><button run="todos-ext.note-edit" with="id={{ data.p.id }}, at={{ at }}, text={{ state.notetext }}" then="noteedit=" emit="todos-changed" label="Save" variant=primary disabled="{{ not state.notetext }}"/><button action="state" state="noteedit" value="" label="Cancel"/></row>
 {{#else}}
-{{#each parts}}{{#if image}}<a href="{{ url }}"><img src="{{ url }}" alt="{{ title }}"/></a>{{#else}}<text pre=true>{{ text }}</text>{{/if}}{{/each}}
+{{#each parts}}{{#if image}}<a href="{{ url }}"><img src="{{ url }}" alt="{{ title }}"/></a>{{#else}}<text pre=true><reftext people=tags>{{ text }}</reftext></text>{{/if}}{{/each}}
 {{/if}}
 {{#if url}}<small><a href="{{ url }}">{{ urlLabel }} ↗</a></small>{{/if}}
 {{#if sync}}<small><muted>{{ sync }}</muted></small>{{/if}}
