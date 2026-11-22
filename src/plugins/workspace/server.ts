@@ -54,6 +54,8 @@ import { blockTodoDone } from "./task-lists";
 import { todoDone } from "./todo-engine";
 // What external plugins bring to the extension points from their manifests (formula functions, Kennzahlen, row badges, tab menus).
 import "./ext-points";
+import { refCardProviders } from "@/lib/refs/point";
+import { PAGE_REF_CARD } from "./ref-card";
 
 /** What Workspace registers for other plugins (loaded through plugins/contributions). */
 collectionProviders.contribute("workspace", workspaceCollections);
@@ -92,3 +94,5 @@ workspacePackages.contribute("workspace", () => {
     return [];
   }
 });
+// A page or a row named in a text: its hover card.
+refCardProviders.contribute("workspace", [PAGE_REF_CARD]);

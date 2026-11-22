@@ -766,6 +766,20 @@ const CORE: FlowAction[] = [
       return { iso: d.toISOString(), today: d.toLocaleDateString("sv-SE"), weekday: d.getDay(), hour: d.getHours() };
     },
   },
+  {
+    name: "refs.card",
+    group: "data",
+    label: "A reference's card",
+    summary: 'What the hover card of a reference shows (a <ref kind id> in a view): kind "ticket" (a Jira key), "person" (an id or a name), "todo" (37 or T-37), "page" (a page or row id), "mr" (!168, project!168 or its URL) — or any kind a plugin adds. Null: nothing known.',
+    input: [f("kind", "text", { required: true }), f("id", "text", { required: true })],
+    output: "{ kind, id, title, eyebrow?, subtitle?, icon?, avatar?, badges?: [{ label, tone }], facts?: [{ label, value }], excerpt?, excerptLabel?, items?: [{ label, href? }], links?: [{ label, href }], note? } | null",
+    run: async (i) => {
+      const { refCards } = await import("@/lib/refs/point");
+      const kind = text(i.kind);
+      const id = text(i.id);
+      return (await refCards([{ kind, id }]))[`${kind}:${id}`] ?? null;
+    },
+  },
 ];
 
 /**

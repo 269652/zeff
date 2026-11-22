@@ -3,6 +3,8 @@ import { flowActionsPoint } from "@/plugins/workspace/flows/actions";
 import { GITLAB_FLOW_ACTIONS } from "./flow-actions";
 import { GITLAB_ITEMS_SOURCE } from "./items-source";
 import { MRS_SOURCE } from "./workspace-source";
+import { refCardProviders } from "@/lib/refs/point";
+import { MR_REF_CARD } from "./ref-card";
 
 /**
  * What GitLab registers for other plugins (loaded through plugins/contributions): the merge requests as something the Workspace's databases
@@ -10,3 +12,5 @@ import { MRS_SOURCE } from "./workspace-source";
  */
 workspaceSources.contribute("gitlab", [MRS_SOURCE, GITLAB_ITEMS_SOURCE]);
 flowActionsPoint.contribute("gitlab", GITLAB_FLOW_ACTIONS);
+// A merge request named in a text ("!168"): its hover card.
+refCardProviders.contribute("gitlab", [MR_REF_CARD]);

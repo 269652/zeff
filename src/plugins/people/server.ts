@@ -16,6 +16,8 @@ import { workspaceFormulaFunctions } from "@/plugins/workspace/formula-point";
 import { PEOPLE_SOURCE } from "./workspace-source";
 import "./todo-settle"; // (a promise kept when its todo is done)
 import "./flow-actions"; // (people.names, people.accounts for lambdas and flows)
+import { refCardProviders } from "@/lib/refs/point";
+import { PERSON_REF_CARD } from "./ref-card";
 
 /** What People registers for other plugins (loaded through plugins/contributions): its profiles as a source of the Workspace's pipelines. */
 workspaceSources.contribute("people", [PEOPLE_SOURCE]);
@@ -30,3 +32,5 @@ reviewSources.contribute("people", PEOPLE_REVIEW);
 proposalSources.contribute("people", PEOPLE_PROPOSALS);
 // The days with the people you are most in touch with, as daily series for the Correlations (a journal's mood with them and without).
 correlationSeries.contribute("people", [PEOPLE_SERIES]);
+// A person named in a text: their hover card.
+refCardProviders.contribute("people", [PERSON_REF_CARD]);

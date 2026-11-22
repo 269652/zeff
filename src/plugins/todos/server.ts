@@ -7,6 +7,8 @@ import { TODOS_REVIEW } from "./review";
 import { TODOS_SOURCE } from "./workspace-source";
 import { TODOS_WIDGETS } from "./widgets";
 import "./flow-actions"; // (todos.open, todos.sources … for lambdas and flows)
+import { refCardProviders } from "@/lib/refs/point";
+import { TODO_REF_CARD } from "./ref-card";
 
 /** What Todos registers for other plugins (loaded through plugins/contributions). */
 apiPoint.contribute("todos", TODOS_API);
@@ -16,3 +18,5 @@ workspaceSources.contribute("todos", [TODOS_SOURCE]);
 reviewSources.contribute("todos", TODOS_REVIEW);
 /** … and what you got done, as a widget (the weekly review). */
 workspaceWidgets.contribute("todos", TODOS_WIDGETS);
+// … and "T-37" named in a text: that todo's hover card.
+refCardProviders.contribute("todos", [TODO_REF_CARD]);
