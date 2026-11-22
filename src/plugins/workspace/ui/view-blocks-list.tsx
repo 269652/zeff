@@ -571,6 +571,13 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
           </a>
         );
       // hover="…": while its row is hovered it reads that instead and is the button (a "Dismissed" label that turns into "Reopen")
+      if (acts(a) && a.hover && a.grace)
+        return (
+          <GraceInk key={key} a={a} cls={cls} run={() => env.run(a)}>
+            {glyph}
+            {kids(n.c)}
+          </GraceInk>
+        );
       if (acts(a) && a.hover)
         return (
           <button key={key} type="button" className={`${cls} hover:bg-indigo-50 hover:text-indigo-700 group-hover:text-indigo-700 dark:hover:bg-indigo-950/50 dark:group-hover:text-indigo-300`} title={a.tip || undefined} aria-label={a.hover} onClick={go}>
@@ -652,26 +659,28 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
   }
 }
 
-/** The clicks that wait (GraceButton), by what they do: kept across a redraw of the list (new data arriving meanwhile), the timer going on. */
+/** The clicks that wait (grace=), by what they do: kept across a redraw of the list (new data arriving meanwhile), the timer going on. */
 const graceWaiting = new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>();
 
 /**
- * An icon button whose click waits (grace= seconds) before it counts: its row (the nearest list item) is struck through and the
- * button turns into undo= — clicked, nothing happened. A redraw meanwhile (the list's data refreshed) keeps the wait.
+ * A click that waits (grace= seconds) before it counts — the row (the nearest list item) shows it at once: pending=strike (the
+ * default) strikes it through, pending=unstrike takes its strike away (a todo reopened). Clicked again meanwhile: nothing happened.
+ * A redraw meanwhile (the list's data refreshed) keeps the wait.
  */
-function GraceButton({ a, cls, run }: { a: Record<string, string>; cls: string; run: () => void }) {
+function useGrace(a: Record<string, string>, run: () => void) {
   const id = `${a.run ?? a.do ?? a.action ?? ""}|${a.with ?? ""}|${a.value ?? ""}`;
   const [waiting, setWaiting] = useState(() => graceWaiting.has(id));
-  const btn = useRef<HTMLButtonElement>(null);
+  const ref = useRef<HTMLButtonElement>(null);
   const runRef = useRef(run);
   useEffect(() => {
     runRef.current = run;
     const w = graceWaiting.get(id);
     if (w) w.run = run;
   });
+  const cls = a.pending === "unstrike" ? "ws-pending-open" : "ws-pending";
   useEffect(() => {
-    btn.current?.closest("li")?.classList.toggle("ws-pending", waiting);
-  }, [waiting]);
+    ref.current?.closest("li")?.classList.toggle(cls, waiting);
+  }, [waiting, cls]);
   const ms = Math.max(0.5, Math.min(30, Number(a.grace) || 3.5)) * 1000;
   const click = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -692,15 +701,40 @@ function GraceButton({ a, cls, run }: { a: Record<string, string>; cls: string; 
     graceWaiting.set(id, entry);
     setWaiting(true);
   };
+  return { waiting, click, ref };
+}
+
+const UNDO = "ws-undo inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-indigo-700 no-underline opacity-100 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-zinc-800";
+
+/** An icon button whose click waits (useGrace): meanwhile it reads undo=. */
+function GraceButton({ a, cls, run }: { a: Record<string, string>; cls: string; run: () => void }) {
+  const { waiting, click, ref } = useGrace(a, run);
   if (waiting)
     return (
-      <button ref={btn} type="button" onClick={click} className="ws-undo inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-xs font-medium whitespace-nowrap text-indigo-700 no-underline opacity-100 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-zinc-800">
+      <button ref={ref} type="button" onClick={click} className={UNDO}>
         {a.undo || "Undo"}
       </button>
     );
   return (
-    <button ref={btn} type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} disabled={a.disabled === "true"} onClick={click}>
+    <button ref={ref} type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} disabled={a.disabled === "true"} onClick={click}>
       <Glyph name={a.glyph ?? ""} />
+    </button>
+  );
+}
+
+/** A label that turns into its button on the row's hover (ink hover=) and waits (useGrace): meanwhile it reads undo=. */
+function GraceInk({ a, cls, run, children }: { a: Record<string, string>; cls: string; run: () => void; children: ReactNode }) {
+  const { waiting, click, ref } = useGrace(a, run);
+  if (waiting)
+    return (
+      <button ref={ref} type="button" onClick={click} className={UNDO}>
+        {a.undo || "Undo"}
+      </button>
+    );
+  return (
+    <button ref={ref} type="button" className={`${cls} hover:bg-indigo-50 hover:text-indigo-700 group-hover:text-indigo-700 dark:hover:bg-indigo-950/50 dark:group-hover:text-indigo-300`} title={a.tip || undefined} aria-label={a.hover} onClick={click}>
+      <span className="group-hover:hidden group-has-[:focus-visible]:hidden">{children}</span>
+      <span className="hidden group-hover:inline group-has-[:focus-visible]:inline">{a.hover}</span>
     </button>
   );
 }
