@@ -286,7 +286,7 @@ export const VIEW_TAGS: Record<string, TagDef> = {
   checkrow: T({ id: "text", label: "text", checked: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, tone: { oneOf: ["plain", "ask", "suggest", "good", "busy", "new", "dim"] }, look: { oneOf: ["plain", "suggest"] }, tip: "text", checktip: "text", action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }),
   hoverbar: T({ pin: { oneOf: ["true", "false"] } }),
   vrule: T({}, true),
-  iconbtn: T({ glyph: "text", label: "text", tip: "text", size: { oneOf: ["sm", "md"] }, on: { oneOf: ["true", "false"] }, reveal: { oneOf: ["true", "false"] }, tone: { oneOf: ["bad", "accent"] }, dot: { oneOf: ["true", "false"] }, pressed: { oneOf: ["true", "false"] }, expanded: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }, true),
+  iconbtn: T({ /** seconds the click waits before it counts — its row struck through, the button reading undo= (taken back: nothing happened) */ grace: "num", undo: "text", glyph: "text", label: "text", tip: "text", size: { oneOf: ["sm", "md"] }, on: { oneOf: ["true", "false"] }, reveal: { oneOf: ["true", "false"] }, tone: { oneOf: ["bad", "accent"] }, dot: { oneOf: ["true", "false"] }, pressed: { oneOf: ["true", "false"] }, expanded: { oneOf: ["true", "false"] }, disabled: { oneOf: ["true", "false"] }, action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text", href: "url", then: "text", confirm: "text", do: "text", done: "text" }, true),
   line: T({ look: "text", tip: "text" }),
   // <splitbutton label tip menutip …action>: a main button with a chevron beside it that opens what is inside. <rows> of <listrow tone=new>: a list parted by thin lines.
   splitbutton: T({ label: "text", tip: "text", menutip: "text", disabled: { oneOf: ["true", "false"] }, action: "text", run: "text", with: "text", emit: "text", into: "text", state: "text", value: "text" }),
@@ -821,7 +821,7 @@ function out(v: unknown): VNode[] {
 }
 
 /** The attributes that are words shown to the user (translated); every other one is a name, a value or a flow — never translated. */
-const WORD_ATTRS = new Set(["label", "title", "subtitle", "placeholder", "empty", "tip", "more", "confirm", "first", "begin", "done", "aside", "text", "none", "all"]);
+const WORD_ATTRS = new Set(["label", "title", "subtitle", "placeholder", "empty", "tip", "more", "confirm", "first", "begin", "done", "aside", "text", "none", "all", "undo"]);
 
 /**
  * A run of a template's text with its values ({{ … }}, given as null) as {0}, {1} …, the spaces made one: the key the language bundles know it by —

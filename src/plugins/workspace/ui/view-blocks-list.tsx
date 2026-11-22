@@ -422,7 +422,7 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
           </span>
           <div className="min-w-0 flex-1 text-sm">{kids(rest)}</div>
           {bar.length > 0 && (
-            <div className={`absolute top-1.5 right-2 flex items-center gap-0.5 rounded-lg bg-white/95 p-0.5 shadow-sm ring-1 ring-zinc-200 backdrop-blur transition max-sm:static max-sm:order-last max-sm:ml-[30px] max-sm:basis-full max-sm:justify-start max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none max-sm:ring-0 dark:bg-zinc-900/95 dark:ring-zinc-700 max-sm:[&>*]:!opacity-100 ${pinned ? "" : "sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-has-[:focus-visible]:pointer-events-auto sm:group-has-[:focus-visible]:opacity-100"}`}>
+            <div className={`ws-hoverbar absolute top-1.5 right-2 flex items-center gap-0.5 rounded-lg bg-white/95 p-0.5 shadow-sm ring-1 ring-zinc-200 backdrop-blur transition max-sm:static max-sm:order-last max-sm:ml-[30px] max-sm:basis-full max-sm:justify-start max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none max-sm:ring-0 dark:bg-zinc-900/95 dark:ring-zinc-700 max-sm:[&>*]:!opacity-100 ${pinned ? "" : "sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-has-[:focus-visible]:pointer-events-auto sm:group-has-[:focus-visible]:opacity-100"}`}>
               {kids(bar.flatMap((b) => b.c))}
             </div>
           )}
@@ -488,6 +488,8 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
       const cls = small
         ? `relative inline-flex size-5 items-center justify-center rounded align-middle text-zinc-400 hover:bg-zinc-100 hover:text-indigo-600 disabled:opacity-40 dark:hover:bg-zinc-800 dark:hover:text-indigo-400 ${on ? "bg-zinc-100 text-indigo-600 dark:bg-zinc-800 dark:text-indigo-400" : ""}`
         : `icon-btn ${a.glyph === "x" ? "text-base" : ""} ${on ? (a.tone === "bad" ? "text-red-600 opacity-100 dark:text-red-400" : "text-indigo-600 opacity-100 dark:text-indigo-400") : a.reveal === "true" ? "opacity-0 group-hover:opacity-100 focus-visible:opacity-100" : ""}`;
+      // grace="3.5": the click counts after that many seconds — meanwhile its row is struck through and the button reads undo= (taken back: nothing happened)
+      if (a.grace) return <GraceButton key={key} a={a} cls={cls} run={() => env.run(a)} />;
       return (
         <button key={key} type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} aria-pressed={a.pressed ? a.pressed === "true" : undefined} aria-expanded={a.expanded ? a.expanded === "true" : undefined} disabled={a.disabled === "true"} onClick={go}>
           <Glyph name={a.glyph ?? ""} />
@@ -630,4 +632,57 @@ export function listBlock(n: Node, key: string | number, kids0: Kids, env: Block
     default:
       return undefined;
   }
+}
+
+/** The clicks that wait (GraceButton), by what they do: kept across a redraw of the list (new data arriving meanwhile), the timer going on. */
+const graceWaiting = new Map<string, { timer: ReturnType<typeof setTimeout>; run: () => void }>();
+
+/**
+ * An icon button whose click waits (grace= seconds) before it counts: its row (the nearest list item) is struck through and the
+ * button turns into undo= — clicked, nothing happened. A redraw meanwhile (the list's data refreshed) keeps the wait.
+ */
+function GraceButton({ a, cls, run }: { a: Record<string, string>; cls: string; run: () => void }) {
+  const id = `${a.run ?? a.do ?? a.action ?? ""}|${a.with ?? ""}|${a.value ?? ""}`;
+  const [waiting, setWaiting] = useState(() => graceWaiting.has(id));
+  const btn = useRef<HTMLButtonElement>(null);
+  const runRef = useRef(run);
+  useEffect(() => {
+    runRef.current = run;
+    const w = graceWaiting.get(id);
+    if (w) w.run = run;
+  });
+  useEffect(() => {
+    btn.current?.closest("li")?.classList.toggle("ws-pending", waiting);
+  }, [waiting]);
+  const ms = Math.max(0.5, Math.min(30, Number(a.grace) || 3.5)) * 1000;
+  const click = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const w = graceWaiting.get(id);
+    if (w) {
+      clearTimeout(w.timer);
+      graceWaiting.delete(id);
+      setWaiting(false);
+      return;
+    }
+    const entry = {
+      run: runRef.current,
+      timer: setTimeout(() => {
+        graceWaiting.delete(id);
+        entry.run();
+      }, ms),
+    };
+    graceWaiting.set(id, entry);
+    setWaiting(true);
+  };
+  if (waiting)
+    return (
+      <button ref={btn} type="button" onClick={click} className="ws-undo inline-flex shrink-0 items-center rounded-full border border-zinc-300 bg-white px-2.5 py-0.5 text-xs font-medium text-indigo-700 no-underline opacity-100 shadow-sm hover:bg-indigo-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-indigo-300 dark:hover:bg-zinc-800">
+        {a.undo || "Undo"}
+      </button>
+    );
+  return (
+    <button ref={btn} type="button" className={cls} title={a.tip || undefined} aria-label={a.label || a.tip || undefined} disabled={a.disabled === "true"} onClick={click}>
+      <Glyph name={a.glyph ?? ""} />
+    </button>
+  );
 }

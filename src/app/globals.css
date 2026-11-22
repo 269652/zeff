@@ -591,3 +591,13 @@ html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
     animation-iteration-count: infinite !important;
   }
 }
+
+/* A row whose action waits a moment to be taken back (the kit's grace=): struck through, its buttons kept in view for the undo. */
+.ws-pending {
+  text-decoration: line-through;
+  color: var(--color-zinc-400);
+}
+.ws-pending .ws-hoverbar {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}

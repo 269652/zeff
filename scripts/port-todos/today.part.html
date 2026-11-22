@@ -6,7 +6,7 @@
 <checklist>
 {{#each data.today.due}}
 <checkrow id="today-{{ id }}" label="{{ ref }} done" run="todos-ext.status" with="id={{ id }}, status=done" into="st" emit="todos-changed">
-<line look=between><line look=lead>{{ text }}</line><line look=tools><ink tone="{{ overdue ? 'bad' : 'amber' }}">{{ when }}</ink><ink tone=faint>{{ ref }}</ink><iconbtn glyph=x label="Dismiss — not to be done" tip="Dismiss — not to be done" run="todos-ext.status" with="id={{ id }}, status=dismissed" into="st" emit="todos-changed"/></line></line>
+<line look=between><line look=lead>{{ text }}</line><line look=tools><ink tone="{{ overdue ? 'bad' : 'amber' }}">{{ when }}</ink><ink tone=faint>{{ ref }}</ink><iconbtn glyph=x grace=3.5 undo="Undo dismiss" label="Dismiss — not to be done" tip="Dismiss — not to be done" run="todos-ext.status" with="id={{ id }}, status=dismissed" into="st" emit="todos-changed"/></line></line>
 </checkrow>
 {{/each}}
 </checklist>
