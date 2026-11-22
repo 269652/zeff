@@ -563,6 +563,8 @@ html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
   border: 4px solid color-mix(in srgb, var(--color-indigo-600) 15%, transparent);
   border-top-color: var(--color-indigo-600);
   animation: zeff-loading-spin 900ms linear infinite;
+  /* (on the compositor: it keeps turning while the page is busy loading) */
+  will-change: transform;
 }
 .main-body:empty::after {
   content: var(--zeff-loading-label, "Loading");
@@ -580,7 +582,8 @@ html[data-focus] .page:has([data-app-screen]) .zeff-loading-view {
 }
 @media (prefers-reduced-motion: reduce) {
   .main-body:empty::before {
-    animation-duration: 2.5s;
+    animation-duration: 2.5s !important;
+    animation-iteration-count: infinite !important;
   }
   /* A loading spinner keeps turning, slowly: still, it would read as a progress ring that is stuck. */
   .zeff-spinner {
