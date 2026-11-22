@@ -51,6 +51,31 @@ Same machine, same copy of the data, warm:
 
 The flows' own run time (30 – 380 ms warm) is unchanged; what changed is how long the page waits for them.
 
+## Answers per input: switching tabs (`<data>` in the browser)
+
+A `<data>` keeps every answer per **page, source and resolved inputs** (src/plugins/workspace/ui/data-kept.ts: in memory for the
+session — no size limit, 80 answers — and in localStorage as before, now keyed by the parsed inputs). What templates see:
+
+| | |
+| --- | --- |
+| inputs seen before (Done → Open → Done) | the kept answer at once (`data.x_status` = `stale`), the fresh one replaces it |
+| new inputs, nothing kept | `data.x` empty, `data.x_loading` true — never the answer for the other inputs; the server's kept answer (`peek`) if it has one |
+| `{{#if data.x…}}…{{#else}}…{{/if}}`, `{{#each data.x…}}` while `x_loading` | the kit's loader (LoadingScreen, block size) in their place — by itself; `<loading/>` to place one |
+| `data.x_last` | the last answer whatever it was asked with — for counts and headings that may show the one before meanwhile (a condition that reads `x_last` / `x_loading` decides by itself) |
+| `hold="filter, chips, limit"` | when only these inputs change, the answer on screen stays while the new one loads (a search narrowing, "Show more"); a text typed on or taken back by a few letters counts as held by itself |
+| `preload="scope=open\|done\|worker"` | once the current answer is in, the other values' answers are asked quietly (idle time, one at a time for the page, not while the tab is hidden, each at most every 30 s, through the same coalescing) — the first switch shows at once |
+
+Rows keep their DOM across a newer answer: an `{{#each}}` item with an `id` (else `key`, `name`, `label`, `group`) is keyed by it,
+the other blocks of a level by tag + look/tone + how many came before (card-template.tsx `siblingKeys`) — a callout shown above a
+list doesn't redraw it. Measured on a test server (`next dev`, Todos with e2e/todos-parity-seed.mts, in-page per animation frame):
+
+| Switch | Before | After |
+| --- | --- | --- |
+| Open → Done, first time | the open list's shape: Done empty, no indicator, ~0.7 s | loader in the first frame, the list at ~0.7 s; after the idle preload (~3 s on the page): the list in the first frame (35 ms) |
+| Done again / Open again | reloaded from scratch | kept list in the first frame (32–85 ms Done, 110–280 ms Open — dev-mode render of the view), refreshed behind |
+| a todo ticked | the list below a new callout drawn anew | the other rows keep their DOM nodes (5 of 5), no loader |
+| Report Week ↔ Month (scripts/parity-seed-time.mts) | — | first Week: loader, content at ~0.66 s; then each switch shows the kept view in the first frame (~0.2 s) |
+
 ## Measuring
 
 - `ZEFF_PERF=1` — every flow / lambda run of a view logs `[perf] flow learn.courses 130ms` (src/plugins/workspace/perf.ts).
