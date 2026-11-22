@@ -4,6 +4,10 @@ import { setupTempData } from "./helpers";
 
 setupTempData();
 
+// (the plugins' contributions loaded first, as the server does at its start: the places and the flow actions they add to are ready — without
+// a booking integration mounted nothing else loads them before)
+test.before(async () => void (await import("@/plugins/contributions")));
+
 /** The Todos screen's buttons of other plugins (todos.actions): every field there, a contributor that fails left out. */
 test("the Todos screen lists the buttons other plugins put there", async () => {
   const { todoPlaces, todoActions } = await import("@/plugins/todos/places");
