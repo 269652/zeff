@@ -23,7 +23,7 @@ export const useHoverSide = () => useContext(SideCtx);
  * above when there's more room there — no taller than that room (it scrolls inside), kept in the
  * window. It stays while the pointer is on it, to click what's in it.
  */
-export function HoverCard({ card, children, width = 420, className = "", side: sideProp, label, delay = 250 }: { card: ReactNode; children: ReactNode; width?: number; className?: string; /** A sidebar beside the card, whenever it's open (the people a note names). */ side?: ReactNode; /** The card's accessible name. */ label?: string; /** How long the pointer (or focus) rests before it opens, ms. */ delay?: number }) {
+export function HoverCard({ card, children, width = 420, className = "", side: sideProp, label, delay = 250, column: fitColumn = true, touch = true, onOpen }: { card: ReactNode; children: ReactNode; width?: number; className?: string; /** A sidebar beside the card, whenever it's open (the people a note names). */ side?: ReactNode; /** The card's accessible name. */ label?: string; /** How long the pointer (or focus) rests before it opens, ms. */ delay?: number; /** As wide as the column it is in (a table cell, a todo's text); false: `width` (a small card). */ column?: boolean; /** A tap toggles it; false: a tap is the trigger's own (a link opens). */ touch?: boolean; /** The pointer (or focus) came: before the delay, to load what the card shows. */ onOpen?: () => void }) {
   const t = useT();
   const id = useId();
   const [place, setPlace] = useState<Place | null>(null);
@@ -80,7 +80,7 @@ export function HoverCard({ card, children, width = 420, className = "", side: s
       // As wide as the column it's in (a table cell, a todo's text) — else its own width —, at
       // most 45% of the window, at least enough to read; starting under the element, shifted
       // left only as far as the window needs.
-      const column = ref.current?.closest("td, [data-hover-column]")?.getBoundingClientRect();
+      const column = !fitColumn ? null : ref.current?.closest("td, [data-hover-column]")?.getBoundingClientRect();
       const fit = Math.min(window.innerWidth - 16, 280);
       const w = Math.max(fit, Math.min(column ? column.width : width, window.innerWidth * 0.45, window.innerWidth - 16));
       const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
@@ -95,7 +95,9 @@ export function HoverCard({ card, children, width = 420, className = "", side: s
   // A touch fires emulated mouse/focus events after its pointerdown: those must not undo the toggle.
   const recentTouch = () => Date.now() - touchAt.current < 800;
   const show = () => {
-    if (!recentTouch()) later(locate, delay);
+    if (recentTouch()) return;
+    onOpen?.();
+    later(locate, delay);
   };
   // Touch: a tap toggles the card — the finger lifted where it went down, soon. A finger that starts a scroll on the
   // element (moves, or the browser takes it over: pointercancel) opens nothing.
@@ -103,6 +105,7 @@ export function HoverCard({ card, children, width = 420, className = "", side: s
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
     touchAt.current = Date.now();
+    if (!touch) return;
     touchStart.current = { x: e.clientX, y: e.clientY, at: Date.now() };
   };
   const onPointerUp = (e: React.PointerEvent) => {

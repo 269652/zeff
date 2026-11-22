@@ -20,6 +20,11 @@ const Ctx = createContext<ReturnType<typeof mentionMatcher>>(null);
 const Hrefs = createContext<Record<number, string>>({});
 const useHref = (id: number) => useContext(Hrefs)[id] ?? "/workspace";
 
+/** The people texts name (null without the People plugin), and where each one's page is — for texts that link them their own way (a view's <reftext>). */
+export function usePeopleLinks(): { matcher: ReturnType<typeof mentionMatcher>; hrefs: Record<number, string> } {
+  return { matcher: useContext(Ctx), hrefs: useContext(Hrefs) };
+}
+
 export function PeopleProvider({ index, hrefs = {}, children }: { index: PersonIndexEntry[]; hrefs?: Record<number, string>; children: ReactNode }) {
   const matcher = useMemo(() => mentionMatcher(index), [index]);
   return (

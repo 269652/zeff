@@ -22,6 +22,9 @@ import type { ActionEnv, AppViewProps, ViewAppModule } from "./app-view";
 import { draw, Level, type DrawExt } from "./card-template";
 import { ChannelLogo } from "@/components/ChannelLogo";
 import { HoverCard } from "@/components/HoverCard";
+import { RefLink } from "@/components/RefLink";
+import { REF_LOOK, RefText } from "./ref-text";
+import { INK } from "./view-blocks-list";
 import { toggleTaskAction } from "../actions";
 import { askWorkspace } from "./chat-client";
 import { WS_CHANGED } from "./ChatPanel";
@@ -887,6 +890,17 @@ export function TemplateView({ src, onErrors, module, meta, current, draftBlocks
           </HoverCard>
         );
       }
+      case "ref": {
+        const look = a.tone ? a.tone.split(/\s+/).map((x) => INK[x] ?? "").join(" ") : (REF_LOOK[a.kind ?? ""] ?? INK.link);
+        if (!a.kind || !a.id) return a.href ? <a key={key} href={a.href} className={look} title={a.tip || undefined}>{kids(n.c)}</a> : <span key={key}>{kids(n.c)}</span>;
+        return (
+          <RefLink key={key} kind={a.kind} id={a.id} href={a.href || undefined} className={look} title={a.tip || undefined}>
+            {kids(n.c)}
+          </RefLink>
+        );
+      }
+      case "reftext":
+        return <RefText key={key} text={a.text ?? n.c.map((c) => (typeof c === "string" ? c : "")).join("")} people={a.people === "tags" || a.people === "none" ? a.people : "names"} tickets={a.tickets !== "false"} todos={a.todos !== "false"} mrs={a.mrs !== "false"} hrefs={json<Record<string, string>>(a.links, {})} />;
       case "drag":
         return (
           <div key={key} draggable title={a.tip || undefined} className="cursor-grab active:cursor-grabbing" onDragStart={(e) => (e.stopPropagation(), e.dataTransfer.setData("text/plain", `zeff-drag:${a.value ?? ""}`), (e.dataTransfer.effectAllowed = "move"))}>

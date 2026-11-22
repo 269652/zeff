@@ -99,7 +99,7 @@ const LINE: Record<string, string> = {
   warnline: "text-xs text-amber-700 dark:text-amber-400",
 };
 
-const INK: Record<string, string> = {
+export const INK: Record<string, string> = {
   bad: "text-red-600 dark:text-red-400",
   warn: "text-amber-600 dark:text-amber-400",
   good: "font-medium text-emerald-700 dark:text-emerald-400",

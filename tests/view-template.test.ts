@@ -234,3 +234,15 @@ test("the first screen waits for its <data> (a when= that is false is off, not l
   assert.deepEqual(dataAwaited(r.nodes, { x: [1], x_status: "stale", y_status: "loading" }), ["y"]);
   assert.deepEqual(dataAwaited(r.nodes, { x: [1], x_status: "loading", y_status: "error" }), []);
 });
+
+test("<ref> and <reftext>: references named inline keep their kind, id and link; the words between keep their spaces", () => {
+  const app = { parts: [{ ref: "ticket", id: "PROJ-12", label: "PROJ-12", href: "https://jira/browse/PROJ-12", s: "" }, { ref: "", id: "", label: "", href: "", s: " fix it with Anna " }] };
+  const r = renderView('{{#each app.parts}}{{#if ref}}<ref kind="{{ ref }}" id="{{ id }}" href="{{ href }}">{{ label }}</ref>{{/if}}{{#if s}}<reftext tickets=false>{{ s }}</reftext>{{/if}}{{/each}}', data({ app }));
+  assert.deepEqual(r.errors, []);
+  const ref = r.nodes.find((n): n is Exclude<VNode, string> => typeof n !== "string" && n.t === "ref")!;
+  assert.deepEqual([ref.a.kind, ref.a.id, ref.a.href, ref.c], ["ticket", "PROJ-12", "https://jira/browse/PROJ-12", ["PROJ-12"]]);
+  const text = r.nodes.find((n): n is Exclude<VNode, string> => typeof n !== "string" && n.t === "reftext")!;
+  assert.equal(text.c.join(""), " fix it with Anna ");
+  assert.equal(text.a.tickets, "false");
+  assert.match(viewReference(), /REFERENCES/);
+});
