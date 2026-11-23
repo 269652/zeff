@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signInHref } from "@/lib/sign-in-href";
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
-import { dismissAttentionAction, openServiceLoginAction, retryServiceAction, runSyncAction } from "@/app/actions";
+import { dismissAttentionAction, openServiceLoginAction, retryServiceAction, runSyncAction, signInWithCredentialsAction } from "@/app/actions";
 import type { Attention } from "@/lib/attention";
 import { toast } from "./Toaster";
 import { sourceToasts } from "@/lib/sync/source-toasts";
@@ -176,6 +176,11 @@ function AttentionRow({ a }: { a: Attention }) {
           ) : (
             <button type="button" className="btn btn-sm btn-primary" disabled={pending} onClick={() => act("open", t("Opening the sign-in on the computer (automation Chrome) …"), () => openServiceLoginAction(a.service!))} title={t("Bring the page to the front in the automation Chrome (or open it) — you sign in there yourself")}>
               {label("open", t("Open sign-in"))}
+            </button>
+          )}
+          {a.credentials && (
+            <button type="button" className="btn btn-sm btn-primary" disabled={pending} onClick={() => act("creds", t("Signing in with the saved login — this can take a minute …"), () => signInWithCredentialsAction(a.service!))} title={t("Signs in by itself with the company, user name and password saved on Settings → Secrets")}>
+              {label("creds", t("Sign in with credentials"))}
             </button>
           )}
           <button type="button" className="btn btn-sm" disabled={pending} onClick={() => act("retry", t("Checking again — this can take a minute …"), () => retryServiceAction(a.service!))} title={t("Signed in? Then try again now")}>

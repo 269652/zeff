@@ -91,7 +91,15 @@ export type IntegrationServer = {
   /** Its browser driver (an MCP server over stdio), as a path inside the mount: "chrono/driver.mjs". */
   driver?: string;
   /** Its sign-in: its name, where the page is ("Sign in" opens it), its driver's status check (the driver of its id, tool "<id>_status"), what its driver needs in the environment. */
-  service?: { label: string; loginUrl: string; status: () => Promise<string>; env?: () => Record<string, string> | Promise<Record<string, string>> };
+  service?: {
+    label: string;
+    /** Where its sign-in page is — a function when it is a setting of the integration (read each time "Sign in" is clicked). */
+    loginUrl: string | (() => string | Promise<string>);
+    status: () => Promise<string>;
+    env?: () => Record<string, string> | Promise<Record<string, string>>;
+    /** A sign-in by itself with a login saved in Zeff (Settings → Secrets): `available` — whether one is saved; `signIn` — does it, answers whether it worked and what happened. The notice and the Logins page offer "Sign in with credentials" then. */
+    credentials?: { available: () => boolean | Promise<boolean>; signIn: () => Promise<{ ok: boolean; message: string }> };
+  };
   /** Its pages: /export/<id> and /settings/<id> (the plugin's routes in the manifest). */
   pages?: { export?: IntegrationPage; settings?: IntegrationPage };
   week?: (ctx: WeekContext) => WeekSlot | Promise<WeekSlot>;

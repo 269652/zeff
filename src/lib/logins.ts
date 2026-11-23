@@ -5,7 +5,7 @@ import { integrationServer } from "@/lib/integrations/server";
 import { automationUp, runDriver, type DriverId } from "@/plugins/drivers";
 import { PLUGINS } from "@/plugins/catalog";
 import { installedPlugins, stepAvailable } from "@/plugins/state";
-import { listAttention, serviceLabel, signInHref, type ServiceId } from "./attention";
+import { canSignInWithCredentials, listAttention, serviceLabel, signInHref, type ServiceId } from "./attention";
 import { syncOverview } from "./sync/registry";
 import type { SyncKey } from "./sync/shared";
 
@@ -27,6 +27,8 @@ export type LoginView = {
   checkable: boolean;
   /** Its sign-in is a page in Zeff (Jira: its token on Settings → Secrets), not a login in the automation Chrome. */
   href?: string;
+  /** It can sign in by itself with a login saved in Zeff ("Sign in with credentials"). */
+  credentials?: boolean;
 };
 
 /** The driver and its status tool, per service — GitLab and Jira have none (their last sync tells). A mounted integration's service has the driver of its id and the tool "<id>_status". */
@@ -152,9 +154,10 @@ export async function listLogins(): Promise<{ chrome: { endpoint: string; runnin
   const requests = new Map((await listAttention()).filter((a) => a.kind === "login" && a.service).map((a) => [a.service!, a]));
   const steps = new Map(syncOverview().steps.map((s) => [s.key, s]));
   const account = currentAccountId();
+  const withCredentials = new Set((await Promise.all([...services.keys()].map(async (s) => ((await canSignInWithCredentials(s)) ? s : null)))).filter((s): s is ServiceId => !!s));
   const logins = [...services].map(([service, plugins]): LoginView => {
     const href = signInHref(service) ?? undefined;
-    const base = { service, label: serviceLabel(service) ?? service, plugins, checkable: !!statusTool(service) || service === "jira", ...(href ? { href } : {}) };
+    const base = { service, label: serviceLabel(service) ?? service, plugins, checkable: !!statusTool(service) || service === "jira", ...(href ? { href } : {}), ...(withCredentials.has(service) ? { credentials: true } : {}) };
     const check = checks().get(`${account}:${service}`);
     const request = requests.get(service);
     const step = steps.get(stepOf(service));

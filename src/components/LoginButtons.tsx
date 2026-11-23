@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { checkAllLoginsAction, checkLoginAction, openAllSignInsAction, openServiceLoginAction } from "@/app/actions";
+import { checkAllLoginsAction, checkLoginAction, openAllSignInsAction, openServiceLoginAction, signInWithCredentialsAction } from "@/app/actions";
 import type { ActionState } from "@/app/action-helpers";
 import { toast } from "./Toaster";
 import { useT } from "./I18nProvider";
@@ -25,7 +25,7 @@ function useAct() {
  * A service's buttons: its sign-in page brought up in the automation Chrome (you sign in there), and a check. A service whose sign-in is a page
  * in Zeff (`href` — Jira: its token on Settings → Secrets) links there instead.
  */
-export function LoginButtons({ service, label, checkable, href }: { service: string; label: string; checkable: boolean; href?: string }) {
+export function LoginButtons({ service, label, checkable, href, credentials }: { service: string; label: string; checkable: boolean; href?: string; credentials?: boolean }) {
   const t = useT();
   const [pending, act] = useAct();
   return (
@@ -33,6 +33,11 @@ export function LoginButtons({ service, label, checkable, href }: { service: str
       {checkable && (
         <button type="button" className="btn btn-sm" disabled={pending} onClick={() => act(() => checkLoginAction(service))} title={t("Asks {service} in the automation Chrome whether you are signed in — opens nothing", { service: label })}>
           {pending ? "…" : t("Check")}
+        </button>
+      )}
+      {credentials && (
+        <button type="button" className="btn btn-sm" disabled={pending} onClick={() => act(() => signInWithCredentialsAction(service))} title={t("Signs in by itself with the login saved on Settings → Secrets")}>
+          {pending ? "…" : t("Sign in with credentials")}
         </button>
       )}
       {href ? (

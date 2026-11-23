@@ -21,7 +21,8 @@ const SIGN_IN_PAGES = "accounts\\.google\\.com|login\\.microsoftonline\\.com|log
 
 async function serviceUrl(id: ServiceId): Promise<string | null> {
   // The mounted integrations' say where their sign-in page is.
-  const own = integrationServer(id)?.service?.loginUrl;
+  const login = integrationServer(id)?.service?.loginUrl;
+  const own = typeof login === "function" ? await login() : login;
   if (own) return own;
   if (id === "teams") return "https://teams.microsoft.com/v2/";
   if (id === "outlook") return "https://outlook.office.com/mail/inbox";
@@ -83,6 +84,8 @@ export type Attention = {
   at: string;
   /** login: which service (its sign-in can be opened, its sync run again). */
   service?: ServiceId;
+  /** login: the service can sign in by itself with a login saved in Zeff (the notice offers "Sign in with credentials"). */
+  credentials?: boolean;
   /** Where to answer (a todo). */
   href?: string;
   /** source: the sync step (it can be run again). */
@@ -190,5 +193,20 @@ export async function listAttention(): Promise<Attention[]> {
   }));
   // Sign-ins only for what's installed (an uninstalled plugin's request is moot).
   const { serviceAvailable } = await import("@/plugins/state");
-  return [...[...store().values()].filter((a) => !a.service || serviceAvailable(a.service)), ...questions, ...live, ...claude, ...sources];
+  const logins = await Promise.all(
+    [...store().values()]
+      .filter((a) => !a.service || serviceAvailable(a.service))
+      .map(async (a): Promise<Attention> => (a.kind === "login" && a.service && (await canSignInWithCredentials(a.service)) ? { ...a, credentials: true } : a)),
+  );
+  return [...logins, ...questions, ...live, ...claude, ...sources];
+}
+
+/** Whether a service can sign in by itself with a login saved in Zeff (a mounted integration's `service.credentials`). */
+export async function canSignInWithCredentials(id: string): Promise<boolean> {
+  try {
+    const c = integrationServer(id)?.service?.credentials;
+    return !!c && !!(await c.available());
+  } catch {
+    return false;
+  }
 }

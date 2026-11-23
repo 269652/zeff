@@ -13,6 +13,19 @@ import { syncWhatsappAction } from "@/plugins/whatsapp/server-actions";
 import { syncSignalAction } from "@/plugins/signal/server-actions";
 import { syncMailAction } from "./mail";
 
+/** A service signed in by itself with the login saved in Zeff (Settings → Secrets): its driver signs in and says how it went. */
+export async function signInWithCredentialsAction(service: string): Promise<ActionState> {
+  try {
+    const c = integrationServer(service)?.service?.credentials;
+    if (!c || !(await c.available())) return { ok: false, error: t("No login is saved for this service — enter it on Settings → Secrets.") };
+    const r = await c.signIn();
+    revalidateAll();
+    return r.ok ? { ok: true, message: r.message.slice(0, 400) } : { ok: false, error: r.message.slice(0, 400) };
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
+}
+
 /** A service's sign-in shown in the automation Chrome (its tab at the front, else a new one) — you sign in there yourself. */
 export async function openServiceLoginAction(service: string): Promise<ActionState> {
   let href: string | undefined;

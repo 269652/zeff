@@ -40,7 +40,7 @@ export async function LoginsList() {
                       </p>
                     )}
                   </div>
-                  <LoginButtons service={l.service} label={l.label} checkable={l.checkable} href={l.href} />
+                  <LoginButtons service={l.service} label={l.label} checkable={l.checkable} href={l.href} credentials={l.credentials} />
                 </li>
               );
             })}
