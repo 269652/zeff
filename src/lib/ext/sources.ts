@@ -399,12 +399,15 @@ function withInstalled(state: SourceState): SourceState {
       const from = origin(p.id);
       const fromHere = !!from && norm(from.url) === norm(state.source.url);
       const waiting = pending(pluginsRoot(), p.id);
+      const candidate = !!inst && (compareVersions(p.version, inst.manifest.version) > 0 || (fromHere && !!from && from.path === p.path && from.sha !== state.sha && compareVersions(p.version, inst.manifest.version) === 0 && !!state.sha && p.touched === true));
+      // (the installed folder is byte for byte what the repository has: no update, whatever the version numbers or commits say)
+      const sameContent = () => !!inst && !!p.listing.hash && !(waiting && openConflicts(waiting).length) && contentHash(localFiles(path.join(pluginsRoot(), p.id))) === p.listing.hash;
       return {
         ...p,
         installed: inst?.manifest.version ?? null,
         fromHere,
         // (newer — or the same version with other commits, when it came from here: a change published without a new version number)
-        updateAvailable: !!inst && (compareVersions(p.version, inst.manifest.version) > 0 || (fromHere && !!from && from.path === p.path && from.sha !== state.sha && compareVersions(p.version, inst.manifest.version) === 0 && !!state.sha && p.touched === true)),
+        updateAvailable: candidate && !sameContent(),
         enabled: !!inst && isEnabled(p.id),
         conflicts: waiting ? openConflicts(waiting).length : 0,
       };

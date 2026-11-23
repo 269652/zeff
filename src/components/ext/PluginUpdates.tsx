@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/components/Toaster";
 import { useT } from "@/components/I18nProvider";
@@ -23,6 +23,18 @@ export function PluginUpdates() {
   const [busy, setBusy] = useState<string | null>(null);
   const [merging, setMerging] = useState<string | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
 
   const load = useCallback(async () => {
     const r = await pluginUpdatesAction(false).catch(() => null);
@@ -61,22 +73,23 @@ export function PluginUpdates() {
   return (
     <>
       {updates.length > 0 && (
-        <aside className="fixed right-4 bottom-4 z-40 w-[min(24rem,calc(100vw-2rem))] print:hidden" aria-label={t("Plugin updates")}>
-          {!open ? (
-            <button type="button" className="ml-auto flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-3 py-1.5 text-sm font-medium text-indigo-800 shadow-lg hover:bg-indigo-50 dark:border-indigo-900 dark:bg-zinc-900 dark:text-indigo-200 dark:hover:bg-indigo-950" onClick={() => setOpen(true)}>
-              <span aria-hidden>🧩</span>
-              {updates.length === 1
-                ? waiting
-                  ? t("{name} {to} waits for you", { name: updates[0].name, to: updates[0].to })
-                  : t("{name} {to} is out", { name: updates[0].name, to: updates[0].to })
-                : waiting
-                  ? t("{n} plugin updates · {c} wait for you", { n: updates.length, c: waiting })
-                  : t("{n} plugin updates", { n: updates.length })}
-            </button>
-          ) : (
-            <div className="max-h-[70vh] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div ref={box} className="relative print:hidden">
+          <button
+            type="button"
+            className="relative inline-flex size-9 cursor-pointer items-center justify-center rounded-md text-zinc-600 transition hover:bg-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            aria-label={t("Plugin updates")}
+            aria-expanded={open}
+            title={updates.length === 1 ? t("{name} {to} is out", { name: updates[0].name, to: updates[0].to }) : t("{n} plugin updates", { n: updates.length })}
+            onClick={() => setOpen((o) => !o)}
+          >
+            <svg viewBox="0 0 20 20" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 8a5 5 0 0 1 10 0c0 4 1.5 5.5 1.5 5.5h-13S5 12 5 8zM8.2 16.5a2 2 0 0 0 3.6 0" />
+            </svg>
+            <span className={`absolute top-0.5 right-0 min-w-4 rounded-full px-1 text-center text-[10px] leading-4 font-semibold text-white ${waiting ? "bg-amber-500" : "bg-indigo-600"}`}>{updates.length}</span>
+          </button>
+          {open && (
+            <div className="absolute right-0 top-full z-50 mt-2 max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-3 shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
               <header className="mb-2 flex items-center gap-2">
-                <span aria-hidden>🧩</span>
                 <h2 className="flex-1 text-sm font-semibold">{t("Plugin updates")}</h2>
                 <button type="button" className="rounded px-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label={t("Close")} onClick={() => setOpen(false)}>
                   ✕
@@ -132,7 +145,7 @@ export function PluginUpdates() {
               <p className="mt-2 text-[11px] text-zinc-400">{t("What you changed in a plugin is merged with the new version; where both changed the same lines, you decide.")}</p>
             </div>
           )}
-        </aside>
+        </div>
       )}
       {merging && (
         <MergeResolver

@@ -83,7 +83,6 @@ const headerAccount = () => {
   return { current: chip(currentAccount()), list: listAccounts().map(chip) };
 };
 import { Toaster } from "@/components/Toaster";
-import { PluginUpdates } from "@/components/ext/PluginUpdates";
 import { StalePageGuard } from "@/components/StalePageGuard";
 import { FlowAsks } from "@/plugins/workspace/ui/flow-asks";
 import { LockWatcher } from "@/components/LockWatcher";
@@ -198,7 +197,6 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           {/* What flows ask you (a check-in, an approval): a card on every page. */}
           {!setupPending && installedPlugins().has("workspace") && <FlowAsks />}
           {/* A newer version of a plugin in its repository: the note with Update / Later (and the merge when both sides changed). */}
-          {!setupPending && <PluginUpdates />}
           </BadgeLookProvider>
         </I18nProvider>
       </body>

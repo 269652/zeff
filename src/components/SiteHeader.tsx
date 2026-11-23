@@ -12,6 +12,7 @@ import { DEFAULT_BADGE, type BadgeConfig } from "@/lib/todos/badge";
 import { TodoBadgePill } from "./TodoBadgePill";
 import { LookDot } from "./BadgeLookProvider";
 import { SyncMenu } from "./SyncMenu";
+import { PluginUpdates } from "./ext/PluginUpdates";
 import { BackupMenu } from "./BackupMenu";
 import { Search } from "./Search";
 import { openSearch } from "@/lib/search/shared";
@@ -439,6 +440,7 @@ export function SiteHeader({
                 <span className="hidden lg:inline">{t("Search")}</span>
               </button>
               {backupMenu && <BackupMenu />}
+              <PluginUpdates />
               <SyncMenu />
             </div>
           )}
