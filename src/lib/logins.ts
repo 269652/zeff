@@ -5,7 +5,7 @@ import { integrationServer } from "@/lib/integrations/server";
 import { automationUp, runDriver, type DriverId } from "@/plugins/drivers";
 import { PLUGINS } from "@/plugins/catalog";
 import { installedPlugins, stepAvailable } from "@/plugins/state";
-import { canSignInWithCredentials, listAttention, serviceLabel, signInHref, type ServiceId } from "./attention";
+import { canSignInWithCredentials, clearAttention, listAttention, raiseLogin, serviceLabel, signInHref, type ServiceId } from "./attention";
 import { syncOverview } from "./sync/registry";
 import type { SyncKey } from "./sync/shared";
 
@@ -131,6 +131,9 @@ export async function checkLogin(service: ServiceId): Promise<{ state: LoginStat
     }
   }
   checks().set(`${currentAccountId()}:${service}`, { ...r, at: new Date().toISOString() });
+  // What the check found stands as the request: signed out — asked to sign in (the notice, with its buttons); signed in — the request goes.
+  if (r.state === "login") raiseLogin(service, r.detail);
+  else if (r.state === "ok") clearAttention(`login:${service}`);
   return r;
 }
 
