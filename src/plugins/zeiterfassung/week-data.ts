@@ -125,6 +125,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
           key: w.key,
           label: `${t("W{week}", { week: w.week })}${w.missing > 0 ? ` −${h(w.missing)}` : ""}`,
           missing: w.missing > 0,
+          tone: w.missing > 0 ? "bad" : "good",
           title:
             w.missing > 0
               ? t("Week {week}: {hours} h missing — {days}", { week: w.week, hours: h(w.missing), days: w.shortDays.map((d) => `${formatDate(d.date)} −${h(d.gap)}`).join(", ") })
@@ -144,27 +145,28 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     }
     if (!rows.some((r) => r.says.length)) return null;
     const mark = (s: string) => (s === "in" ? "✓" : s === "out" ? "✕" : "?");
-    const weeks = rows.map((r) => {
-      const all = r.says.length > 0 && r.says.every((s) => s.state === "in");
-      const out = r.says.some((s) => s.state === "out");
-      return {
-        key: r.key,
-        label: `${t("W{week}", { week: r.week })} ${r.says.map((s) => `${s.system} ${mark(s.state)}`).join(" · ")}`,
-        tone: all ? "good" : out ? "bad" : "warn",
-        done: all,
-        title: r.says.map((s) => `${s.system}: ${s.title}`).join(" — "),
-      };
-    });
-    const open = weeks.filter((x) => !x.done);
-    return {
-      label: t("Not in the booking systems"),
-      value: open.length ? String(open.length) : "0",
-      sub: open.length ? t("{n} past weeks not confirmed — pull them, or export", { n: open.length }) : t("All past weeks are in, as last read"),
-      tone: open.length ? (weeks.some((x) => x.tone === "bad") ? "bad" : "warn") : "good",
-      mark: open.length ? "info" : "check",
-      weeks,
-    };
+    return new Map(
+      rows
+        .filter((r) => !(r.says.length > 0 && r.says.every((s) => s.state === "in")))
+        .map((r) => [r.key, { text: r.says.map((s) => `${s.system} ${mark(s.state)}`).join(" · "), out: r.says.some((s) => s.state === "out"), title: r.says.map((s) => `${s.system}: ${s.title}`).join(" — ") }] as const),
+    );
   })();
+  // The past card shows only the weeks that need something: hours missing, or not (confirmed) in Roar / TimO — a week that is all green is left out.
+  if (outstanding) {
+    const open = outstanding.size;
+    past.weeks = past.weeks
+      .map((w) => {
+        const o = outstanding.get(w.key);
+        if (!o) return w;
+        return { ...w, label: `${w.label} · ${o.text}`, tone: w.missing || o.out ? "bad" : "warn", title: `${w.title} — ${o.title}` };
+      })
+      .filter((w) => w.missing || outstanding.has(w.key));
+    if (open && past.tone === "good") {
+      past.tone = "warn";
+      past.mark = "info";
+      past.sub = `${past.sub} · ${t("{n} not in the booking systems", { n: open })}`;
+    }
+  } else past.weeks = past.weeks.filter((w) => w.missing);
 
   // --- the table: hours per job and day
   const isoDays = week.days.map(isoDate);
@@ -381,7 +383,6 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     csv: `/api/report?week=${week.key}${by ? `&by=${encodeURIComponent(by)}` : ""}`,
     booked,
     past,
-    outstanding,
     slots: { cards: slots.flatMap((x) => (x.slot.cards ?? []).map(fullCard)), actions: slots.flatMap((x) => (x.slot.actions ?? []).map(fullAction)), exports: slots.flatMap((x) => (x.slot.exports ?? []).map(fullAction)) },
     table,
     form: {
