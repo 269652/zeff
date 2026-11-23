@@ -151,7 +151,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
         .map((r) => [r.key, { text: r.says.map((s) => `${s.system} ${mark(s.state)}`).join(" · "), out: r.says.some((s) => s.state === "out"), title: r.says.map((s) => `${s.system}: ${s.title}`).join(" — ") }] as const),
     );
   })();
-  // The past card shows only the weeks that need something: hours missing, or not (confirmed) in Roar / TimO — a week that is all green is left out.
+  // The past card keeps every week's pill (red: hours missing); one not (confirmed) in a booking system says so on its pill — what is in is not mentioned.
   if (outstanding) {
     const open = outstanding.size;
     past.weeks = past.weeks
@@ -159,14 +159,13 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
         const o = outstanding.get(w.key);
         if (!o) return w;
         return { ...w, label: `${w.label} · ${o.text}`, tone: w.missing || o.out ? "bad" : "warn", title: `${w.title} — ${o.title}` };
-      })
-      .filter((w) => w.missing || outstanding.has(w.key));
+      });
     if (open && past.tone === "good") {
       past.tone = "warn";
       past.mark = "info";
       past.sub = `${past.sub} · ${t("{n} not in the booking systems", { n: open })}`;
     }
-  } else past.weeks = past.weeks.filter((w) => w.missing);
+  }
 
   // --- the table: hours per job and day
   const isoDays = week.days.map(isoDate);
