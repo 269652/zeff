@@ -777,7 +777,19 @@ export async function syncAndWait(key: SyncKey): Promise<Last> {
   }
 }
 
-export async function syncAndWaitHere(key: SyncKey): Promise<Last> {
+/**
+ * The step that does what `key` stands for in this account: the key itself — or, when a plugin's sync flow took the built-in's place (its
+ * port: FlowDef.sync.replaces), that flow's step. Without this, asking for the built-in ("gitlab", after a sign-in: try again) ran nothing
+ * and answered with the old result at once — a failure, however the sign-in went.
+ */
+function stepInUse(key: SyncKey): SyncKey {
+  if (key.startsWith("flow:") || stepAvailable(key)) return key;
+  const flow = Object.keys(flowSteps()).find((k) => flowByName(k.slice(5))?.sync?.replaces === key);
+  return (flow ?? key) as SyncKey;
+}
+
+export async function syncAndWaitHere(asked: SyncKey): Promise<Last> {
+  const key = stepInUse(asked);
   const l = live();
   if (l.running.has(key) || STEPS[key].busy?.()) {
     while (live().running.has(key) || STEPS[key].busy?.()) await sleep(1000);
@@ -791,9 +803,10 @@ export async function startSync(key: SyncKey): Promise<{ ok: boolean; message: s
 }
 
 /** Start one step in the background, in this server. */
-export function startSyncHere(key: SyncKey): { ok: boolean; message: string } {
+export function startSyncHere(asked: SyncKey): { ok: boolean; message: string } {
   // Kept in the account it was started in — whichever is switched to while it runs.
   return inThisAccount(() => {
+    const key = stepInUse(asked);
     if (!stepAvailable(key)) return { ok: false, message: t("{step}: not installed (Menu → Plugins).", { step: STEPS[key].label }) };
     if (isDemoAccount()) return { ok: false, message: t("This is the demo: nothing is synced here. Set up your own Zeff to read your mail and chats.") };
     if (live().running.has(key) || STEPS[key].busy?.()) return { ok: false, message: t("{step} is already syncing.", { step: STEPS[key].label }) };
