@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useT } from "@/components/I18nProvider";
 import { toast } from "@/components/Toaster";
+import { Spinner } from "@/components/Spinner";
 import { lookupAddAction, undoAction } from "../actions";
 import type { LookupHit } from "../lookup-point";
 import { postJson } from "./post-json";
@@ -142,7 +143,7 @@ export function LookupField({ a, dbId, reload, openRow }: { a: Record<string, st
         <div className="absolute top-full right-0 left-0 z-20 mt-1 overflow-hidden rounded-md border border-zinc-200 bg-white text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           {long && (
             <p role="status" className="flex items-center gap-2 px-3 py-2 text-zinc-500">
-              <span className="size-3 shrink-0 animate-spin rounded-full border-2 border-zinc-300 border-t-indigo-500 motion-reduce:animate-none" aria-hidden />
+              <Spinner tone="quiet" className="block size-3 shrink-0" />
               {t("Searching the web, this can take half a minute …")}
             </p>
           )}

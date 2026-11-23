@@ -5,6 +5,7 @@ import { duration, isActive, type WorkLogLine, type WorkRunView } from "@/lib/wo
 import { useT } from "../I18nProvider";
 import { Markdown } from "../Markdown";
 import { EditDiff } from "./Diff";
+import { Spinner as SharedSpinner } from "../Spinner";
 
 /** One message of yours and the run that answered it. `ask`: your words (null: the todo's own work, `label` says what). */
 export type SessionTurn = { run: WorkRunView; ask: string | null; label: string };
@@ -92,7 +93,7 @@ function toBlocks(lines: WorkLogLine[]): { blocks: Block[]; model: string | null
 }
 
 function Spinner() {
-  return <span className="inline-block size-3 animate-spin rounded-full border-2 border-zinc-300 border-t-indigo-500 align-[-2px] dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden />;
+  return <SharedSpinner tone="quiet" className="inline-block size-3 align-[-2px]" />;
 }
 
 function StepLine({ s }: { s: Step }) {

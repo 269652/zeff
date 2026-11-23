@@ -7,6 +7,7 @@ import { modeText } from "./mode-text";
 import { Markdown } from "../Markdown";
 import { toast } from "../Toaster";
 import { EditDiff } from "./Diff";
+import { Spinner } from "../Spinner";
 
 type Post = (body: Record<string, unknown>) => Promise<{ ok: boolean; error?: string; out?: string; code?: number | null }>;
 
@@ -400,7 +401,7 @@ function Composer({
               title={shell ? t("Run") : working ? t("Queue — it reads it after this step") : t("Send")}
             >
               {pending ? (
-                <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" aria-hidden />
+                <Spinner className="block size-3.5" />
               ) : (
                 <svg viewBox="0 0 20 20" fill="currentColor" className="size-4" aria-hidden>
                   <path d="M10 3.5a.75.75 0 0 1 .53.22l5 5a.75.75 0 1 1-1.06 1.06l-3.72-3.72v9.19a.75.75 0 0 1-1.5 0V6.06L5.53 9.78a.75.75 0 0 1-1.06-1.06l5-5A.75.75 0 0 1 10 3.5Z" />

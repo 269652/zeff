@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EditDiff, Patch } from "@/components/work/Diff";
 import { useT } from "@/components/I18nProvider";
+import { Spinner } from "@/components/Spinner";
 
 /**
  * Text pieces of the view language for what programs say: a diff (an edit's old and new text, or a unified patch, coloured), a terminal's output (dark,
@@ -20,7 +21,7 @@ export function textBlock(t: string, a: A, key: string | number, run?: (a: A) =>
     case "terminal":
       return <Terminal key={key} a={a} />;
     case "spinner":
-      return <span key={key} className="zeff-spinner zeff-spinner-sweep inline-block size-3 shrink-0 text-indigo-500 dark:text-indigo-400 rounded-full border-2 border-zinc-300 border-t-indigo-500 align-[-2px] dark:border-zinc-700 dark:border-t-indigo-400" aria-hidden />;
+      return <Spinner key={key} tone="quiet" className="inline-block size-3 shrink-0 align-[-2px]" />;
     default:
       return undefined;
   }

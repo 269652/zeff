@@ -2,7 +2,9 @@ const TONES = {
   /** Turns in the text colour around it (a button, a link). */
   current: "border-current border-t-transparent",
   /** Indigo on a light ring (something running). */
-  indigo: "border-indigo-200 border-t-indigo-600 dark:border-indigo-900 dark:border-t-indigo-400",
+  indigo: "text-indigo-600 dark:text-indigo-400 border-indigo-200 border-t-indigo-600 dark:border-indigo-900 dark:border-t-indigo-400",
+  /** Grey ring, indigo arc (inside text: a chat, a search that takes a while). */
+  quiet: "text-indigo-500 dark:text-indigo-400 border-zinc-300 border-t-indigo-500 dark:border-zinc-700 dark:border-t-indigo-400",
 };
 
 /**
@@ -17,7 +19,8 @@ export function Spinner({ tone = "current", label, className = "" }: { tone?: ke
       aria-label={label}
       aria-hidden={label ? undefined : true}
       title={label}
-      className={`animate-spin rounded-full border-2 ${TONES[tone]} ${className}`}
+      // (the same turning ring whose arc widens and narrows as the loading screens': globals.css .zeff-spinner-sweep)
+      className={`zeff-spinner zeff-spinner-sweep rounded-full border-2 ${TONES[tone]} ${className}`}
     />
   );
 }
