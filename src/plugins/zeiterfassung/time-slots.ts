@@ -32,11 +32,15 @@ export type MonthSlotData = {
   oldestPull?: string | null;
   entries?: Record<number, SlotMark>;
 };
+/** Whether a past week is in a booking system, as that system last said it ("unknown": not read from it yet). */
+export type WeekSyncData = { system: string; state: "in" | "out" | "unknown"; title: string };
 export type JobsSlotData = { toolbar?: SlotAction[]; column?: { title: string; cells: Record<number, SlotMark> } };
 
 export type TimeSlot = {
   week?: (ctx: { week: WeekInfo; entries: EntryWithJob[]; by?: string }) => WeekSlotData | Promise<WeekSlotData>;
   month?: (ctx: { month: MonthInfo; entries: EntryWithJob[] }) => MonthSlotData | Promise<MonthSlotData>;
+  /** For the "not in the booking systems" card: is this past week in the system (as of its last read)? */
+  pastWeek?: (ctx: { week: WeekInfo; entries: EntryWithJob[] }) => WeekSyncData | null | Promise<WeekSyncData | null>;
   jobs?: (jobs: JobWithStats[]) => JobsSlotData | Promise<JobsSlotData>;
   weekClose?: (ctx: { week: WeekInfo; now: Date; over: boolean; entries: EntryWithJob[]; query: string }) => CloseItem[] | Promise<CloseItem[]>;
   /**
@@ -94,6 +98,7 @@ async function ask<T>(pick: (s: TimeSlot) => (() => T | Promise<T>) | undefined)
 
 export const weekSlotData = (ctx: Parameters<NonNullable<TimeSlot["week"]>>[0]) => ask<WeekSlotData>((s) => s.week && (() => s.week!(ctx)));
 export const monthSlotData = (ctx: Parameters<NonNullable<TimeSlot["month"]>>[0]) => ask<MonthSlotData>((s) => s.month && (() => s.month!(ctx)));
+export const pastWeekSlotData = (ctx: Parameters<NonNullable<TimeSlot["pastWeek"]>>[0]) => ask<WeekSyncData | null>((s) => s.pastWeek && (() => s.pastWeek!(ctx)));
 export const jobsSlotData = (jobs: JobWithStats[]) => ask<JobsSlotData>((s) => s.jobs && (() => s.jobs!(jobs)));
 export const closeSlotItems = async (ctx: Parameters<NonNullable<TimeSlot["weekClose"]>>[0]): Promise<CloseItem[]> => (await ask<CloseItem[]>((s) => s.weekClose && (() => s.weekClose!(ctx)))).flatMap((x) => x.slot);
 

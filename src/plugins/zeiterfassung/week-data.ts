@@ -22,7 +22,7 @@ import { listTags } from "@/lib/tags";
 import { weekClose } from "@/lib/week-close";
 import { ticketInfos } from "./tickets";
 import { todoContextCounts } from "./entry-context";
-import { closeSlotItems, closeWith, fullAction, fullCard, weekSlotData, type SlotMark } from "./time-slots";
+import { closeSlotItems, closeWith, fullAction, fullCard, pastWeekSlotData, weekSlotData, type SlotMark } from "./time-slots";
 import { currentWeek, formatDay, formatWeekRange, isoDate, resolveWeek, shiftWeek, todayIso } from "@/lib/week";
 import { doneToday } from "@/lib/work/booking";
 import { openSuggestions } from "@/lib/work/suggestions";
@@ -131,6 +131,40 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
               : t("Week {week}: {booked} of {target} h booked", { week: w.week, booked: h(w.booked), target: h(w.target) }),
         })),
   };
+
+  // The past weeks that have hours: is each one in the booking systems (as they last said)? A green pill when every system confirms it.
+  const outstanding = await (async () => {
+    if (noPast) return null;
+    const rows: { key: string; week: number; says: { system: string; state: string; title: string }[] }[] = [];
+    for (const w of due.weeks.filter((x) => x.booked > 0)) {
+      const wk = resolveWeek(w.key);
+      if (!wk) continue;
+      const says = (await pastWeekSlotData({ week: wk, entries: getWeeklyReport(wk).entries })).flatMap((x) => (x.slot ? [x.slot] : []));
+      rows.push({ key: w.key, week: w.week, says });
+    }
+    if (!rows.some((r) => r.says.length)) return null;
+    const mark = (s: string) => (s === "in" ? "✓" : s === "out" ? "✕" : "?");
+    const weeks = rows.map((r) => {
+      const all = r.says.length > 0 && r.says.every((s) => s.state === "in");
+      const out = r.says.some((s) => s.state === "out");
+      return {
+        key: r.key,
+        label: `${t("W{week}", { week: r.week })} ${r.says.map((s) => `${s.system} ${mark(s.state)}`).join(" · ")}`,
+        tone: all ? "good" : out ? "bad" : "warn",
+        done: all,
+        title: r.says.map((s) => `${s.system}: ${s.title}`).join(" — "),
+      };
+    });
+    const open = weeks.filter((x) => !x.done);
+    return {
+      label: t("Not in the booking systems"),
+      value: open.length ? String(open.length) : "0",
+      sub: open.length ? t("{n} past weeks not confirmed — pull them, or export", { n: open.length }) : t("All past weeks are in, as last read"),
+      tone: open.length ? (weeks.some((x) => x.tone === "bad") ? "bad" : "warn") : "good",
+      mark: open.length ? "info" : "check",
+      weeks,
+    };
+  })();
 
   // --- the table: hours per job and day
   const isoDays = week.days.map(isoDate);
@@ -347,6 +381,7 @@ export async function weekScreen(input: { week?: string; by?: string } = {}) {
     csv: `/api/report?week=${week.key}${by ? `&by=${encodeURIComponent(by)}` : ""}`,
     booked,
     past,
+    outstanding,
     slots: { cards: slots.flatMap((x) => (x.slot.cards ?? []).map(fullCard)), actions: slots.flatMap((x) => (x.slot.actions ?? []).map(fullAction)), exports: slots.flatMap((x) => (x.slot.exports ?? []).map(fullAction)) },
     table,
     form: {

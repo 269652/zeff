@@ -16,8 +16,8 @@ const repo = path.resolve(process.argv[2] ?? "../zeff-plugins");
 const dir = path.join(repo, "plugins", "zeiterfassung-ext");
 const SRC = path.join(ROOT, "scripts", "port-zeiterfassung");
 // Raised with every change of what the plugin ships (a Zeff that has the plugin installed is offered the update by its version).
-const PLUGIN_VERSION = "0.7.10";
-const PACKAGE_VERSION = "1.6.10";
+const PLUGIN_VERSION = "0.7.11";
+const PACKAGE_VERSION = "1.6.11";
 const write = (rel: string, text: string) => {
   const f = path.join(dir, rel);
   fs.mkdirSync(path.dirname(f), { recursive: true });
