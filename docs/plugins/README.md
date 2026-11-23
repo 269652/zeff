@@ -3,6 +3,15 @@
 External plugins let you extend Zeff — its **Work tab** in particular — **without touching its source and without rebuilding it**.
 They work in a packaged Zeff (the release you download) exactly as in a checkout.
 
+## Find, install, update
+
+You don't have to write a plugin to use one. **Menu → Plugins → Browse** is Zeff's marketplace: a search over every plugin of every
+source (the official [zeff-plugins](https://github.com/269652/zeff-plugins) repository is always one; add any GitHub repository or folder as
+another), with each plugin's README, what it asks for and what it adds, then **Install**. A bell in the header offers newer versions with
+what changed; updating merges them with what you changed. All of it: [repository.md](repository.md).
+
+## Write one
+
 A plugin is a folder with a `zeff-plugin.json`. Put it into Zeff's plugins folder: it appears on
 **Menu → Plugins → External plugins** at once (no restart), and you turn it on there. What it may do is named in its
 manifest, and you see it before you turn it on.

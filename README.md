@@ -15,6 +15,7 @@
   <a href="https://getzeff.com">Website</a> ·
   <a href="https://github.com/269652/zeff-alpha/releases">Download (alpha)</a> ·
   <a href="#extensions">Extensions</a> ·
+  <a href="https://github.com/269652/zeff-plugins">Plugins</a> ·
   <a href="docs/plugins/README.md">Write a plugin</a> ·
   <a href="LICENSE">Licence</a> ·
   <a href="mailto:info@getzeff.com">info@getzeff.com</a>
@@ -36,6 +37,9 @@ your todos from what actually comes in: who asked you for what, by when, in whic
 since. A reply you sent, a ticket that moved, a payment that arrived: the todo settles itself. What's left is one calm
 list, each item with its sources, its reason and a ready-made action.
 
+**Try it in five minutes:** [download it](https://github.com/269652/zeff-alpha/releases), start it and follow **Setup** — it
+asks which accounts you use, helps you sign in and shows your first todos. No cloud account, no API keys to create.
+
 ```
   Outlook · Gmail · IMAP/POP3 ───┐
   Teams · WhatsApp · Signal ─────┤                           ┌────────────────────────────────────┐
@@ -55,6 +59,8 @@ agents that take todos over in your own repos, and a **Studio** to build whateve
   a booking — happens on your click. A test enforces it.
 - 🤖 **Agents that actually work.** Claude Code, Codex and Copilot run on your todos with live sessions, worktrees,
   diffs and delivery — and they can ask you when they need a decision.
+- 🧩 **Everything is a plugin.** A [marketplace](https://github.com/269652/zeff-plugins) to install from, updates that
+  merge with your changes, and building blocks to make your own — or let the AI build it.
 - 🔒 **Privacy you can see.** Every source and database carries a sensitivity (open, personal, secret) that the AI,
   the knowledge server, agents and MCP all respect.
 
@@ -79,7 +85,8 @@ agents that take todos over in your own repos, and a **Studio** to build whateve
 
 ## Extensions
 
-Everything in Zeff is an **extension** (a plugin) you turn on or off on **Menu → Plugins**. Each has a page in the docs
+Everything in Zeff is an **extension** (a plugin) you turn on or off on **Menu → Plugins** — and more are one click away in
+the **marketplace** (Plugins → Browse). Each has a page in the docs
 with what it does, how to set it up, its settings and **screenshots** — follow the link. All of them: [docs/extensions](docs/extensions/README.md).
 
 ### Your day
@@ -185,25 +192,41 @@ a hint for each:
 
 ## Make Zeff yours: plugins
 
-External plugins are plain folders in Zeff's data folder. They appear under **Menu → Plugins** at once, and you turn
-them on there after seeing what they ask for — no rebuild, no restart.
+Zeff is small on purpose — what it does for you is a **plugin**. Mail, chats, time tracking, finances, the
+todo list itself: all of them can be switched on, replaced or left out. And you can add your own, or have the AI build
+one for you.
+
+**Find one.** **Menu → Plugins → Browse** is a marketplace: search by name, keyword or what a plugin adds, filter by
+category, read its README, see what it asks for and what it adds — then **Install**. The official collection,
+[zeff-plugins](https://github.com/269652/zeff-plugins), is already there. Add any other GitHub repository (or a folder
+on your disk) as a source, and its plugins show up next to the official ones.
+
+**Stay current, safely.** A bell in the header tells you when a plugin has a newer version — with what changed.
+**Update** merges the new version with what you changed yourself, file by file, the way git does; where both of you
+changed the same lines, you decide. Nothing is offered that is byte for byte what you already have. Releases can be
+signed, and a download is checked against its repository's catalog.
+
+**Build one.** A plugin is a plain folder, and it can be a whole app: pages and databases, flows, syncs, widgets and
+views made from Zeff's **building blocks** — no build step, no restart, and the AI can change them for you later.
 
 ```
 plugins/my-plugin/
   zeff-plugin.json   ← what it adds, and what it may do
-  ui/index.html      ← a view of your own, inside Zeff
+  views/             ← pages, built from Zeff's building blocks
   rules.md           ← rules every Work worker gets
 ```
 
-A plugin can add **rules** for every worker, **`/` commands**, **views** in the sidebar or as a session tab, **MCP
-servers**, **event hooks** on runs and todos, and drive Zeff through **the API**. Views run in a sandboxed frame behind
-a permission-checked bridge; hooks have time limits and no shell. The one permission that can't be contained is
-`exec`, and Zeff says so before you enable it — [the trust model](docs/plugins/security.md).
+A plugin can add **apps and pages**, **rules** for every worker, **`/` commands**, **views**, **MCP servers**,
+**event hooks** on runs and todos, and drive Zeff through **the API**. A plugin runs behind permissions you grant after
+seeing what it asks for; views run in a sandboxed frame behind a permission-checked bridge; hooks have time limits and
+no shell. The one permission that can't be contained is `exec`, and Zeff says so before you enable it —
+[the trust model](docs/plugins/security.md).
 
 Start with the [overview](docs/plugins/README.md) and the examples in [`examples/plugins/`](examples/plugins). Reference:
-[manifest](docs/plugins/manifest.md) · [API](docs/plugins/api.md) · [panels](docs/plugins/panels.md) ·
-[hooks](docs/plugins/hooks.md). `npm run plugin:check -- <folder>` validates a plugin. Integrations that must not live
-in a public repo can be mounted as a git submodule under `integrations/` — [docs/integrations.md](docs/integrations.md).
+[marketplace & updates](docs/plugins/repository.md) · [manifest](docs/plugins/manifest.md) · [API](docs/plugins/api.md) ·
+[panels](docs/plugins/panels.md) · [hooks](docs/plugins/hooks.md). `npm run plugin:check -- <folder>` validates a plugin.
+Publishing one is a commit to a GitHub repository with a `zeff-plugin.json`. Integrations that must not live in a public
+repo can be mounted as a git submodule under `integrations/` — [docs/integrations.md](docs/integrations.md).
 
 ## Connect an agent (MCP)
 
