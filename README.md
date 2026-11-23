@@ -59,10 +59,10 @@ agents that take todos over in your own repos, and a **Studio** to build whateve
   a booking — happens on your click. A test enforces it.
 - 🤖 **Agents that actually work.** Claude Code, Codex and Copilot run on your todos with live sessions, worktrees,
   diffs and delivery — and they can ask you when they need a decision.
-- 🧩 **Everything is a plugin.** A [marketplace](https://github.com/269652/zeff-plugins) to install from, updates that
-  merge with your changes, and building blocks to make your own — or let the AI build it.
 - 🔒 **Privacy you can see.** Every source and database carries a sensitivity (open, personal, secret) that the AI,
   the knowledge server, agents and MCP all respect.
+- 🧩 **A channel is a plugin.** Each source that feeds your todos is one: install more from a
+  [marketplace](https://github.com/269652/zeff-plugins), or build your own.
 
 ## Screenshots
 
@@ -192,11 +192,12 @@ a hint for each:
 
 ## Make Zeff yours: plugins
 
-Zeff is small on purpose — what it does for you is a **plugin**. Mail, chats, time tracking, finances, the
-todo list itself: all of them can be switched on, replaced or left out. And you can add your own, or have the AI build
-one for you.
+Zeff's job is one thing: **to derive your todos from every channel that reaches you.** Each channel is a plugin — Outlook,
+Gmail, Teams, WhatsApp, Signal, Jira, GitLab, calendars, documents, bank statements — so you switch on the ones you use,
+and add a missing one without waiting for a release. The same goes for what you do with those todos: time tracking,
+finances, cases, news. You can add your own, or have the AI build one for you.
 
-**Find one.** **Menu → Plugins → Browse** is a marketplace: search by name, keyword or what a plugin adds, filter by
+**Find a channel or an app.** **Menu → Plugins → Browse** is a marketplace: search by name, keyword or what a plugin adds, filter by
 category, read its README, see what it asks for and what it adds — then **Install**. The official collection,
 [zeff-plugins](https://github.com/269652/zeff-plugins), is already there. Add any other GitHub repository (or a folder
 on your disk) as a source, and its plugins show up next to the official ones.

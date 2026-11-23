@@ -5,7 +5,7 @@ They work in a packaged Zeff (the release you download) exactly as in a checkout
 
 ## Find, install, update
 
-You don't have to write a plugin to use one. **Menu → Plugins → Browse** is Zeff's marketplace: a search over every plugin of every
+Zeff derives your todos from every channel that reaches you, and each channel is a plugin — you don't have to write one to use it. **Menu → Plugins → Browse** is Zeff's marketplace: a search over every plugin of every
 source (the official [zeff-plugins](https://github.com/269652/zeff-plugins) repository is always one; add any GitHub repository or folder as
 another), with each plugin's README, what it asks for and what it adds, then **Install**. A bell in the header offers newer versions with
 what changed; updating merges them with what you changed. All of it: [repository.md](repository.md).
